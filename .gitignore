@@ -1,0 +1,16 @@
+# Environments
+.env
+venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# Databases
+geopolitics.db
+
+# Build
+build/
