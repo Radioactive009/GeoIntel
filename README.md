@@ -70,7 +70,7 @@ Data Handling: JSON, REST APIs
 📦 Setup Instructions
 
 Clone the repository
-git clone https://github.com/your-username/geointel-ai.git
+git clone https://github.com/radioactive009/geointel-ai.git
 
 cd geointel-ai
 
