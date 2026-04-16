@@ -1,30 +1,30 @@
 import React from 'react';
-import { ExternalLink, Calendar, MapPin, Globe, TrendingUp, TrendingDown, Minus, Clock } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ShieldCheck, ExternalLink, Globe, Clock } from 'lucide-react';
 
-const sentimentConfig = {
-    positive: {
-        icon: TrendingUp,
-        color: 'text-emerald-400',
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/20',
-        label: 'Positive',
-        gradient: 'from-emerald-500 to-emerald-600',
-    },
-    negative: {
-        icon: TrendingDown,
+const riskConfig = {
+    high: {
+        icon: AlertCircle,
         color: 'text-rose-400',
         bg: 'bg-rose-500/10',
         border: 'border-rose-500/20',
-        label: 'Negative',
+        label: 'High Risk',
         gradient: 'from-rose-500 to-rose-600',
     },
-    neutral: {
-        icon: Minus,
-        color: 'text-slate-400',
-        bg: 'bg-slate-500/10',
-        border: 'border-slate-500/20',
-        label: 'Neutral',
-        gradient: 'from-slate-500 to-slate-600',
+    medium: {
+        icon: AlertTriangle,
+        color: 'text-amber-400',
+        bg: 'bg-amber-500/10',
+        border: 'border-amber-500/20',
+        label: 'Medium Risk',
+        gradient: 'from-amber-500 to-amber-600',
+    },
+    low: {
+        icon: ShieldCheck,
+        color: 'text-emerald-400',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/20',
+        label: 'Low Risk',
+        gradient: 'from-emerald-500 to-emerald-600',
     },
 };
 
@@ -53,16 +53,17 @@ const ArticleCard = ({ article, index }) => {
         return `${Math.floor(hrs / 24)}d ago`;
     })();
 
-    const sentiment = sentimentConfig[sentiment_label] || sentimentConfig.neutral;
-    const SentimentIcon = sentiment.icon;
+    // Default to 'low' config if label doesn't match
+    const risk = riskConfig[sentiment_label] || riskConfig.low;
+    const RiskIcon = risk.icon;
 
     return (
         <div
             className="group glass-card rounded-3xl overflow-hidden flex flex-col h-full relative transition-all duration-500 hover:shadow-2xl hover:shadow-cyan-500/10 hover:-translate-y-1 animate-fade-in-up"
             style={{ animationDelay: `${index * 50}ms` }}
         >
-            {/* Sentiment Gradient Bar */}
-            <div className={`h-1 w-full bg-gradient-to-r ${sentiment.gradient}`} />
+            {/* Risk Gradient Bar */}
+            <div className={`h-1 w-full bg-gradient-to-r ${risk.gradient}`} />
 
             <div className="p-6 flex flex-col h-full flex-grow">
                 {/* Meta Header */}
@@ -76,10 +77,10 @@ const ArticleCard = ({ article, index }) => {
                         </span>
                     </div>
 
-                    <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${sentiment.bg} ${sentiment.color} border ${sentiment.border}`}>
-                        <SentimentIcon size={12} />
-                        <span>{sentiment_label.toUpperCase()}</span>
-                        <span className="ml-1 opacity-70 border-l border-current pl-1.5">{sentiment_score?.toFixed(2)}</span>
+                    <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${risk.bg} ${risk.color} border ${risk.border}`}>
+                        <RiskIcon size={12} />
+                        <span>{risk.label.toUpperCase()}</span>
+                        <span className="ml-1 opacity-70 border-l border-current pl-1.5">{Math.abs(sentiment_score || 0).toFixed(2)}</span>
                     </div>
                 </div>
 

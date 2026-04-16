@@ -110,6 +110,13 @@ EVENT_WEIGHTS: dict[str, float] = {
     "arrested":     0.30,
     "diplomacy":    0.30,
     "trade":        0.30,
+    # Hazard / CBRN (0.45 - 0.55)
+    "toxic":        0.55,
+    "chemical":     0.50,
+    "hazard":       0.50,
+    "outbreak":     0.55,
+    "epidemic":     0.55,
+    "biological":   0.55,
 }
 
 # ─────────────────────────────────────────────
@@ -119,7 +126,8 @@ EVENT_TYPES = {
     "military": ["attack", "missile", "troops", "airstrike", "invasion", "war", "military", "bombing", "explosion", "airstrike", "navy", "army", "airforce"],
     "diplomatic": ["talks", "meeting", "agreement", "summit", "diplomacy", "treaty", "negotiation", "peace", "ceasefire"],
     "economic": ["sanctions", "trade", "oil", "economy", "tariffs", "market", "currency", "finance"],
-    "political": ["election", "protest", "government", "parliament", "regime", "coup", "policy"]
+    "political": ["election", "protest", "government", "parliament", "regime", "coup", "policy"],
+    "hazard": ["toxic", "chemical", "hazard", "outbreak", "epidemic", "biological", "contamination", "poison", "health concerns"]
 }
 
 # ─────────────────────────────────────────────
@@ -146,7 +154,7 @@ MITIGATION_CONFIG = {
 CONFLICT_KEYWORDS = [
     "attack", "killed", "kills", "war", "dead", "death", "destroyed", "violence", 
     "blood", "clash", "fighting", "bombing", "airstrike", "invasion", "casualty", 
-    "massacre", "genocide", "strike", "explosions"
+    "massacre", "genocide", "strike", "explosions", "contamination", "poison", "toxic"
 ]
 HARM_KEYWORDS = ["crisis", "collapse", "depression", "ruined", "bankrupt", "defaults", "recession"]
 
