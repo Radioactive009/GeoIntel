@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldTopoJson from 'world-atlas/countries-110m.json';
 
@@ -34,6 +34,52 @@ const getDisplayCountryName = (geoProperties) =>
 
 const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
     const [tooltip, setTooltip] = useState(null);
+    const audioContextRef = useRef(null);
+    const lastHoveredCountryRef = useRef('');
+    const lastToneAtRef = useRef(0);
+    const mapContainerRef = useRef(null);
+
+    const playHoverTone = (countryName, riskScore) => {
+        const now = Date.now();
+        if (now - lastToneAtRef.current < 45) return;
+        lastToneAtRef.current = now;
+
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+
+            if (!audioContextRef.current) {
+                audioContextRef.current = new AudioCtx();
+            }
+
+            const ctx = audioContextRef.current;
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            const stableRisk = typeof riskScore === 'number' ? Math.max(0, Math.min(100, riskScore)) : 30;
+            const countryOffset = (countryName.length % 6) * 8;
+            const frequency = 360 + stableRisk * 2.1 + countryOffset;
+
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
+
+            gainNode.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.09, ctx.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + 0.125);
+        } catch {
+            // Ignore audio errors so map interactions remain smooth.
+        }
+    };
 
     const riskLookup = useMemo(() => {
         const byName = new Map();
@@ -48,6 +94,22 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
     }, [riskData]);
 
     const selectedNormalized = normalizeCountry(selectedCountry);
+    const TOOLTIP_WIDTH = 190;
+    const TOOLTIP_HEIGHT = 64;
+    const TOOLTIP_GAP = 12;
+
+    const getTooltipPosition = (clientX, clientY) => {
+        const rect = mapContainerRef.current?.getBoundingClientRect();
+        if (!rect) return { x: TOOLTIP_GAP, y: TOOLTIP_GAP };
+
+        const localX = clientX - rect.left;
+        const localY = clientY - rect.top;
+        const maxX = rect.width - TOOLTIP_WIDTH - 8;
+        const maxY = rect.height - TOOLTIP_HEIGHT - 8;
+        const safeX = Math.max(8, Math.min(localX + TOOLTIP_GAP, maxX));
+        const safeY = Math.max(8, Math.min(localY - TOOLTIP_HEIGHT - TOOLTIP_GAP, maxY));
+        return { x: safeX, y: safeY };
+    };
 
     return (
         <div className="glass rounded-[2.5rem] p-5 lg:p-6 relative overflow-hidden animate-fade-in-up">
@@ -64,9 +126,9 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                     </button>
                 </div>
 
-                <div className="relative h-[360px] md:h-[520px] lg:h-[640px]">
+                <div ref={mapContainerRef} className="relative h-[360px] md:h-[520px] lg:h-[640px]">
                     <ComposableMap
-                        projectionConfig={{ scale: 220 }}
+                        projectionConfig={{ scale: 205 }}
                         className="w-full h-full"
                         style={{ width: '100%', height: '100%' }}
                     >
@@ -95,12 +157,24 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                                             geography={geo}
                                             onClick={() => onCountrySelect(selectedCountryName)}
                                             onMouseEnter={(event) => {
-                                                const rect = event.currentTarget.getBoundingClientRect();
+                                                const pos = getTooltipPosition(event.clientX, event.clientY);
                                                 setTooltip({
-                                                    x: rect.x + rect.width / 2,
-                                                    y: rect.y,
+                                                    x: pos.x,
+                                                    y: pos.y,
                                                     countryName,
                                                     riskScore,
+                                                });
+
+                                                if (lastHoveredCountryRef.current !== countryName) {
+                                                    playHoverTone(countryName, riskScore);
+                                                    lastHoveredCountryRef.current = countryName;
+                                                }
+                                            }}
+                                            onMouseMove={(event) => {
+                                                setTooltip((prev) => {
+                                                    if (!prev) return prev;
+                                                    const pos = getTooltipPosition(event.clientX, event.clientY);
+                                                    return { ...prev, x: pos.x, y: pos.y };
                                                 });
                                             }}
                                             onMouseLeave={() => setTooltip(null)}
@@ -134,8 +208,8 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
 
                     {tooltip && (
                         <div
-                            className="fixed z-50 px-3 py-2 rounded-xl border border-cyan-500/30 bg-slate-950/95 backdrop-blur-md pointer-events-none shadow-xl shadow-cyan-500/20"
-                            style={{ left: tooltip.x + 12, top: tooltip.y - 8 }}
+                            className="absolute z-50 px-3 py-2 rounded-xl border border-cyan-500/30 bg-slate-950/95 backdrop-blur-md pointer-events-none shadow-xl shadow-cyan-500/20"
+                            style={{ left: tooltip.x, top: tooltip.y, width: `${TOOLTIP_WIDTH}px` }}
                         >
                             <p className="text-xs font-bold text-white">{tooltip.countryName}</p>
                             <p className="text-[11px] text-slate-300">
