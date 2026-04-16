@@ -143,8 +143,12 @@ MITIGATION_CONFIG = {
 # ─────────────────────────────────────────────
 # STRATEGIC ACTIVITY KEYWORDS
 # ─────────────────────────────────────────────
-CONFLICT_KEYWORDS = ["attack", "killed", "war", "dead", "destroyed", "violence", "blood", "clash", "fighting", "bombing"]
-HARM_KEYWORDS = ["crisis", "collapse", "depression", "ruined", "bankrupt", "defaults"]
+CONFLICT_KEYWORDS = [
+    "attack", "killed", "kills", "war", "dead", "death", "destroyed", "violence", 
+    "blood", "clash", "fighting", "bombing", "airstrike", "invasion", "casualty", 
+    "massacre", "genocide", "strike", "explosions"
+]
+HARM_KEYWORDS = ["crisis", "collapse", "depression", "ruined", "bankrupt", "defaults", "recession"]
 
 
 def _classify_event_type(text: str) -> str:

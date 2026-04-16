@@ -51,6 +51,10 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE articles ADD COLUMN geo_risk_score FLOAT"))
     if "geo_risk_level" not in columns:
         conn.execute(text("ALTER TABLE articles ADD COLUMN geo_risk_level VARCHAR"))
+    if "event_type" not in columns:
+        conn.execute(text("ALTER TABLE articles ADD COLUMN event_type VARCHAR"))
+    if "category" not in columns:
+        conn.execute(text("ALTER TABLE articles ADD COLUMN category VARCHAR"))
     conn.commit()
 
 
@@ -354,13 +358,13 @@ def ingest_news_for_country(country_iso: str, db: Session):
 
         # ── Semantic Risk Scoring ─────────────────────────
         text = (item.get("title") or "") + " " + (item.get("description") or "")
-        geo_risk_score, geo_risk_level = score_article(text)
+        geo_risk_score, geo_risk_level, event_type, category = score_article(text)
 
         # Keep legacy sentiment fields as aliases for backwards compatibility
         sentiment_score = geo_risk_score / 100.0 * -1 if geo_risk_level in ("high", "medium") else geo_risk_score / 100.0
         sentiment_label = geo_risk_level
 
-        print(f"  RISK {geo_risk_level:>6} risk ({geo_risk_score:>6.1f}/100) | {text[:70]}")
+        print(f"  RISK {geo_risk_level:>6} | {event_type:>10} | {category:>18} | ({geo_risk_score:>5.1f}/100) | {text[:50]}...")
 
         new_article = models.Article(
             title=item.get("title"),
@@ -372,6 +376,8 @@ def ingest_news_for_country(country_iso: str, db: Session):
             sentiment_label=sentiment_label,
             geo_risk_score=geo_risk_score,
             geo_risk_level=geo_risk_level,
+            event_type=event_type,
+            category=category,
         )
 
         db.add(new_article)
@@ -666,9 +672,9 @@ def calculate_risk(db: Session):
         # Simple average (all articles equally weighted)
         risk_score = round(sum(scored) / total_articles, 2)
 
-        if risk_score >= 65:
+        if risk_score >= 70:
             risk_level = "high"
-        elif risk_score >= 35:
+        elif risk_score >= 40:
             risk_level = "medium"
         else:
             risk_level = "low"
