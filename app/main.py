@@ -374,16 +374,28 @@ def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)
 
 
 @app.get("/articles", response_model=list[schemas.ArticleResponse])
-def get_articles(db: Session = Depends(get_db)):
-    return (
+def get_articles(country: str | None = None, db: Session = Depends(get_db)):
+    query = (
         db.query(models.Article)
         .options(
             joinedload(models.Article.source)
             .joinedload(models.Source.country)
         )
-        .order_by(models.Article.published_at.desc())
-        .all()
     )
+
+    if country:
+        country_term = country.strip()
+        if country_term:
+            query = (
+                query.join(models.Article.source)
+                .join(models.Source.country)
+                .filter(
+                    (models.Country.iso_code == country_term.upper()) |
+                    (models.Country.name.ilike(country_term))
+                )
+            )
+
+    return query.order_by(models.Article.published_at.desc()).all()
 
 
 # =========================================================

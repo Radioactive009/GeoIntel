@@ -7,7 +7,7 @@ const api = axios.create({
     },
 });
 
-export const getArticles = () => api.get('/articles');
+export const getArticles = (country = '') => api.get('/articles', { params: country ? { country } : undefined });
 export const getRiskAnalysis = () => api.get('/risk-analysis');
 
 export default api;

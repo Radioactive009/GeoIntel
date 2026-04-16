@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import ArticleCard from '../components/ArticleCard';
+import MapChart from '../components/MapChart';
 import { getArticles, getRiskAnalysis } from '../services/api';
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
@@ -33,6 +34,26 @@ const getRiskGradient = (level) => {
     if (level === 'medium') return 'from-amber-500/20 to-transparent';
     return 'from-emerald-500/20 to-transparent';
 };
+
+const COUNTRY_ALIASES = {
+    'united states of america': 'united states',
+    usa: 'united states',
+    'russian federation': 'russia',
+    'iran (islamic republic of)': 'iran',
+};
+
+const normalizeCountry = (value) => {
+    if (!value) return '';
+    const normalized = value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[().,]/g, '')
+        .replace(/\s+/g, ' ');
+    return COUNTRY_ALIASES[normalized] || normalized;
+};
+
+const getArticleCountryName = (article) => article?.country || article?.source?.country?.name || '';
 
 // ── Custom chart tooltip ────────────────────────────────
 const CustomTooltip = ({ active, payload }) => {
@@ -97,7 +118,10 @@ const Dashboard = () => {
 
     const countries = useMemo(() => {
         const s = new Set();
-        articles.forEach(a => { if (a.source?.country?.name) s.add(a.source.country.name); });
+        articles.forEach(a => {
+            const countryName = getArticleCountryName(a);
+            if (countryName) s.add(countryName);
+        });
         return Array.from(s).sort();
     }, [articles]);
 
@@ -109,7 +133,8 @@ const Dashboard = () => {
 
     const filteredArticles = useMemo(() => {
         return articles.filter(a => {
-            const cm = !selectedCountry || a.source?.country?.name === selectedCountry;
+            const articleCountry = getArticleCountryName(a);
+            const cm = !selectedCountry || normalizeCountry(articleCountry) === normalizeCountry(selectedCountry);
             const rm = !selectedRegion || a.source?.country?.region === selectedRegion;
             return cm && rm;
         });
@@ -155,6 +180,14 @@ const Dashboard = () => {
                 </header>
 
                 {/* ── SECTION 1: STAT CARDS ────────────────── */}
+                <section className="mb-12">
+                    <MapChart
+                        riskData={riskData}
+                        selectedCountry={selectedCountry}
+                        onCountrySelect={setSelectedCountry}
+                    />
+                </section>
+
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                     {[
                         { icon: Globe, label: 'Monitored Regions', value: riskData.length, color: 'text-cyan-400', sub: 'Active Strategic Zones' },
@@ -279,7 +312,9 @@ const Dashboard = () => {
                                 <div className="p-2 rounded-xl bg-cyan-500/10">
                                     <Search size={18} className="text-cyan-400" />
                                 </div>
-                                <h2 className="text-base font-bold text-white uppercase tracking-widest">Strategic Feed</h2>
+                                <h2 className="text-base font-bold text-white uppercase tracking-widest">
+                                    {selectedCountry ? `News for ${selectedCountry}` : 'Global News'}
+                                </h2>
                             </div>
                             <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest tabular-nums">
                                 {filteredArticles.length} Bulletins Logged

@@ -56,3 +56,15 @@ class Article(Base):
     # 🔥 SENTIMENT FIELDS (FIXED)
     sentiment_score = Column(Float)
     sentiment_label = Column(String)
+
+    @property
+    def country(self):
+        if self.source and self.source.country:
+            return self.source.country.name
+        return None
+
+    @property
+    def country_iso_code(self):
+        if self.source and self.source.country:
+            return self.source.country.iso_code
+        return None
