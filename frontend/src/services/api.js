@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+// ── Dynamic API URL ──────────────────────────────────────
+// Uses the VITE_API_URL environment variable if present (production).
+// Otherwise, defaults to localhost:8000 for local development.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const api = axios.create({
-    baseURL: 'http://localhost:8000',
+    baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
     },

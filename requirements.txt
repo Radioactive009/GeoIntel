@@ -6,5 +6,6 @@ requests
 python-dotenv
 feedparser
 vaderSentiment
+psycopg2-binary
 pycountry
 pycountry-convert
