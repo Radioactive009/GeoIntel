@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
+import worldTopoJson from 'world-atlas/countries-110m.json';
 
-const geoUrl = 'https://raw.githubusercontent.com/deldersveld/topojson/master/world-countries.json';
+const geoUrl = worldTopoJson;
 
 const COUNTRY_ALIASES = {
     'united states of america': 'united states',
@@ -49,7 +50,7 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
     const selectedNormalized = normalizeCountry(selectedCountry);
 
     return (
-        <div className="glass rounded-[2.5rem] p-6 lg:p-8 relative overflow-hidden animate-fade-in-up">
+        <div className="glass rounded-[2.5rem] p-5 lg:p-6 relative overflow-hidden animate-fade-in-up">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.12),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.12),transparent_50%)]" />
             <div className="relative z-10">
                 <div className="flex items-center justify-between mb-5">
@@ -63,11 +64,11 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                     </button>
                 </div>
 
-                <div className="relative">
+                <div className="relative h-[360px] md:h-[520px] lg:h-[640px]">
                     <ComposableMap
-                        projectionConfig={{ scale: 135 }}
-                        className="w-full h-auto"
-                        style={{ width: '100%', height: 'auto' }}
+                        projectionConfig={{ scale: 220 }}
+                        className="w-full h-full"
+                        style={{ width: '100%', height: '100%' }}
                     >
                         <Geographies geography={geoUrl}>
                             {({ geographies }) =>
