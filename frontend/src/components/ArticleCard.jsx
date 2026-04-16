@@ -41,7 +41,7 @@ const getFlagEmoji = (countryCode) => {
 
 const ArticleCard = ({ article, index }) => {
     const { title, description, url, published_at, source, sentiment_score, sentiment_label } = article;
-    const sourceName = source?.name || 'Unknown';
+    const sourceName = (source?.name || 'Unknown').replace(/\s\[[A-Z]{2}\]$/, '');
     const countryName = source?.country?.name || 'Global';
     const isoCode = source?.country?.iso_code || 'Global';
 

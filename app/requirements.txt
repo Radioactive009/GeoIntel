@@ -7,3 +7,5 @@ python-dotenv
 transformers
 torch
 feedparser
+pycountry
+pycountry-convert

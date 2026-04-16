@@ -9,6 +9,23 @@ const COUNTRY_ALIASES = {
     usa: 'united states',
     'russian federation': 'russia',
     'iran (islamic republic of)': 'iran',
+    'dem rep congo': 'congo, the democratic republic of the',
+    'central african rep': 'central african republic',
+    'dominican rep': 'dominican republic',
+    'eq guinea': 'equatorial guinea',
+    'falkland is': 'falkland islands (malvinas)',
+    'bosnia and herz': 'bosnia and herzegovina',
+    laos: "lao people's democratic republic",
+    macedonia: 'north macedonia',
+    moldova: 'moldova, republic of',
+    'north korea': "korea, democratic people's republic of",
+    'south korea': 'korea, republic of',
+    syria: 'syrian arab republic',
+    tanzania: 'tanzania, united republic of',
+    turkey: 'türkiye',
+    venezuela: 'venezuela, bolivarian republic of',
+    vietnam: 'viet nam',
+    bolivia: 'bolivia, plurinational state of',
 };
 
 const normalizeCountry = (value) => {

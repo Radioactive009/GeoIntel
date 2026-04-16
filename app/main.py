@@ -1,13 +1,16 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Query
 from sqlalchemy.orm import Session, joinedload
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 import requests
 import os
+import json
 from dotenv import load_dotenv
 import logging
 import threading
+import pycountry
+import pycountry_convert as pc
 
 # =========================================================
 # LOGGING SETUP
@@ -78,33 +81,64 @@ def get_db():
 # =========================================================
 # CENTRAL COUNTRY CONFIGURATION
 # =========================================================
-COUNTRIES = [
-    {"name": "United States", "code": "US", "query": "US OR United States", "region": "North America"},
-    {"name": "India",         "code": "IN", "query": "India",              "region": "South Asia"},
-    {"name": "China",         "code": "CN", "query": "China",              "region": "East Asia"},
-    {"name": "Russia",        "code": "RU", "query": "Russia",             "region": "Europe"},
-    {"name": "Iran",          "code": "IR", "query": "Iran",               "region": "Middle East"},
-    {"name": "South Africa",  "code": "ZA", "query": "South Africa",       "region": "Africa"},
-    {"name": "Nigeria",       "code": "NG", "query": "Nigeria",            "region": "Africa"},
-    {"name": "Egypt",         "code": "EG", "query": "Egypt",              "region": "Africa"},
-    {"name": "Ethiopia",      "code": "ET", "query": "Ethiopia",           "region": "Africa"},
-    {"name": "Kenya",         "code": "KE", "query": "Kenya",              "region": "Africa"},
-    {"name": "Algeria",       "code": "DZ", "query": "Algeria",            "region": "Africa"},
-    {"name": "Morocco",       "code": "MA", "query": "Morocco",            "region": "Africa"},
-    {"name": "Ghana",         "code": "GH", "query": "Ghana",              "region": "Africa"},
-    {"name": "Sudan",         "code": "SD", "query": "Sudan",              "region": "Africa"},
-    {"name": "DR Congo",      "code": "CD", "query": "DR Congo OR Democratic Republic of the Congo", "region": "Africa"},
-    {"name": "Argentina",     "code": "AR", "query": "Argentina",          "region": "South America"},
-    {"name": "Brazil",        "code": "BR", "query": "Brazil",             "region": "South America"},
-    {"name": "Chile",         "code": "CL", "query": "Chile",              "region": "South America"},
-    {"name": "Colombia",      "code": "CO", "query": "Colombia",           "region": "South America"},
-    {"name": "Peru",          "code": "PE", "query": "Peru",               "region": "South America"},
-    {"name": "Venezuela",     "code": "VE", "query": "Venezuela",          "region": "South America"},
-    {"name": "Ecuador",       "code": "EC", "query": "Ecuador",            "region": "South America"},
-    {"name": "Bolivia",       "code": "BO", "query": "Bolivia",            "region": "South America"},
-    {"name": "Paraguay",      "code": "PY", "query": "Paraguay",           "region": "South America"},
-    {"name": "Uruguay",       "code": "UY", "query": "Uruguay",            "region": "South America"},
-]
+CONTINENT_TO_REGION = {
+    "AF": "Africa",
+    "AS": "Asia",
+    "EU": "Europe",
+    "NA": "North America",
+    "SA": "South America",
+    "OC": "Oceania",
+    "AN": "Antarctica",
+}
+
+MIDDLE_EAST_ISO = {
+    "AE", "BH", "CY", "EG", "IQ", "IR", "IL", "JO", "KW",
+    "LB", "OM", "PS", "QA", "SA", "SY", "TR", "YE",
+}
+
+CURSOR_FILE = os.path.join(os.path.dirname(__file__), ".ingest_cursor.json")
+INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "25")))
+
+
+def resolve_region(alpha2: str) -> str:
+    if alpha2 in MIDDLE_EAST_ISO:
+        return "Middle East"
+    try:
+        continent_code = pc.country_alpha2_to_continent_code(alpha2)
+        return CONTINENT_TO_REGION.get(continent_code, "Global")
+    except Exception:
+        return "Global"
+
+
+def build_country_catalog() -> list[dict]:
+    countries = []
+    for c in pycountry.countries:
+        code = getattr(c, "alpha_2", None)
+        if not code:
+            continue
+
+        # Use canonical short country name for UI/map compatibility.
+        name = c.name
+        query_terms = [f'"{name}"']
+        if getattr(c, "official_name", None):
+            query_terms.append(f'"{c.official_name}"')
+        if getattr(c, "common_name", None):
+            query_terms.append(f'"{c.common_name}"')
+        query_terms.append(code)
+
+        countries.append({
+            "name": name,
+            "code": code,
+            "query": " OR ".join(dict.fromkeys(query_terms)),
+            "region": resolve_region(code),
+        })
+
+    countries.sort(key=lambda x: x["name"])
+    return countries
+
+
+COUNTRIES = build_country_catalog()
+COUNTRY_MAP = {c["code"]: c for c in COUNTRIES}
 
 BASE_QUERY = "politics OR war OR conflict OR sanctions OR diplomacy OR military OR crisis"
 
@@ -159,11 +193,70 @@ def get_or_create_source(db: Session, source_name: str, country_id: int) -> mode
 def find_country_config(iso_code: str) -> dict:
     """Find a country config entry by ISO code, or build a fallback."""
     iso_code = iso_code.strip().upper()
-    for c in COUNTRIES:
-        if c["code"] == iso_code:
-            return c
+    if iso_code in COUNTRY_MAP:
+        return COUNTRY_MAP[iso_code]
     # Fallback for unknown codes
     return {"name": iso_code, "code": iso_code, "query": iso_code, "region": "Unknown"}
+
+
+def ensure_country_catalog_in_db(db: Session) -> None:
+    """
+    Ensure DB has the full ISO country catalog and normalized names/regions.
+    This keeps map labels and backend country names aligned.
+    """
+    existing = {c.iso_code: c for c in db.query(models.Country).all()}
+
+    for cfg in COUNTRIES:
+        current = existing.get(cfg["code"])
+        if current:
+            changed = False
+            if current.name != cfg["name"]:
+                current.name = cfg["name"]
+                changed = True
+            if current.region != cfg["region"]:
+                current.region = cfg["region"]
+                changed = True
+            if changed:
+                db.add(current)
+        else:
+            db.add(models.Country(
+                name=cfg["name"],
+                iso_code=cfg["code"],
+                region=cfg["region"],
+            ))
+
+    db.commit()
+
+
+def load_cursor() -> int:
+    if not os.path.exists(CURSOR_FILE):
+        return 0
+    try:
+        with open(CURSOR_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return int(data.get("cursor", 0))
+    except Exception:
+        return 0
+
+
+def save_cursor(cursor: int) -> None:
+    try:
+        with open(CURSOR_FILE, "w", encoding="utf-8") as f:
+            json.dump({"cursor": cursor}, f)
+    except Exception:
+        logger.warning("Could not persist ingest cursor")
+
+
+def get_country_batch(size: int) -> tuple[list[dict], int]:
+    if not COUNTRIES:
+        return [], 0
+
+    size = max(1, min(size, len(COUNTRIES)))
+    current = load_cursor() % len(COUNTRIES)
+    batch = [COUNTRIES[(current + i) % len(COUNTRIES)] for i in range(size)]
+    next_cursor = (current + size) % len(COUNTRIES)
+    save_cursor(next_cursor)
+    return batch, current
 
 
 # =========================================================
@@ -240,7 +333,8 @@ def ingest_news_for_country(country_iso: str, db: Session):
             continue
 
         # Source → Country link
-        source_name = item.get("source", {}).get("name") or "Unknown Source"
+        raw_source_name = item.get("source", {}).get("name") or "Unknown Source"
+        source_name = f"{raw_source_name} [{country.iso_code}]"
         source = get_or_create_source(db, source_name, country.id)
 
         # Parse date
@@ -294,11 +388,19 @@ scheduler = BackgroundScheduler()
 
 
 def auto_ingest_all_countries():
-    """Scheduled job: ingest for every configured country."""
+    """Scheduled job: ingest rotating global country batches."""
     db = SessionLocal()
     try:
         logger.info("⏰ Scheduled ingestion starting...")
-        for country_cfg in COUNTRIES:
+        ensure_country_catalog_in_db(db)
+        batch, start_idx = get_country_batch(INGEST_BATCH_SIZE)
+        logger.info(
+            "🌍 Ingest batch: start=%s size=%s of total=%s",
+            start_idx,
+            len(batch),
+            len(COUNTRIES),
+        )
+        for country_cfg in batch:
             get_or_create_country(db, country_cfg)
             ingest_news_for_country(country_cfg["code"], db)
         delete_old_articles(db)
@@ -312,6 +414,13 @@ def auto_ingest_all_countries():
 @app.on_event("startup")
 def start_scheduler():
     logger.info("🚀 Starting background scheduler...")
+    db = SessionLocal()
+    try:
+        ensure_country_catalog_in_db(db)
+        logger.info("✅ Country catalog synced in DB (%s countries)", len(COUNTRIES))
+    finally:
+        db.close()
+
     if not scheduler.get_jobs():
         scheduler.add_job(
             auto_ingest_all_countries,
@@ -357,6 +466,7 @@ def create_country(country: schemas.CountryCreate, db: Session = Depends(get_db)
 
 @app.get("/countries", response_model=list[schemas.CountryResponse])
 def get_countries(db: Session = Depends(get_db)):
+    ensure_country_catalog_in_db(db)
     return db.query(models.Country).all()
 
 
@@ -428,27 +538,65 @@ def ingest_news(country_iso: str, db: Session = Depends(get_db)):
 
 
 # =========================================================
-# MULTI-COUNTRY BATCH INGEST (uses COUNTRIES config)
+# MULTI-COUNTRY BATCH INGEST (uses global COUNTRY catalog)
 # =========================================================
 @app.post("/ingest-all")
-def ingest_all_countries(db: Session = Depends(get_db)):
+def ingest_all_countries(
+    limit: int = Query(default=50, ge=1, le=249),
+    db: Session = Depends(get_db)
+):
     print("====================================")
-    print("🌐 MULTI-COUNTRY INGESTION")
+    print("🌐 GLOBAL INGESTION")
     print("====================================")
 
+    ensure_country_catalog_in_db(db)
     results = {}
-    for country_cfg in COUNTRIES:
+    selected = COUNTRIES[:limit]
+    for country_cfg in selected:
         get_or_create_country(db, country_cfg)
         saved = ingest_news_for_country(country_cfg["code"], db)
         results[country_cfg["code"]] = saved
 
     total = sum(results.values())
-    print(f"✅ Total across {len(COUNTRIES)} countries: {total}")
+    print(f"✅ Total across {len(selected)} countries: {total}")
 
     return {
-        "message": "Multi-country ingestion completed",
+        "message": "Global ingestion completed",
+        "catalog_total": len(COUNTRIES),
+        "ingested_count": len(selected),
         "results": results,
         "total_saved": total
+    }
+
+
+@app.post("/ingest-batch")
+def ingest_country_batch(
+    size: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    ensure_country_catalog_in_db(db)
+    batch, start_idx = get_country_batch(size)
+    results = {}
+    for country_cfg in batch:
+        get_or_create_country(db, country_cfg)
+        saved = ingest_news_for_country(country_cfg["code"], db)
+        results[country_cfg["code"]] = saved
+
+    return {
+        "message": "Batch ingestion completed",
+        "catalog_total": len(COUNTRIES),
+        "batch_start_index": start_idx,
+        "batch_size": len(batch),
+        "total_saved": sum(results.values()),
+        "results": results,
+    }
+
+
+@app.get("/country-catalog")
+def get_country_catalog():
+    return {
+        "total": len(COUNTRIES),
+        "sample": COUNTRIES[:20]
     }
 
 
