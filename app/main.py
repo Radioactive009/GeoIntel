@@ -715,6 +715,7 @@ def risk_analysis(db: Session = Depends(get_db)):
     print("🌐 GEOPOLITICAL RISK ANALYSIS")
     print("====================================")
 
+    ensure_country_catalog_in_db(db)
     results = calculate_risk(db)
 
     print(f"✅ Risk analysis complete — {len(results)} countries evaluated")

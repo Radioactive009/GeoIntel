@@ -38,8 +38,31 @@ const getRiskGradient = (level) => {
 const COUNTRY_ALIASES = {
     'united states of america': 'united states',
     usa: 'united states',
+    russia: 'russian federation',
+    iran: 'iran, islamic republic of',
     'russian federation': 'russia',
     'iran (islamic republic of)': 'iran',
+    'dem rep congo': 'congo, the democratic republic of the',
+    'central african rep': 'central african republic',
+    'dominican rep': 'dominican republic',
+    'eq guinea': 'equatorial guinea',
+    'falkland is': 'falkland islands (malvinas)',
+    'bosnia and herz': 'bosnia and herzegovina',
+    laos: "lao people's democratic republic",
+    macedonia: 'north macedonia',
+    moldova: 'moldova, republic of',
+    'north korea': "korea, democratic people's republic of",
+    'south korea': 'korea, republic of',
+    syria: 'syrian arab republic',
+    tanzania: 'tanzania, united republic of',
+    turkey: 'türkiye',
+    venezuela: 'venezuela, bolivarian republic of',
+    vietnam: 'viet nam',
+    bolivia: 'bolivia, plurinational state of',
+    palestine: 'palestine, state of',
+    brunei: 'brunei darussalam',
+    'solomon is': 'solomon islands',
+    's sudan': 'south sudan',
 };
 
 const normalizeCountry = (value) => {
@@ -50,7 +73,13 @@ const normalizeCountry = (value) => {
         .toLowerCase()
         .replace(/[().,]/g, '')
         .replace(/\s+/g, ' ');
-    return COUNTRY_ALIASES[normalized] || normalized;
+    const aliased = COUNTRY_ALIASES[normalized] || normalized;
+    return aliased
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[().,]/g, '')
+        .replace(/\s+/g, ' ');
 };
 
 const getArticleCountryName = (article) => article?.country || article?.source?.country?.name || '';
@@ -116,6 +145,11 @@ const Dashboard = () => {
 
     useEffect(() => { fetchArticles(); fetchRiskData(); }, []);
 
+    // ── Filter out countries with zero articles ──────────
+    const activeRiskData = useMemo(() => 
+        riskData.filter(r => r.total_articles > 0), 
+    [riskData]);
+
     const countries = useMemo(() => {
         const s = new Set();
         articles.forEach(a => {
@@ -147,8 +181,8 @@ const Dashboard = () => {
     const resetFilters = () => { setSelectedCountry(''); setSelectedRegion(''); setCurrentPage(1); };
     useEffect(() => { setCurrentPage(1); }, [selectedCountry, selectedRegion]);
 
-    const highRiskCount = riskData.filter(r => r.risk_level === 'high').length;
-    const avgRisk = riskData.length > 0 ? (riskData.reduce((s, r) => s + r.risk_score, 0) / riskData.length).toFixed(1) : '0.0';
+    const highRiskCount = activeRiskData.filter(r => r.risk_level === 'high').length;
+    const avgRisk = activeRiskData.length > 0 ? (activeRiskData.reduce((s, r) => s + r.risk_score, 0) / activeRiskData.length).toFixed(1) : '0.0';
 
     return (
         <div className="flex flex-col min-h-screen app-bg text-slate-400 font-sans">
@@ -165,7 +199,7 @@ const Dashboard = () => {
                         <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
                             Geopolitical <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 decoration-cyan-500/20 underline underline-offset-8">Intelligence</span>
                         </h1>
-                        <p className="text-slate-500 text-sm font-medium pt-2">Global monitoring network analyzing {articles.length} reports across {riskData.length} strategic zones.</p>
+                        <p className="text-slate-500 text-sm font-medium pt-2">Global monitoring network analyzing {articles.length} reports across {activeRiskData.length} strategic zones.</p>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -182,7 +216,7 @@ const Dashboard = () => {
                 {/* ── SECTION 1: STAT CARDS ────────────────── */}
                 <section className="mb-12">
                     <MapChart
-                        riskData={riskData}
+                        riskData={activeRiskData}
                         selectedCountry={selectedCountry}
                         onCountrySelect={setSelectedCountry}
                     />
@@ -190,7 +224,7 @@ const Dashboard = () => {
 
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                     {[
-                        { icon: Globe, label: 'Monitored Regions', value: riskData.length, color: 'text-cyan-400', sub: 'Active Strategic Zones' },
+                        { icon: Globe, label: 'Monitored Regions', value: activeRiskData.length, color: 'text-cyan-400', sub: 'Active Strategic Zones' },
                         { icon: Activity, label: 'Average Risk Score', value: `${avgRisk}%`, color: 'text-amber-400', sub: 'Weighted Regional Index' },
                         { icon: AlertTriangle, label: 'High Alert Zones', value: highRiskCount, color: 'text-rose-400', sub: 'Immediate Threat Potential' },
                         { icon: Newspaper, label: 'Intelligence Volume', value: articles.length, color: 'text-indigo-400', sub: 'Verified Field Reports' },
@@ -231,7 +265,7 @@ const Dashboard = () => {
                         </div>
                         <div className="h-[320px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={riskData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                                <BarChart data={activeRiskData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
                                     <XAxis
                                         dataKey="iso_code"
                                         tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }}
@@ -248,7 +282,7 @@ const Dashboard = () => {
                                     />
                                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                                     <Bar dataKey="risk_score" radius={[12, 12, 12, 12]} barSize={50}>
-                                        {riskData.map((e) => (
+                                        {activeRiskData.map((e) => (
                                             <Cell key={e.iso_code} fill={getRiskColor(e.risk_level)} fillOpacity={0.9} />
                                         ))}
                                     </Bar>
@@ -266,7 +300,7 @@ const Dashboard = () => {
                             <h2 className="text-base font-bold text-white uppercase tracking-widest">Threat Index</h2>
                         </div>
                         <div className="space-y-4">
-                            {riskData.slice(0, 5).map((item, i) => (
+                            {activeRiskData.slice(0, 5).map((item, i) => (
                                 <div
                                     key={item.iso_code}
                                     className="flex items-center gap-4 p-4 rounded-3xl bg-slate-900/40 border border-white/5 transition-transform duration-300 hover:translate-x-1"

@@ -7,6 +7,8 @@ const geoUrl = worldTopoJson;
 const COUNTRY_ALIASES = {
     'united states of america': 'united states',
     usa: 'united states',
+    russia: 'russian federation',
+    iran: 'iran, islamic republic of',
     'russian federation': 'russia',
     'iran (islamic republic of)': 'iran',
     'dem rep congo': 'congo, the democratic republic of the',
@@ -26,6 +28,10 @@ const COUNTRY_ALIASES = {
     venezuela: 'venezuela, bolivarian republic of',
     vietnam: 'viet nam',
     bolivia: 'bolivia, plurinational state of',
+    palestine: 'palestine, state of',
+    brunei: 'brunei darussalam',
+    'solomon is': 'solomon islands',
+    's sudan': 'south sudan',
 };
 
 const normalizeCountry = (value) => {
@@ -36,7 +42,13 @@ const normalizeCountry = (value) => {
         .toLowerCase()
         .replace(/[().,]/g, '')
         .replace(/\s+/g, ' ');
-    return COUNTRY_ALIASES[normalized] || normalized;
+    const aliased = COUNTRY_ALIASES[normalized] || normalized;
+    return aliased
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[().,]/g, '')
+        .replace(/\s+/g, ' ');
 };
 
 const getRiskColor = (risk) => {
