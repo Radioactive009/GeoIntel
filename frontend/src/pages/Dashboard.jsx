@@ -441,7 +441,14 @@ const Dashboard = () => {
                 </div>
             </main>
 
-            <footer className="mt-auto border-t border-slate-800/50 py-5 px-6 text-center">
+            <footer className="mt-auto border-t border-slate-800/50 py-10 px-6 text-center space-y-4">
+                <div className="max-w-2xl mx-auto glass p-6 rounded-[2rem] border border-indigo-500/10">
+                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
+                        <span className="text-indigo-400 font-bold uppercase tracking-widest mr-2">Intelligence Note:</span>
+                        This system is currently built on basic NLP pipelines. Geopolitical nuance is complex, so do not expect sentiment analysis to be 100% accurate. 
+                        If you think you can build a more accurate sentiment engine for geopolitical data—do it! Take it as a fun challenge.
+                    </p>
+                </div>
                 <p className="text-[10px] text-slate-600 uppercase tracking-[0.25em] font-bold">
                     GeoIntel Systems • Multi-Source Intelligence • Secure Node 04
                 </p>
