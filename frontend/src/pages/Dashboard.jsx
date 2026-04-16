@@ -3,7 +3,7 @@ import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import ArticleCard from '../components/ArticleCard';
 import MapChart from '../components/MapChart';
-import { getArticles, getRiskAnalysis } from '../services/api';
+import { getArticles, getRiskAnalysis, triggerIngestion } from '../services/api';
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
     TrendingUp, BarChart3, Globe, Activity, Newspaper,
@@ -143,6 +143,22 @@ const Dashboard = () => {
         }
     };
 
+    const handleManualRefresh = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // 1. Trigger fresh ingestion on backend
+            await triggerIngestion();
+            // 2. Fetch updated data
+            await Promise.all([fetchArticles(), fetchRiskData()]);
+        } catch (err) {
+            console.error(err);
+            setError('Intelligence bypass failed. Critical connection timeout.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => { fetchArticles(); fetchRiskData(); }, []);
 
     // ── Filter out countries with zero articles ──────────
@@ -186,7 +202,7 @@ const Dashboard = () => {
 
     return (
         <div className="flex flex-col min-h-screen app-bg text-slate-400 font-sans">
-            <Navbar onRefresh={() => { fetchArticles(); fetchRiskData(); }} isRefreshing={loading} />
+            <Navbar onRefresh={handleManualRefresh} isRefreshing={loading} />
 
             <main className="flex-grow max-w-[1440px] mx-auto w-full px-6 py-10 lg:py-12">
                 {/* Dashboard Header */}

@@ -9,5 +9,6 @@ const api = axios.create({
 
 export const getArticles = (country = '') => api.get('/articles', { params: country ? { country } : undefined });
 export const getRiskAnalysis = () => api.get('/risk-analysis');
+export const triggerIngestion = () => api.post('/ingest-batch', null, { params: { size: 10 } });
 
 export default api;

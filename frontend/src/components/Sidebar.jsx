@@ -78,7 +78,7 @@ const Sidebar = ({
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-[10px] font-medium text-slate-500">Sentiment Model</span>
-                            <span className="text-[10px] font-bold text-emerald-400">FINBERT-04</span>
+                            <span className="text-[10px] font-bold text-emerald-400">VADER-V1 (LITE)</span>
                         </div>
                         <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                             <div 
