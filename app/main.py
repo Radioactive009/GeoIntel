@@ -32,6 +32,27 @@ load_dotenv()
 
 
 # =========================================================
+
+# =========================================================
+# LOGGING SETUP
+# =========================================================
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+from .database import engine, Base, SessionLocal
+from . import models, schemas
+
+
+# =========================================================
+# LOAD ENV
+# =========================================================
+load_dotenv()
+
+
+# =========================================================
 # CREATE TABLES + MIGRATE
 # =========================================================
 Base.metadata.create_all(bind=engine)
@@ -46,6 +67,11 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE articles ADD COLUMN sentiment_score FLOAT"))
     if "sentiment_label" not in columns:
         conn.execute(text("ALTER TABLE articles ADD COLUMN sentiment_label VARCHAR"))
+    # New columns for semantic risk engine
+    if "geo_risk_score" not in columns:
+        conn.execute(text("ALTER TABLE articles ADD COLUMN geo_risk_score FLOAT"))
+    if "geo_risk_level" not in columns:
+        conn.execute(text("ALTER TABLE articles ADD COLUMN geo_risk_level VARCHAR"))
     conn.commit()
 
 
@@ -264,7 +290,7 @@ def get_country_batch(size: int) -> tuple[list[dict], int]:
 # =========================================================
 def ingest_news_for_country(country_iso: str, db: Session):
 
-    from app.finbert import analyze_sentiment
+    from app.services.risk_engine import score_article
     from app.services.gnews_service import fetch_gnews
     from app.services.rss_service import fetch_rss
 
@@ -347,11 +373,15 @@ def ingest_news_for_country(country_iso: str, db: Session):
         else:
             pub_date = datetime.utcnow()
 
-        # Sentiment (FinBERT + keyword override — untouched)
+        # ── Semantic Risk Scoring ─────────────────────────
         text = (item.get("title") or "") + " " + (item.get("description") or "")
-        sentiment_score, label = analyze_sentiment(text)
+        geo_risk_score, geo_risk_level = score_article(text)
 
-        print(f"  🧠 {label:>8} ({sentiment_score:+.3f}) │ {text[:70]}")
+        # Keep legacy sentiment fields as aliases for backwards compatibility
+        sentiment_score = geo_risk_score / 100.0 * -1 if geo_risk_level in ("high", "medium") else geo_risk_score / 100.0
+        sentiment_label = geo_risk_level
+
+        print(f"  🎯 {geo_risk_level:>6} risk ({geo_risk_score:>6.1f}/100) │ {text[:70]}")
 
         new_article = models.Article(
             title=item.get("title"),
@@ -360,8 +390,11 @@ def ingest_news_for_country(country_iso: str, db: Session):
             source_id=source.id,
             published_at=pub_date,
             sentiment_score=sentiment_score,
-            sentiment_label=label
+            sentiment_label=sentiment_label,
+            geo_risk_score=geo_risk_score,
+            geo_risk_level=geo_risk_level,
         )
+
         db.add(new_article)
         saved_count += 1
 
@@ -598,99 +631,6 @@ def get_country_catalog():
         "total": len(COUNTRIES),
         "sample": COUNTRIES[:20]
     }
-
-
-# =========================================================
-# REFRESH: CLEAR OLD + RE-INGEST WITH SENTIMENT
-# =========================================================
-@app.post("/refresh-news")
-def refresh_news(db: Session = Depends(get_db)):
-    # Delete all existing articles so duplicates don't block re-ingestion
-    deleted = db.query(models.Article).delete()
-    db.commit()
-
-    # Re-ingest for all countries
-    countries = db.query(models.Country).all()
-    total_saved = 0
-    for country in countries:
-        total_saved += ingest_news_for_country(country.iso_code, db)
-
-    return {
-        "message": "Full refresh completed",
-        "articles_deleted": deleted,
-        "articles_saved": total_saved
-    }
-
-
-# =========================================================
-# GEOPOLITICAL RISK ENGINE
-# =========================================================
-def calculate_risk(db: Session):
-    """
-    Compute a weighted geopolitical risk score per country.
-
-    Improved formula:
-        negative_scores = sum(abs(score)) for all articles with score < 0
-        risk_score = (negative_scores / total_articles) * 100
-
-    This captures keyword-boosted negatives even if FinBERT
-    originally labeled them differently.
-
-    Risk levels:
-        >= 70  → high
-        >= 40  → medium
-        <  40  → low
-    """
-
-    countries = db.query(models.Country).all()
-    results = []
-
-    for country in countries:
-        # ── Join: Article → Source → Country ──────────────
-        all_articles = (
-            db.query(models.Article)
-            .join(models.Source, models.Article.source_id == models.Source.id)
-            .filter(models.Source.country_id == country.id)
-            .all()
-        )
-
-        total_articles = len(all_articles)
-
-        # ── Edge case: no articles ───────────────────────
-        if total_articles == 0:
-            print(f"⚠️ Risk calc: {country.name} — 0 articles, skipping")
-            results.append({
-                "country": country.name,
-                "iso_code": country.iso_code,
-                "total_articles": 0,
-                "negative_articles": 0,
-                "risk_score": 0.0,
-                "risk_level": "low"
-            })
-            continue
-
-        # ── Improved: use score < 0 (catches boosted negatives) ──
-        negative_articles = [
-            a for a in all_articles
-            if a.sentiment_score is not None and a.sentiment_score < 0
-        ]
-        negative_count = len(negative_articles)
-
-        negative_scores = sum(
-            abs(a.sentiment_score) for a in negative_articles
-        )
-
-        risk_score = round((negative_scores / total_articles) * 100, 2)
-
-        # ── Classify risk level ──────────────────────────
-        if risk_score >= 70:
-            risk_level = "high"
-        elif risk_score >= 40:
-            risk_level = "medium"
-        else:
-            risk_level = "low"
-
-        print(f"🔎 Risk calculation: {country.name} → "
               f"score={risk_score}, level={risk_level}, "
               f"neg={negative_count}/{total_articles}")
 

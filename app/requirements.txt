@@ -7,5 +7,7 @@ python-dotenv
 transformers
 torch
 feedparser
+spacy
+sentence-transformers
 pycountry
 pycountry-convert
