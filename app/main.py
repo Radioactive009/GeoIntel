@@ -32,27 +32,6 @@ load_dotenv()
 
 
 # =========================================================
-
-# =========================================================
-# LOGGING SETUP
-# =========================================================
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
-
-from .database import engine, Base, SessionLocal
-from . import models, schemas
-
-
-# =========================================================
-# LOAD ENV
-# =========================================================
-load_dotenv()
-
-
-# =========================================================
 # CREATE TABLES + MIGRATE
 # =========================================================
 Base.metadata.create_all(bind=engine)
@@ -192,7 +171,7 @@ def get_or_create_country(db: Session, country_data: dict) -> models.Country:
         db.add(country)
         db.commit()
         db.refresh(country)
-        print(f"  ✅ Created country: {country.name} ({country.iso_code})")
+        print(f"  [OK] Created country: {country.name} ({country.iso_code})")
     return country
 
 
@@ -296,16 +275,16 @@ def ingest_news_for_country(country_iso: str, db: Session):
 
     # ── Validate API Keys ────────────────────────────────
     NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-    print("🔑 NEWS_API_KEY:", "YES" if NEWS_API_KEY else "❌ NONE")
+    print("KEYS NEWS_API_KEY:", "YES" if NEWS_API_KEY else "MISSING NONE")
 
     # ── Resolve country config ───────────────────────────
     country_cfg = find_country_config(country_iso)
     country = get_or_create_country(db, country_cfg)
-    print(f"🌍 Ingesting for: {country.name} ({country.iso_code})")
+    print(f"INGEST Ingesting for: {country.name} ({country.iso_code})")
 
     # ── Build dynamic query ──────────────────────────────
     query_string = build_query(country_cfg["query"])
-    print("📡 Query:", query_string)
+    print("QUERY Query:", query_string)
 
     # ── SOURCE 1: NewsAPI ────────────────────────────────
     newsapi_articles = []
@@ -325,11 +304,11 @@ def ingest_news_for_country(country_iso: str, db: Session):
             if response.status_code == 200:
                 data = response.json()
                 newsapi_articles = data.get("articles", [])
-                print(f"  📡 NewsAPI: {len(newsapi_articles)} articles")
+                print(f"  NET NewsAPI: {len(newsapi_articles)} articles")
             else:
-                print(f"  ❌ NewsAPI error: {response.status_code}")
+                print(f"  ERR NewsAPI error: {response.status_code}")
         except requests.exceptions.RequestException as e:
-            print(f"  ❌ NewsAPI request failed: {e}")
+            print(f"  ERR NewsAPI request failed: {e}")
 
     # ── SOURCE 2: GNews ──────────────────────────────────
     gnews_articles = fetch_gnews(query_string, country_cfg["code"])
@@ -339,7 +318,7 @@ def ingest_news_for_country(country_iso: str, db: Session):
 
     # ── Merge all sources ────────────────────────────────
     articles = newsapi_articles + gnews_articles + rss_articles
-    print(f"  📦 Combined: {len(newsapi_articles)} NewsAPI + {len(gnews_articles)} GNews + {len(rss_articles)} RSS = {len(articles)} total")
+    print(f"  MERGE Combined: {len(newsapi_articles)} NewsAPI + {len(gnews_articles)} GNews + {len(rss_articles)} RSS = {len(articles)} total")
 
     if not articles:
         print("⚠️ No articles from any source")
@@ -381,7 +360,7 @@ def ingest_news_for_country(country_iso: str, db: Session):
         sentiment_score = geo_risk_score / 100.0 * -1 if geo_risk_level in ("high", "medium") else geo_risk_score / 100.0
         sentiment_label = geo_risk_level
 
-        print(f"  🎯 {geo_risk_level:>6} risk ({geo_risk_score:>6.1f}/100) │ {text[:70]}")
+        print(f"  RISK {geo_risk_level:>6} risk ({geo_risk_score:>6.1f}/100) | {text[:70]}")
 
         new_article = models.Article(
             title=item.get("title"),
@@ -399,7 +378,7 @@ def ingest_news_for_country(country_iso: str, db: Session):
         saved_count += 1
 
     db.commit()
-    print(f"✅ {country.name}: {saved_count} articles saved")
+    print(f"OK {country.name}: {saved_count} articles saved")
     return saved_count
 
 
@@ -450,7 +429,7 @@ def start_scheduler():
     db = SessionLocal()
     try:
         ensure_country_catalog_in_db(db)
-        logger.info("✅ Country catalog synced in DB (%s countries)", len(COUNTRIES))
+        logger.info("OK Country catalog synced in DB (%s countries)", len(COUNTRIES))
     finally:
         db.close()
 
@@ -463,7 +442,7 @@ def start_scheduler():
             replace_existing=True
         )
         scheduler.start()
-        logger.info("✅ Scheduler started — ingestion every 30 minutes")
+        logger.info("OK Scheduler started - ingestion every 30 minutes")
     
     # Run first ingestion immediately in a background thread
     threading.Thread(target=auto_ingest_all_countries, daemon=True).start()
@@ -579,7 +558,7 @@ def ingest_all_countries(
     db: Session = Depends(get_db)
 ):
     print("====================================")
-    print("🌐 GLOBAL INGESTION")
+    print("GLOBAL INGESTION")
     print("====================================")
 
     ensure_country_catalog_in_db(db)
@@ -591,7 +570,7 @@ def ingest_all_countries(
         results[country_cfg["code"]] = saved
 
     total = sum(results.values())
-    print(f"✅ Total across {len(selected)} countries: {total}")
+    print(f"OK Total across {len(selected)} countries: {total}")
 
     return {
         "message": "Global ingestion completed",
@@ -631,32 +610,95 @@ def get_country_catalog():
         "total": len(COUNTRIES),
         "sample": COUNTRIES[:20]
     }
-              f"score={risk_score}, level={risk_level}, "
-              f"neg={negative_count}/{total_articles}")
+
+
+# =========================================================
+# GEOPOLITICAL RISK ENGINE
+# =========================================================
+def calculate_risk(db: Session):
+    """
+    Compute a weighted geopolitical risk score per country using the
+    new semantic risk engine scores stored per article (geo_risk_score).
+
+    Formula:
+        country_risk = mean(geo_risk_score for all articles) 
+                       weighted by recency (newer → higher weight)
+
+    Risk levels:
+        >= 65  → high
+        >= 35  → medium
+        <  35  → low
+    """
+
+    countries = db.query(models.Country).all()
+    results = []
+
+    for country in countries:
+        all_articles = (
+            db.query(models.Article)
+            .join(models.Source, models.Article.source_id == models.Source.id)
+            .filter(models.Source.country_id == country.id)
+            .all()
+        )
+
+        total_articles = len(all_articles)
+
+        if total_articles == 0:
+            results.append({
+                "country": country.name,
+                "iso_code": country.iso_code,
+                "total_articles": 0,
+                "high_risk_articles": 0,
+                "risk_score": 0.0,
+                "risk_level": "low",
+            })
+            continue
+
+        # ── Use geo_risk_score if available, fall back to |sentiment_score|*100 ──
+        scored = [
+            a.geo_risk_score if a.geo_risk_score is not None
+            else (abs(a.sentiment_score or 0.0) * 100)
+            for a in all_articles
+        ]
+
+        high_risk_count = sum(1 for a in all_articles if (a.geo_risk_level or a.sentiment_label) in ("high",))
+
+        # Simple average (all articles equally weighted)
+        risk_score = round(sum(scored) / total_articles, 2)
+
+        if risk_score >= 65:
+            risk_level = "high"
+        elif risk_score >= 35:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        logger.info(
+            "🔎 Risk: %s → score=%.1f level=%s hi=%d/%d",
+            country.name, risk_score, risk_level, high_risk_count, total_articles,
+        )
 
         results.append({
             "country": country.name,
             "iso_code": country.iso_code,
             "total_articles": total_articles,
-            "negative_articles": negative_count,
+            "high_risk_articles": high_risk_count,
             "risk_score": risk_score,
-            "risk_level": risk_level
+            "risk_level": risk_level,
         })
 
-    # ── Sort: highest risk first ─────────────────────────
     results.sort(key=lambda r: r["risk_score"], reverse=True)
-
     return results
 
 
 @app.get("/risk-analysis")
 def risk_analysis(db: Session = Depends(get_db)):
     print("====================================")
-    print("🌐 GEOPOLITICAL RISK ANALYSIS")
+    print("GEOPOLITICAL RISK ANALYSIS")
     print("====================================")
 
     ensure_country_catalog_in_db(db)
     results = calculate_risk(db)
 
-    print(f"✅ Risk analysis complete — {len(results)} countries evaluated")
+    print(f"OK Risk analysis complete - {len(results)} countries evaluated")
     return results

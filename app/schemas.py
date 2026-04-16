@@ -60,6 +60,8 @@ class ArticleResponse(BaseModel):
     published_at: datetime
     sentiment_score: Optional[float] = None
     sentiment_label: Optional[str] = None
+    geo_risk_score: Optional[float] = None
+    geo_risk_level: Optional[str] = None
     country: Optional[str] = None
     country_iso_code: Optional[str] = None
     source: SourceResponse

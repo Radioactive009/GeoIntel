@@ -115,6 +115,22 @@ EVENT_WEIGHTS: dict[str, float] = {
 }
 
 # ─────────────────────────────────────────────
+# INTENSITY MODIFIERS
+# ─────────────────────────────────────────────
+INTENSITY_MODIFIERS: dict[str, float] = {
+    "massive":      1.25,
+    "severe":       1.20,
+    "heavy":        1.15,
+    "major":        1.15,
+    "escalating":   1.10,
+    "minor":        0.75,
+    "limited":      0.80,
+    "slight":       0.85,
+    "controlled":   0.80,
+    "partial":      0.90,
+}
+
+# ─────────────────────────────────────────────
 # MITIGATION PHRASES
 # ─────────────────────────────────────────────
 MITIGATION_TERMS: list[str] = [
@@ -213,29 +229,73 @@ def _semantic_score(text: str) -> float:
 # ─────────────────────────────────────────────
 # STEP 4 — SPACY CONTEXT REFINEMENT (optional)
 # ─────────────────────────────────────────────
-def _spacy_negation_check(text: str) -> float:
+def _nlp_refinement(text: str) -> Tuple[float, dict]:
     """
-    Use spaCy to detect negation around event verbs.
-    e.g. "did NOT attack" → reduce score by 0.15.
-    Returns penalty (negative value) or 0.0.
+    Perform deep NLP analysis using spaCy to:
+      1. Extract Subject-Action-Object (SAO) relationships.
+      2. Detect intensity modifiers (adjectives/adverbs).
+      3. Detect negations.
+
+    Returns (adjustment_score, metadata_dict).
     """
     nlp = _get_nlp()
     if not nlp:
-        return 0.0
+        return 0.0, {}
+
+    adjustment = 0.0
+    sao_data = {"actors": [], "actions": [], "targets": []}
+    modifiers_found = []
 
     try:
-        doc = nlp(text[:512])
+        doc = nlp(text[:512]) # Analyzing first 512 chars for context
+
         for token in doc:
-            if token.text.lower() in EVENT_WEIGHTS:
-                # Check for negation modifiers on this token
+            # 1. Action (Verb) & Actor/Target detection
+            if token.pos_ == "VERB" or token.dep_ == "ROOT":
+                sao_data["actions"].append(token.lemma_.lower())
+                
+                # Check for negations modifying this action
+                if any(child.dep_ == "neg" for child in token.children):
+                    logger.debug("🚫 Negation detected on: '%s'", token.text)
+                    adjustment -= 0.25
+
+                # Check for intensity modifiers modifying this action
                 for child in token.children:
-                    if child.dep_ == "neg":
-                        logger.debug("🚫 Negation detected on event verb: '%s'", token.text)
-                        return -0.20
-        return 0.0
+                    if child.dep_ in ("advmod", "amod") and child.lemma_.lower() in INTENSITY_MODIFIERS:
+                        mod = child.lemma_.lower()
+                        weight = INTENSITY_MODIFIERS[mod]
+                        modifiers_found.append(mod)
+                        # Adjustment is relative to 1.0 (e.g. 1.25 -> +0.10)
+                        adjustment += (weight - 1.0) / 2 
+
+            # 2. Subject (Actor)
+            if token.dep_ in ("nsubj", "nsubjpass"):
+                sao_data["actors"].append(token.text)
+            
+            # 3. Object (Target)
+            if token.dep_ in ("dobj", "pobj", "attr"):
+                sao_data["targets"].append(token.text)
+                
+                # Check for intensity modifiers modifying the object (e.g. "severe damage")
+                for child in token.children:
+                    if child.lemma_.lower() in INTENSITY_MODIFIERS:
+                        mod = child.lemma_.lower()
+                        modifiers_found.append(mod)
+                        adjustment += (INTENSITY_MODIFIERS[mod] - 1.0) / 2
+
+        metadata = {
+            "sao": sao_data,
+            "modifiers": list(set(modifiers_found))
+        }
+        
+        if modifiers_found:
+             logger.debug("⚡ Intensity modifiers: %s", modifiers_found)
+        
+        return adjustment, metadata
+
     except Exception as e:
-        logger.warning("spaCy negation check failed: %s", e)
-        return 0.0
+        logger.warning("NLP refinement failed: %s", e)
+        return 0.0, {}
 
 
 # ─────────────────────────────────────────────
@@ -273,11 +333,11 @@ def score_article(text: str) -> Tuple[float, str]:
     # ── Step 3: Semantic adjustment ──────────
     semantic_adj = _semantic_score(text)
 
-    # ── Step 4: Negation refinement ──────────
-    negation_adj = _spacy_negation_check(text)
+    # ── Step 4: NLP Deep Refinement (SAO + Modifiers) 
+    nlp_adj, nlp_meta = _nlp_refinement(text)
 
     # ── Combine ──────────────────────────────
-    raw = event_score - mitigation + semantic_adj + negation_adj
+    raw = event_score - mitigation + semantic_adj + nlp_adj
     raw = max(0.0, min(1.0, raw))
 
     # Scale to 0–100
