@@ -1,15 +1,15 @@
 """
-Geopolitical Risk Engine
-========================
-Hybrid NLP-based scoring system that replaces raw sentiment analysis.
+Geopolitical Risk Engine v2
+===========================
+Balanced geopolitical intelligence classification system.
+Rebalanced to reduce negative bias and categorize event types.
 
 Pipeline:
-  1. Event Detection   — identifies high-risk verbs/nouns and their weights
-  2. Mitigation Check  — reduces score when context softens severity
-  3. Semantic Scoring  — sentence-transformer similarity vs reference phrases
-  4. Final Score       — combines all three into a 0–100 risk score
-
-Falls back to rule-only scoring if spaCy or transformers are unavailable.
+  1. Event Detection   — identifies event types (military, diplomatic, etc.) and lowered weights.
+  2. Mitigation Layer  — dynamic weighted reduction (Strong, Medium, Weak).
+  3. Semantic Scoring  — increased influence via sentence-transformers.
+  4. Classification    — identifies "strategic_activity" vs "conflict".
+  5. Final Score       — weighted formula: (Event*0.5 + Semantic*0.3 - Mitigation*0.4).
 """
 
 import logging
@@ -19,7 +19,7 @@ from typing import Tuple
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# LOAD SPACY  (lazy — avoids blocking startup)
+# LOAD SPACY (lazy loading)
 # ─────────────────────────────────────────────
 _nlp = None
 
@@ -38,7 +38,7 @@ def _get_nlp():
 
 
 # ─────────────────────────────────────────────
-# LOAD SENTENCE TRANSFORMER  (lazy)
+# LOAD SENTENCE TRANSFORMER (lazy loading)
 # ─────────────────────────────────────────────
 _embedder = None
 _severe_embeddings = None
@@ -47,12 +47,12 @@ _low_embeddings = None
 SEVERE_EVENTS = [
     "major war", "devastating attack", "high casualties", "nuclear strike",
     "massive military offensive", "genocide", "full-scale invasion",
-    "terror bombing", "mass killing", "coup d'état",
+    "terror bombing", "mass killing", "coup d'état", "imminent threat of war",
 ]
 LOW_EVENTS = [
-    "minor incident", "low impact", "contained situation", "diplomatic talks",
-    "ceasefire agreed", "no casualties reported", "limited skirmish",
-    "peaceful protest", "sanctions lifted", "tensions easing",
+    "minor incident", "strategic movement", "diplomatic talks", "trade agreement",
+    "ceasefire agreed", "monitoring situation", "limited impact",
+    "peaceful protest", "sanctions discussion", "policy change",
 ]
 
 
@@ -62,7 +62,6 @@ def _get_embedder():
         return _embedder
     try:
         from sentence_transformers import SentenceTransformer
-        import torch
         _embedder = SentenceTransformer("all-MiniLM-L6-v2")
         _severe_embeddings = _embedder.encode(SEVERE_EVENTS, convert_to_tensor=True)
         _low_embeddings    = _embedder.encode(LOW_EVENTS,   convert_to_tensor=True)
@@ -74,91 +73,118 @@ def _get_embedder():
 
 
 # ─────────────────────────────────────────────
-# EVENT WEIGHTS
+# REBALANCED EVENT WEIGHTS
 # ─────────────────────────────────────────────
+# Tiers rebalanced for less dominance (0.3 - 0.75 range)
 EVENT_WEIGHTS: dict[str, float] = {
-    # Tier 1 — extreme
-    "war":          1.00,
-    "invasion":     0.95,
-    "nuke":         0.95,
-    "nuclear":      0.90,
-    "genocide":     0.95,
-    "massacre":     0.90,
-    "assassination": 0.85,
-    # Tier 2 — high
-    "attack":       0.85,
-    "bombing":      0.85,
-    "airstrike":    0.85,
-    "missile":      0.80,
-    "explosion":    0.80,
-    "coup":         0.80,
-    "terror":       0.80,
-    "killed":       0.80,
-    "dead":         0.75,
-    # Tier 3 — medium-high
-    "conflict":     0.70,
-    "violence":     0.70,
-    "troops":       0.65,
-    "military":     0.60,
-    "sanctions":    0.60,
-    "blockade":     0.65,
-    "occupation":   0.70,
-    "hostage":      0.75,
-    # Tier 4 — medium
-    "protest":      0.45,
-    "riot":         0.55,
-    "unrest":       0.50,
-    "crisis":       0.55,
-    "emergency":    0.50,
-    "threat":       0.50,
-    "arrested":     0.40,
+    # Tier 1 — High Importance (0.65 - 0.75)
+    "war":          0.75,
+    "invasion":     0.75,
+    "nuke":         0.75,
+    "nuclear":      0.70,
+    "genocide":     0.75,
+    "massacre":     0.70,
+    # Tier 2 — Significant (0.55 - 0.65)
+    "attack":       0.65,
+    "bombing":      0.65,
+    "airstrike":    0.65,
+    "missile":      0.60,
+    "explosion":    0.60,
+    "coup":         0.60,
+    "terror":       0.60,
+    "killed":       0.60,
+    # Tier 3 — Moderate (0.45 - 0.55)
+    "conflict":     0.55,
+    "violence":     0.55,
+    "troops":       0.50,
+    "military":     0.45,
+    "sanctions":    0.45,
+    "blockade":     0.50,
+    "occupation":   0.55,
+    # Tier 4 — Minor/Normal (0.30 - 0.45)
+    "protest":      0.40,
+    "riot":         0.45,
+    "unrest":       0.40,
+    "crisis":       0.35,
+    "threat":       0.35,
+    "arrested":     0.30,
+    "diplomacy":    0.30,
+    "trade":        0.30,
 }
 
 # ─────────────────────────────────────────────
-# INTENSITY MODIFIERS
+# EVENT TYPE CLASSIFICATION
 # ─────────────────────────────────────────────
-INTENSITY_MODIFIERS: dict[str, float] = {
-    "massive":      1.25,
-    "severe":       1.20,
-    "heavy":        1.15,
-    "major":        1.15,
-    "escalating":   1.10,
-    "minor":        0.75,
-    "limited":      0.80,
-    "slight":       0.85,
-    "controlled":   0.80,
-    "partial":      0.90,
+EVENT_TYPES = {
+    "military": ["attack", "missile", "troops", "airstrike", "invasion", "war", "military", "bombing", "explosion", "airstrike", "navy", "army", "airforce"],
+    "diplomatic": ["talks", "meeting", "agreement", "summit", "diplomacy", "treaty", "negotiation", "peace", "ceasefire"],
+    "economic": ["sanctions", "trade", "oil", "economy", "tariffs", "market", "currency", "finance"],
+    "political": ["election", "protest", "government", "parliament", "regime", "coup", "policy"]
 }
 
 # ─────────────────────────────────────────────
-# MITIGATION PHRASES
+# DYNAMIC MITIGATION SYSTEM
 # ─────────────────────────────────────────────
-MITIGATION_TERMS: list[str] = [
-    "not severe", "minor damage", "under control", "limited impact",
-    "not too bad", "contained", "no casualties", "ceasefire",
-    "de-escalation", "peace talks", "diplomatic solution", "agreement reached",
-    "sanctions lifted", "troops withdrawn", "tensions easing", "calm restored",
-    "no fatalities", "minimal damage", "isolated incident",
-]
-
-# How much a mitigation phrase reduces the raw event score
-MITIGATION_REDUCTION = 0.35
-
+MITIGATION_CONFIG = {
+    "strong": {
+        "weight": 0.50,
+        "phrases": ["no casualties", "ceasefire", "peace agreement", "normalized relations", "no fatalities"]
+    },
+    "medium": {
+        "weight": 0.30,
+        "phrases": ["under control", "limited impact", "contained incident", "minimal damage", "de-escalation"]
+    },
+    "weak": {
+        "weight": 0.15,
+        "phrases": ["talks ongoing", "monitoring situation", "tensions easing", "diplomatic solution", "agreement reached"]
+    }
+}
 
 # ─────────────────────────────────────────────
-# STEP 1 — EVENT DETECTION
+# STRATEGIC ACTIVITY KEYWORDS
 # ─────────────────────────────────────────────
+CONFLICT_KEYWORDS = ["attack", "killed", "war", "dead", "destroyed", "violence", "blood", "clash", "fighting", "bombing"]
+HARM_KEYWORDS = ["crisis", "collapse", "depression", "ruined", "bankrupt", "defaults"]
+
+
+def _classify_event_type(text: str) -> str:
+    text_lower = text.lower()
+    type_counts = {etype: 0 for etype in EVENT_TYPES}
+    
+    for etype, keywords in EVENT_TYPES.items():
+        for kw in keywords:
+            if rf"\b{kw}\b" in text_lower or kw in text_lower:
+                type_counts[etype] += 1
+                
+    # Get the type with the highest keyword count
+    max_type = max(type_counts, key=type_counts.get)
+    if type_counts[max_type] == 0:
+        return "political" # Default
+    return max_type
+
+
+def _detect_category(text: str, event_type: str) -> str:
+    text_lower = text.lower()
+    
+    if event_type == "military":
+        # If military but no conflict markers
+        if not any(kw in text_lower for kw in CONFLICT_KEYWORDS):
+            return "strategic_activity"
+    
+    if event_type == "economic":
+        # If economic but no harm markers
+        if not any(kw in text_lower for kw in HARM_KEYWORDS):
+            return "strategic_activity"
+            
+    return "conflict" if any(kw in text_lower for kw in CONFLICT_KEYWORDS) else "news"
+
+
 def _detect_events(text: str) -> Tuple[float, list[str]]:
-    """
-    Scan text for event keywords.
-    Returns (max_event_score, list_of_detected_events).
-    """
     text_lower = text.lower()
     detected: list[str] = []
     scores: list[float] = []
 
     for keyword, weight in EVENT_WEIGHTS.items():
-        # word-boundary match to avoid partial hits (e.g. "attacked" still matches "attack")
         pattern = rf"\b{re.escape(keyword)}"
         if re.search(pattern, text_lower):
             detected.append(keyword)
@@ -167,193 +193,92 @@ def _detect_events(text: str) -> Tuple[float, list[str]]:
     if not scores:
         return 0.0, []
 
-    # Use max event weight + small bonus for co-occurring events
     raw = max(scores)
     if len(scores) > 1:
-        raw = min(1.0, raw + 0.05 * (len(scores) - 1))
+        # Reduced bonus for multi-events
+        raw = min(0.8, raw + 0.02 * (len(scores) - 1))
 
-    logger.debug("🔍 Events detected: %s → raw_score=%.3f", detected, raw)
     return raw, detected
 
 
-# ─────────────────────────────────────────────
-# STEP 2 — MITIGATION DETECTION
-# ─────────────────────────────────────────────
-def _detect_mitigation(text: str) -> Tuple[float, bool]:
-    """
-    Scan text for phrases that soften the severity.
-    Returns (mitigation_reduction, was_mitigated).
-    """
+def _detect_mitigation(text: str) -> float:
     text_lower = text.lower()
-    for phrase in MITIGATION_TERMS:
-        if phrase in text_lower:
-            logger.debug("🛡  Mitigation phrase found: '%s'", phrase)
-            return MITIGATION_REDUCTION, True
-    return 0.0, False
+    max_reduction = 0.0
+    
+    for category, config in MITIGATION_CONFIG.items():
+        for phrase in config["phrases"]:
+            if phrase in text_lower:
+                max_reduction = max(max_reduction, config["weight"])
+                
+    return max_reduction
 
 
-# ─────────────────────────────────────────────
-# STEP 3 — SEMANTIC SCORING
-# ─────────────────────────────────────────────
 def _semantic_score(text: str) -> float:
-    """
-    Compare sentence to SEVERE vs LOW reference embeddings.
-    Returns an adjustment in the range [-0.25, +0.25].
-    Returns 0.0 if transformer unavailable.
-    """
     embedder = _get_embedder()
     if not embedder:
         return 0.0
 
     try:
-        import torch
         from sentence_transformers import util
-
         query_emb = embedder.encode(text[:512], convert_to_tensor=True)
 
         severe_sim = float(util.cos_sim(query_emb, _severe_embeddings).max())
         low_sim    = float(util.cos_sim(query_emb, _low_embeddings).max())
 
-        # Net adjustment: more like severe → positive, more like low → negative
-        adjustment = (severe_sim - low_sim) * 0.25
-        logger.debug(
-            "🧠 Semantic: severe_sim=%.3f low_sim=%.3f adjustment=%.3f",
-            severe_sim, low_sim, adjustment,
-        )
-        return max(-0.25, min(0.25, adjustment))
-    except Exception as e:
-        logger.warning("Semantic scoring failed: %s", e)
+        # Returns adjustment in range [-0.5, +0.5] (increased range)
+        return max(-0.5, min(0.5, (severe_sim - low_sim)))
+    except Exception:
         return 0.0
 
 
-# ─────────────────────────────────────────────
-# STEP 4 — SPACY CONTEXT REFINEMENT (optional)
-# ─────────────────────────────────────────────
-def _nlp_refinement(text: str) -> Tuple[float, dict]:
+def score_article(text: str) -> Tuple[float, str, str, str]:
     """
-    Perform deep NLP analysis using spaCy to:
-      1. Extract Subject-Action-Object (SAO) relationships.
-      2. Detect intensity modifiers (adjectives/adverbs).
-      3. Detect negations.
-
-    Returns (adjustment_score, metadata_dict).
-    """
-    nlp = _get_nlp()
-    if not nlp:
-        return 0.0, {}
-
-    adjustment = 0.0
-    sao_data = {"actors": [], "actions": [], "targets": []}
-    modifiers_found = []
-
-    try:
-        doc = nlp(text[:512]) # Analyzing first 512 chars for context
-
-        for token in doc:
-            # 1. Action (Verb) & Actor/Target detection
-            if token.pos_ == "VERB" or token.dep_ == "ROOT":
-                sao_data["actions"].append(token.lemma_.lower())
-                
-                # Check for negations modifying this action
-                if any(child.dep_ == "neg" for child in token.children):
-                    logger.debug("🚫 Negation detected on: '%s'", token.text)
-                    adjustment -= 0.25
-
-                # Check for intensity modifiers modifying this action
-                for child in token.children:
-                    if child.dep_ in ("advmod", "amod") and child.lemma_.lower() in INTENSITY_MODIFIERS:
-                        mod = child.lemma_.lower()
-                        weight = INTENSITY_MODIFIERS[mod]
-                        modifiers_found.append(mod)
-                        # Adjustment is relative to 1.0 (e.g. 1.25 -> +0.10)
-                        adjustment += (weight - 1.0) / 2 
-
-            # 2. Subject (Actor)
-            if token.dep_ in ("nsubj", "nsubjpass"):
-                sao_data["actors"].append(token.text)
-            
-            # 3. Object (Target)
-            if token.dep_ in ("dobj", "pobj", "attr"):
-                sao_data["targets"].append(token.text)
-                
-                # Check for intensity modifiers modifying the object (e.g. "severe damage")
-                for child in token.children:
-                    if child.lemma_.lower() in INTENSITY_MODIFIERS:
-                        mod = child.lemma_.lower()
-                        modifiers_found.append(mod)
-                        adjustment += (INTENSITY_MODIFIERS[mod] - 1.0) / 2
-
-        metadata = {
-            "sao": sao_data,
-            "modifiers": list(set(modifiers_found))
-        }
-        
-        if modifiers_found:
-             logger.debug("⚡ Intensity modifiers: %s", modifiers_found)
-        
-        return adjustment, metadata
-
-    except Exception as e:
-        logger.warning("NLP refinement failed: %s", e)
-        return 0.0, {}
-
-
-# ─────────────────────────────────────────────
-# MAIN PUBLIC FUNCTION
-# ─────────────────────────────────────────────
-def score_article(text: str) -> Tuple[float, str]:
-    """
-    Score a news article for geopolitical risk.
-
-    Args:
-        text: Combined title + description of the article.
-
-    Returns:
-        (risk_score_0_to_100, risk_label)
-        risk_label: "low" | "medium" | "high"
+    Enhanced scoring and classification.
+    Returns (risk_score, risk_level, event_type, category)
     """
     if not text or not text.strip():
-        return 0.0, "low"
+        return 0.0, "low", "political", "news"
 
-    # ── Step 1: Event detection ──────────────
+    # 1. Detect Core Data
     event_score, events = _detect_events(text)
-
-    if event_score == 0.0:
-        # No recognisable event → near-zero risk
-        logger.debug("ℹ️  No events found. Risk = low.")
-        return round(min(15.0, 0.0)), "low"
-
-    logger.info("🔥 Event detected: %s", events)
-
-    # ── Step 2: Mitigation ───────────────────
-    mitigation, was_mitigated = _detect_mitigation(text)
-    if was_mitigated:
-        logger.info("🛡  Mitigation applied (−%.0f%%)", mitigation * 100)
-
-    # ── Step 3: Semantic adjustment ──────────
+    event_type = _classify_event_type(text)
+    category = _detect_category(text, event_type)
+    
+    # 2. Mitigation
+    mitigation_weight = _detect_mitigation(text)
+    
+    # 3. Semantic
     semantic_adj = _semantic_score(text)
 
-    # ── Step 4: NLP Deep Refinement (SAO + Modifiers) 
-    nlp_adj, nlp_meta = _nlp_refinement(text)
+    # 4. Formula: (Event*0.5 + Semantic*0.3 - Mitigation*0.4)
+    # Combined score calculation
+    raw_calc = (event_score * 0.5) + (semantic_adj * 0.3) - (mitigation_weight * 0.4)
+    
+    # Normalize to 0-1 range
+    # Base adjustment to put neutral around 0.3 and severe high around 0.8
+    normalized = max(0.0, min(1.0, raw_calc + 0.3))
 
-    # ── Combine ──────────────────────────────
-    raw = event_score - mitigation + semantic_adj + nlp_adj
-    raw = max(0.0, min(1.0, raw))
+    final_score = round(normalized * 100, 2)
 
-    # Scale to 0–100
-    final_score = round(raw * 100, 2)
-
-    # ── Classify ─────────────────────────────
-    if final_score >= 65:
+    # 5. Thresholds (Rebalanced)
+    # High Risk >= 70
+    # Medium Risk 40–69
+    # Low Risk < 40
+    if final_score >= 70:
         risk_level = "high"
-    elif final_score >= 35:
+    elif final_score >= 40:
         risk_level = "medium"
     else:
         risk_level = "low"
 
+    # Handle Strategic Activity logic: cap risk if classified as strategic
+    if category == "strategic_activity" and final_score > 60:
+        final_score = 55.0
+        risk_level = "medium"
+
     logger.info(
-        "✅ Final risk score: %.1f (%s) | events=%s mitigated=%s",
-        final_score, risk_level, events, was_mitigated,
+        "🧠 Risk Analysis: Score=%s, Level=%s, Type=%s, Cat=%s | Events=%s",
+        final_score, risk_level, event_type, category, events
     )
 
-    return final_score, risk_level
+    return final_score, risk_level, event_type, category

@@ -60,6 +60,8 @@ class Article(Base):
     # 🎯 SEMANTIC RISK ENGINE FIELDS
     geo_risk_score = Column(Float)   # 0–100
     geo_risk_level = Column(String)  # low | medium | high
+    event_type = Column(String)      # military | diplomatic | economic | political
+    category = Column(String)        # strategic_activity | conflict | news
 
 
     @property

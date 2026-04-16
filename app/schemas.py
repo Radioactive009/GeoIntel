@@ -49,7 +49,8 @@ class ArticleBase(BaseModel):
 
 
 class ArticleCreate(ArticleBase):
-    pass
+    event_type: Optional[str] = None
+    category: Optional[str] = None
 
 
 class ArticleResponse(BaseModel):
@@ -62,6 +63,8 @@ class ArticleResponse(BaseModel):
     sentiment_label: Optional[str] = None
     geo_risk_score: Optional[float] = None
     geo_risk_level: Optional[str] = None
+    event_type: Optional[str] = None
+    category: Optional[str] = None
     country: Optional[str] = None
     country_iso_code: Optional[str] = None
     source: SourceResponse
