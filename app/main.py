@@ -111,7 +111,7 @@ MIDDLE_EAST_ISO = {
 }
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), ".ingest_cursor.json")
-INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "5")))
+INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "15")))
 
 
 def resolve_region(alpha2: str) -> str:
@@ -456,7 +456,7 @@ def start_scheduler():
     
     # Run first ingestion with a slight delay to let server stabilize
     def delayed_bg_start():
-        time.sleep(60) # Wait 1 minute before first heavy lift
+        time.sleep(10) # Wait 10 seconds before first heavy lift
         auto_ingest_all_countries()
 
     threading.Thread(target=delayed_bg_start, daemon=True).start()
