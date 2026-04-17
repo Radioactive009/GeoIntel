@@ -11,6 +11,11 @@ import logging
 import threading
 import pycountry
 import pycountry_convert as pc
+import time
+import gc
+from app.services.risk_engine import score_article
+from app.services.gnews_service import fetch_gnews
+from app.services.rss_service import fetch_rss
 
 # =========================================================
 # LOGGING SETUP
@@ -69,8 +74,8 @@ app = FastAPI()
 # =========================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Production: Allow all (or specific Vercel URL later)
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -106,7 +111,7 @@ MIDDLE_EAST_ISO = {
 }
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), ".ingest_cursor.json")
-INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "25")))
+INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "5")))
 
 
 def resolve_region(alpha2: str) -> str:
@@ -273,10 +278,6 @@ def get_country_batch(size: int) -> tuple[list[dict], int]:
 # =========================================================
 def ingest_news_for_country(country_iso: str, db: Session):
 
-    from app.services.risk_engine import score_article
-    from app.services.gnews_service import fetch_gnews
-    from app.services.rss_service import fetch_rss
-
     # ── Validate API Keys ────────────────────────────────
     NEWS_API_KEY = os.getenv("NEWS_API_KEY")
     print("KEYS NEWS_API_KEY:", "YES" if NEWS_API_KEY else "MISSING NONE")
@@ -421,6 +422,9 @@ def auto_ingest_all_countries():
         for country_cfg in batch:
             get_or_create_country(db, country_cfg)
             ingest_news_for_country(country_cfg["code"], db)
+            # ── Memory Safety ──
+            time.sleep(3) # Give RAM and CPU a break
+            gc.collect()  # Force cleanup of processed article objects
         delete_old_articles(db)
         logger.info("⏰ Scheduled ingestion complete")
     except Exception as e:
@@ -450,9 +454,13 @@ def start_scheduler():
         scheduler.start()
         logger.info("OK Scheduler started - ingestion every 30 minutes")
     
-    # Run first ingestion immediately in a background thread
-    threading.Thread(target=auto_ingest_all_countries, daemon=True).start()
-    logger.info("🔄 Initial ingestion triggered in background thread")
+    # Run first ingestion with a slight delay to let server stabilize
+    def delayed_bg_start():
+        time.sleep(60) # Wait 1 minute before first heavy lift
+        auto_ingest_all_countries()
+
+    threading.Thread(target=delayed_bg_start, daemon=True).start()
+    logger.info("🔄 Initial ingestion queued for background start (60s delay)")
 
 
 @app.on_event("shutdown")
