@@ -122,42 +122,4 @@ const ArticleCard = ({ article, index }) => {
     );
 };
 
-                {/* Content */}
-                <div className="flex-grow">
-                    <h3 className="text-base font-bold text-white mb-2.5 line-clamp-2 leading-snug group-hover:text-cyan-400 transition-colors duration-300 decoration-cyan-500/30 decoration-2 underline-offset-4 group-hover:underline">
-                        {title}
-                    </h3>
-                    <p className="text-slate-400 text-xs leading-relaxed line-clamp-3 mb-4 font-medium opacity-80 group-hover:opacity-100 transition-opacity">
-                        {description || 'Intelligence bulletin summary currently pending analysis.'}
-                    </p>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-auto pt-5 border-t border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 tracking-wider">
-                        <div className="flex items-center gap-1.5">
-                            <Clock size={12} className="text-slate-600" />
-                            <span>{timeAgo}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <Globe size={12} className="text-slate-600" />
-                            <span className="uppercase">{isoCode}</span>
-                        </div>
-                    </div>
-
-                    <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 rounded-xl bg-white/5 border border-white/10 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/30 hover:scale-110 active:scale-95 transition-all"
-                        title="View Full Intel Report"
-                    >
-                        <ExternalLink size={14} />
-                    </a>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 export default ArticleCard;
