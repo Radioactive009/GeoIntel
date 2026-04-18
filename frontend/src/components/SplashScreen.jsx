@@ -1,149 +1,167 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useSpring, useMotionValue, animate } from 'framer-motion';
 import Logo from './Logo';
 
-const GlobeSVG = ({ rotationSpeed }) => (
-    <motion.svg
-        width="200"
-        height="200"
-        viewBox="0 0 100 100"
-        animate={{ rotate: 360 }}
-        transition={{
-            duration: rotationSpeed,
-            repeat: Infinity,
-            ease: "linear"
-        }}
-        className="text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]"
-    >
-        <circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2 2" opacity="0.3" />
-        <path
-            d="M50 2A48 48 0 0 1 50 98M50 2A48 48 0 0 0 50 98M2 50A48 48 0 0 1 98 50M2 50A48 48 0 0 0 98 50"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="0.5"
-            opacity="0.5"
-        />
-        {/* Simplified Continents */}
-        <path
-            d="M30 30c5-5 15-5 20 0s5 15 0 20-15 5-20 0-5-15 0-20zM70 60c3-3 8-3 11 0s3 8 0 11-8 3-11 0-3-8 0-11zM40 70c4-4 10-4 14 0s4 10 0 14-10 4-14 0-4-10 0-14z"
-            fill="currentColor"
-            opacity="0.8"
-        />
-        <motion.circle
-            cx="50"
-            cy="50"
-            r="48"
-            fill="url(#globeGradient)"
-            initial={{ opacity: 0.1 }}
-        />
-        <defs>
-            <radialGradient id="globeGradient">
-                <stop offset="0%" stopColor="rgba(34,211,238,0.4)" />
-                <stop offset="100%" stopColor="rgba(34,211,238,0)" />
-            </radialGradient>
-        </defs>
-    </motion.svg>
-);
-
-const SplashScreen = ({ onComplete }) => {
-    const [phase, setPhase] = useState('spinning'); // spinning, accelerating, burst, whiteout, logo, final
+const GlobeSVG = ({ speed }) => {
+    // Smoother speed control using motion values
+    const x = useMotionValue(0);
 
     useEffect(() => {
-        const sequence = async () => {
-            // Phase 1: Spin slowly (2s)
-            await new Promise(r => setTimeout(r, 2000));
-            setPhase('accelerating');
+        const controls = animate(x, -100, {
+            duration: speed,
+            ease: "linear",
+            repeat: Infinity,
+        });
+        return controls.stop;
+    }, [x, speed]);
 
-            // Phase 2: Accelerate (1.5s)
+    return (
+        <div className="relative w-[280px] h-[280px] flex items-center justify-center will-change-transform">
+            {/* Ambient Glow */}
+            <div className="absolute inset-0 bg-cyan-500/5 rounded-full blur-3xl" />
+            
+            <svg
+                width="200"
+                height="200"
+                viewBox="0 0 100 100"
+                className="relative z-10"
+            >
+                <defs>
+                    <clipPath id="globeClip">
+                        <circle cx="50" cy="50" r="48" />
+                    </clipPath>
+                    <radialGradient id="sphereGradient" cx="35%" cy="35%" r="65%">
+                        <stop offset="0%" stopColor="rgba(34, 211, 238, 0.3)" />
+                        <stop offset="60%" stopColor="rgba(15, 23, 42, 0.1)" />
+                        <stop offset="100%" stopColor="rgba(2, 6, 23, 0.7)" />
+                    </radialGradient>
+                    <linearGradient id="continentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.7" />
+                        <stop offset="50%" stopColor="#3b82f6" stopOpacity="0.7" />
+                        <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.7" />
+                    </linearGradient>
+                </defs>
+
+                {/* Main Sphere Background */}
+                <circle cx="50" cy="50" r="48" fill="#020617" stroke="rgba(34, 211, 238, 0.15)" strokeWidth="0.5" />
+                
+                {/* Rotating Continents */}
+                <g clipPath="url(#globeClip)">
+                    <motion.g style={{ x }}>
+                        {/* Seamless Tiled Pattern */}
+                        {[0, 100].map((offset) => (
+                            <path
+                                key={offset}
+                                d={`M${offset + 10} 40c5-5 15-5 20 0s5 15 0 20-15 5-20 0-5-15 0-20z M${offset + 60} 30c8-8 20-8 28 0s8 20 0 28-20 8-28 0-8-20 0-28z M${offset + 40} 70c4-4 15-4 19 0s4 15 0 19-15 4-19 0-4-15 0-19z`}
+                                fill="url(#continentGradient)"
+                            />
+                        ))}
+                    </motion.g>
+                </g>
+
+                {/* Minimal Grid Layer */}
+                <circle cx="50" cy="50" r="48" fill="none" stroke="rgba(34, 211, 238, 0.1)" strokeWidth="0.2" strokeDasharray="1 3" />
+                
+                {/* 3D Shading Overlay */}
+                <circle cx="50" cy="50" r="48" fill="url(#sphereGradient)" />
+            </svg>
+
+            {/* Orbiting Decor (Uses CSS for 60fps performance) */}
+            <div className="absolute w-full h-full border border-cyan-500/10 rounded-full animate-slow-spin" />
+        </div>
+    );
+};
+
+const SplashScreen = ({ onComplete }) => {
+    const [phase, setPhase] = useState('spinning');
+    const [speed, setSpeed] = useState(8); // Start slow
+
+    useEffect(() => {
+        const runSequence = async () => {
+            // Sequence of phases
+            await new Promise(r => setTimeout(r, 2000));
+            
+            // Accelerate smoothly
+            setPhase('accelerating');
+            setSpeed(1.5);
+            
             await new Promise(r => setTimeout(r, 1500));
             setPhase('burst');
-
-            // Phase 3: Burst (0.5s)
-            await new Promise(r => setTimeout(r, 500));
-            setPhase('whiteout');
-
-            // Phase 4: Whiteout -> Logo Reveal (0.5s)
-            await new Promise(r => setTimeout(r, 500));
+            
+            await new Promise(r => setTimeout(r, 600));
             setPhase('logo');
-
-            // Phase 5: Logo stays (1.5s)
-            await new Promise(r => setTimeout(r, 1500));
+            
+            await new Promise(r => setTimeout(r, 1800));
             setPhase('moving');
-
-            // Phase 6: Complete
+            
             await new Promise(r => setTimeout(r, 1000));
             onComplete();
         };
 
-        sequence();
+        runSequence();
     }, [onComplete]);
 
     return (
         <motion.div
-            className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-slate-950"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#020617] overflow-hidden"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.8 }}
+            transition={{ duration: 1 }}
         >
             <AnimatePresence mode="wait">
-                {/* Globe Phases */}
                 {(phase === 'spinning' || phase === 'accelerating' || phase === 'burst') && (
                     <motion.div
-                        key="globe-container"
-                        initial={{ scale: 0.8, opacity: 0 }}
+                        key="globe-wrap"
+                        initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ 
-                            scale: phase === 'burst' ? 25 : 1, 
+                            scale: phase === 'burst' ? 15 : 1,
                             opacity: phase === 'burst' ? 0 : 1,
-                            filter: phase === 'burst' ? 'brightness(5)' : 'brightness(1)'
+                            filter: phase === 'burst' ? 'brightness(10) blur(20px)' : 'brightness(1) blur(0px)'
                         }}
-                        exit={{ opacity: 0 }}
                         transition={{ 
-                            duration: phase === 'burst' ? 0.6 : 1,
-                            ease: phase === 'burst' ? "easeIn" : "easeOut"
+                            duration: phase === 'burst' ? 0.7 : 1.2,
+                            ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
                         }}
                         className="relative"
                     >
-                        <GlobeSVG rotationSpeed={phase === 'accelerating' ? 0.5 : 4} />
+                        <GlobeSVG speed={speed} />
                     </motion.div>
                 )}
 
-                {/* Whiteout / Logo Reveal */}
-                {(phase === 'whiteout' || phase === 'logo' || phase === 'moving') && (
+                {(phase === 'logo' || phase === 'moving') && (
                     <motion.div
-                        key="overlay"
-                        initial={{ opacity: 0 }}
+                        key="logo-wrap"
+                        initial={{ opacity: 0, backgroundColor: '#ffffff' }}
                         animate={{ 
                             opacity: 1,
-                            backgroundColor: phase === 'moving' ? 'rgba(2, 6, 23, 0)' : '#f8fafc' 
+                            backgroundColor: phase === 'moving' ? 'rgba(2,6,23,0)' : '#ffffff' 
                         }}
                         transition={{ duration: 0.8 }}
                         className="absolute inset-0 flex items-center justify-center"
                     >
-                        {phase !== 'whiteout' && (
-                            <motion.div
-                                layoutId="logo-main"
-                                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                                animate={{ opacity: 1, scale: 1.2, y: 0 }}
-                                transition={{ 
-                                    type: "spring",
-                                    stiffness: 100,
-                                    damping: 20
-                                }}
-                            >
-                                <Logo showText={true} className="scale-150" />
-                            </motion.div>
-                        )}
+                        <motion.div
+                            layoutId="logo-main"
+                            initial={{ scale: 0.8, opacity: 0, y: 10 }}
+                            animate={{ scale: 1.25, opacity: 1, y: 0 }}
+                            transition={{ 
+                                type: "spring",
+                                stiffness: 80,
+                                damping: 15
+                            }}
+                        >
+                            <Logo className="scale-125" />
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* Background Transition Hint (Flash of white) */}
+            {/* High-speed whiteout flash */}
             {phase === 'burst' && (
                 <motion.div 
-                    className="absolute inset-0 bg-white"
+                    className="absolute inset-0 bg-white z-[10000]"
                     initial={{ opacity: 0 }}
-                    animate={{ opacity: 0.4 }}
-                    transition={{ duration: 0.4 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.4, delay: 0.2 }}
                 />
             )}
         </motion.div>
