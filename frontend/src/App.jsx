@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Dashboard from './pages/Dashboard';
 import SplashScreen from './components/SplashScreen';
 import { AnimatePresence } from 'framer-motion';
+import { Analytics } from "@vercel/analytics/react";
 
 function App() {
     const [isLoading, setIsLoading] = useState(true);
@@ -17,6 +18,7 @@ function App() {
                     </div>
                 )}
             </AnimatePresence>
+            <Analytics />
         </div>
     );
 }
