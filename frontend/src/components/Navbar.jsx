@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { RefreshCw, Shield, Zap, Radio, Menu, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+import Logo from './Logo';
 
 const Navbar = ({ onRefresh, isRefreshing }) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -8,20 +10,13 @@ const Navbar = ({ onRefresh, isRefreshing }) => {
         <nav className="sticky top-0 z-50 glass-strong border-b border-white/5 bg-background/80 backdrop-blur-xl">
             <div className="max-w-[1440px] mx-auto flex items-center justify-between px-6 py-4">
                 {/* Logo */}
-                <div className="flex items-center gap-3 transition-transform duration-300 hover:scale-105 active:scale-95 cursor-pointer">
-                    <div className="relative">
-                        <div className="bg-gradient-to-br from-cyan-400 to-blue-600 p-2.5 rounded-xl shadow-lg shadow-cyan-500/20">
-                            <Shield size={22} className="text-white" />
-                        </div>
-                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-background animate-pulse" />
-                    </div>
-                    <div className="hidden sm:block">
-                        <h1 className="text-lg font-extrabold tracking-tight text-white leading-none">
-                            GEO<span className="text-cyan-400">INTEL</span>
-                        </h1>
-                        <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold mt-1">Intelligence Platform</p>
-                    </div>
-                </div>
+                <motion.div 
+                    layoutId="logo-main"
+                    className="transition-transform duration-300 hover:scale-105 active:scale-95 cursor-pointer"
+                    transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                >
+                    <Logo />
+                </motion.div>
 
                 {/* Desktop Actions */}
                 <div className="hidden md:flex items-center gap-4">
