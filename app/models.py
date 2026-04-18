@@ -4,7 +4,7 @@ from datetime import datetime
 from .database import Base
 
 
-# 🌍 COUNTRY TABLE
+# [GLOBAL] COUNTRY TABLE
 class Country(Base):
     __tablename__ = "countries"
 
@@ -21,7 +21,7 @@ class Country(Base):
     )
 
 
-# 📰 SOURCE TABLE
+# [DATA] SOURCE TABLE
 class Source(Base):
     __tablename__ = "sources"
 
@@ -38,7 +38,7 @@ class Source(Base):
     )
 
 
-# 📄 ARTICLE TABLE
+# [DOC] ARTICLE TABLE
 class Article(Base):
     __tablename__ = "articles"
 
@@ -53,11 +53,11 @@ class Article(Base):
     # Relationships
     source = relationship("Source", back_populates="articles")
 
-    # 🔥 SENTIMENT FIELDS (legacy — kept for backwards compatibility)
+    # [LEGACY] SENTIMENT FIELDS (legacy — kept for backwards compatibility)
     sentiment_score = Column(Float)
     sentiment_label = Column(String)
 
-    # 🎯 SEMANTIC RISK ENGINE FIELDS
+    # [AI] SEMANTIC RISK ENGINE FIELDS
     geo_risk_score = Column(Float)   # 0–100
     geo_risk_level = Column(String)  # low | medium | high
     event_type = Column(String)      # military | diplomatic | economic | political

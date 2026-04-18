@@ -194,7 +194,7 @@ def score_article(text: str) -> Tuple[float, str, str, str]:
         risk_level = "medium"
 
     logger.info(
-        "⚡ Lightweight Analysis: Score=%s, Level=%s, Type=%s, Cat=%s | Events=%s",
+        "[CALC] Lightweight Analysis: Score=%s, Level=%s, Type=%s, Cat=%s | Events=%s",
         final_score, risk_level, event_type, category, events
     )
 

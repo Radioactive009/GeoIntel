@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Dynamic Database Selection ───────────────────────────
+# -- Dynamic Database Selection ---------------------------
 # If DATABASE_URL is found (production), use PostgreSQL.
 # Otherwise, default to local SQLite.
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")

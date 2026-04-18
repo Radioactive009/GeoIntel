@@ -326,7 +326,7 @@ def ingest_news_for_country(country_iso: str, db: Session):
     print(f"  MERGE Combined: {len(newsapi_articles)} NewsAPI + {len(gnews_articles)} GNews + {len(rss_articles)} RSS = {len(articles)} total")
 
     if not articles:
-        print("⚠️ No articles from any source")
+        print("[WARN] No articles from any source")
         return 0
 
     # ── Process & store articles ──────────────────────────
@@ -410,11 +410,11 @@ def auto_ingest_all_countries():
     """Scheduled job: ingest rotating global country batches."""
     db = SessionLocal()
     try:
-        logger.info("⏰ Scheduled ingestion starting...")
+        logger.info("[TIMER] Scheduled ingestion starting...")
         ensure_country_catalog_in_db(db)
         batch, start_idx = get_country_batch(INGEST_BATCH_SIZE)
         logger.info(
-            "🌍 Ingest batch: start=%s size=%s of total=%s",
+            "[BATCH] Ingest batch: start=%s size=%s of total=%s",
             start_idx,
             len(batch),
             len(COUNTRIES),
@@ -426,16 +426,16 @@ def auto_ingest_all_countries():
             time.sleep(3) # Give RAM and CPU a break
             gc.collect()  # Force cleanup of processed article objects
         delete_old_articles(db)
-        logger.info("⏰ Scheduled ingestion complete")
+        logger.info("[TIMER] Scheduled ingestion complete")
     except Exception as e:
-        logger.error(f"❌ Scheduled ingestion failed: {e}", exc_info=True)
+        logger.info(f"[ERR] Scheduled ingestion failed: {e}")
     finally:
         db.close()
 
 
 @app.on_event("startup")
 def start_scheduler():
-    logger.info("🚀 Starting background scheduler...")
+    logger.info("[START] Starting background scheduler...")
     db = SessionLocal()
     try:
         ensure_country_catalog_in_db(db)
@@ -460,14 +460,14 @@ def start_scheduler():
         auto_ingest_all_countries()
 
     threading.Thread(target=delayed_bg_start, daemon=True).start()
-    logger.info("🔄 Initial ingestion queued for background start (60s delay)")
+    logger.info("[SYNC] Initial ingestion queued for background start (10s delay)")
 
 
 @app.on_event("shutdown")
 def shutdown_scheduler():
     if scheduler.running:
         scheduler.shutdown(wait=False)
-        logger.info("🛑 Scheduler shut down")
+        logger.info("[STOP] Scheduler shut down")
 
 
 # =========================================================
@@ -688,7 +688,7 @@ def calculate_risk(db: Session):
             risk_level = "low"
 
         logger.info(
-            "🔎 Risk: %s → score=%.1f level=%s hi=%d/%d",
+            "[SCAN] Risk: %s → score=%.1f level=%s hi=%d/%d",
             country.name, risk_score, risk_level, high_risk_count, total_articles,
         )
 

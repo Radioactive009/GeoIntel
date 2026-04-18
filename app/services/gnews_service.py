@@ -44,19 +44,19 @@ def fetch_gnews(query: str, country_code: str = None, max_results: int = 10) -> 
             params=params,
             timeout=15,
         )
-        print(f"  📡 GNews response: {response.status_code}")
+        print(f"  [NET] GNews response: {response.status_code}")
 
         if response.status_code != 200:
-            print(f"  ❌ GNews error: {response.status_code} {response.text[:200]}")
+            print(f"  [ERR] GNews error: {response.status_code} {response.text[:200]}")
             return []
 
     except requests.exceptions.RequestException as e:
-        print(f"  ❌ GNews request failed: {e}")
+        print(f"  [ERR] GNews request failed: {e}")
         return []
 
     data = response.json()
     raw_articles = data.get("articles", [])
-    print(f"  📡 GNews articles received: {len(raw_articles)}")
+    print(f"  [NET] GNews articles received: {len(raw_articles)}")
 
     # ── Normalize to NewsAPI format ──────────────────────
     normalized = []

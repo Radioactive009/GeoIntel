@@ -67,19 +67,19 @@ def fetch_rss(country_query: str = None) -> list[dict]:
     google_articles_count = 0
     query_lower = country_query.lower() if country_query else None
 
-    logger.info("📡 Starting RSS ingestion (including Google RSS)...")
+    logger.info("[NET] Starting RSS ingestion (including Google RSS)...")
 
     for feed_cfg in ALL_RSS_FEEDS:
         feed_name = feed_cfg["name"]
         is_google = feed_cfg.get("is_google", False)
 
         if is_google and google_articles_count == 0:
-            logger.info("📡 Google RSS ingestion running...")
+            logger.info("[NET] Google RSS ingestion running...")
 
         try:
             feed = feedparser.parse(feed_cfg["url"])
         except Exception as e:
-            logger.warning(f"  ⚠️ RSS parse failed for {feed_name}: {e}")
+            logger.warning(f"  [WARN] RSS parse failed for {feed_name}: {e}")
             continue
 
         count = 0
