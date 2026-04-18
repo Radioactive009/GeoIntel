@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { motion, AnimatePresence, useAnimationFrame, useMotionValue, useTransform } from 'framer-motion';
 import Logo from './Logo';
 
-const EARTH_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg";
-const CLOUD_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_2048.png";
+// Optimized 1K Textures
+const EARTH_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_1024.jpg";
+const CLOUD_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png";
 
 // ── Technical Grid Background ─────────────────────────────
 const CyberGrid = () => (
@@ -45,10 +46,7 @@ const Starfield = () => {
                         width: star.size,
                         height: star.size,
                     }}
-                    animate={{ 
-                        opacity: [0.1, 0.4, 0.1],
-                        scale: [1, 1.2, 1]
-                    }}
+                    animate={{ opacity: [0.1, 0.4, 0.1], scale: [1, 1.2, 1] }}
                     transition={{
                         duration: star.duration,
                         repeat: Infinity,
@@ -61,110 +59,94 @@ const Starfield = () => {
     );
 };
 
-// ── HUD Elements ──────────────────────────────────────────
-const GlobeHUD = () => {
-    const [stats, setStats] = useState({ lat: 35.6895, lng: 139.6917 });
+const UltraRealGlobe = ({ speedFactor, isBursting }) => {
+    // raw values for logic
+    const surfacePos = useMotionValue(0);
+    const cloudPos = useMotionValue(0);
+    
+    // Derived percentage strings for visual linkage
+    const xSurface = useTransform(surfacePos, (v) => `${v}%`);
+    const xCloud = useTransform(cloudPos, (v) => `${v}%`);
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setStats({
-                lat: (35.6895 + Math.random() * 2).toFixed(4),
-                lng: (139.6917 + Math.random() * 2).toFixed(4)
-            });
-        }, 2000);
-        return () => clearInterval(interval);
-    }, []);
+    useAnimationFrame((time, delta) => {
+        if (isBursting) return;
+        
+        // Accurate movement based on frame-delta
+        const sMove = (delta * 0.005) * speedFactor;
+        const cMove = (delta * 0.006) * speedFactor;
+
+        // Loop from 0 to -50 (since we have 2 side-by-side images)
+        let nextS = surfacePos.get() - sMove;
+        if (nextS <= -50) nextS = 0;
+        
+        let nextC = cloudPos.get() - cMove;
+        if (nextC <= -50) nextC = 0;
+
+        surfacePos.set(nextS);
+        cloudPos.set(nextC);
+    });
 
     return (
-        <div className="absolute inset-0 pointer-events-none z-20">
-            {/* Latitude/Longitude Grid (Static Rotation to match globe feel) */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[310px] h-[310px] opacity-20 border border-cyan-500/20 rounded-full">
-                <div className="absolute inset-0 border-t border-cyan-500/30 top-1/2 -translate-y-1/2" />
-                <div className="absolute inset-0 border-l border-cyan-500/30 left-1/2 -translate-x-1/2" />
-            </div>
-
-            <motion.div 
-                className="absolute top-1/4 -right-16 space-y-1 text-[#22d3ee]/60 font-mono text-[9px] uppercase tracking-widest bg-slate-900/40 backdrop-blur-sm p-3 rounded-lg border border-cyan-500/20"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-            >
-                <div className="flex justify-between gap-4"><span>LAT:</span> <span className="text-white">{stats.lat}° N</span></div>
-                <div className="flex justify-between gap-4"><span>LNG:</span> <span className="text-white">{stats.lng}° E</span></div>
-                <div className="h-px bg-cyan-500/20 my-1" />
-                <p className="text-cyan-400">STATUS: SCANNING...</p>
-            </motion.div>
-        </div>
-    );
-};
-
-const UltraRealGlobe = ({ rotationSpeed, isBursting }) => {
-    return (
-        <div className="relative flex items-center justify-center scale-110">
-            {/* 1. Deep Space Atmosphere Glow */}
+        <div className="relative flex items-center justify-center scale-110 will-change-transform">
+            {/* Atmosphere Bloom */}
             <div className={`absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] transition-opacity duration-1000 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
             
-            {/* 2. Outer Rim Light */}
-            <div className={`absolute -inset-6 rounded-full bg-blue-500/5 blur-[40px] shadow-[0_0_120px_rgba(59,130,246,0.2)] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
-            
-            {/* 3. The Sphere */}
+            {/* The Sphere */}
             <div className="relative w-[300px] h-[300px] rounded-full overflow-hidden border border-white/10 shadow-2xl bg-black transform-gpu">
-                {/* Surface Layer (CSS Animation) */}
-                <div 
-                    className="planet-surface absolute inset-0 opacity-90 contrast-125 saturate-150"
-                    style={{ 
-                        backgroundImage: `url(${EARTH_TEXTURE})`,
-                        '--rotation-speed': `${rotationSpeed}s`
-                    }}
-                />
                 
-                {/* Cloud Layer (Slower CSS Animation) */}
-                <div 
-                    className="planet-clouds absolute inset-0 opacity-40 mix-blend-screen scale-[1.02]"
-                    style={{ 
-                        backgroundImage: `url(${CLOUD_TEXTURE})`,
-                        '--cloud-speed': `${rotationSpeed * 0.8}s`
-                    }}
-                />
+                {/* Surface Layer - Linked directly to MotionValue */}
+                <motion.div 
+                    style={{ x: xSurface }}
+                    className="absolute inset-y-0 left-0 flex brightness-110 contrast-125 saturate-125"
+                >
+                    <img src={EARTH_TEXTURE} alt="" className="h-full w-auto max-w-none" />
+                    <img src={EARTH_TEXTURE} alt="" className="h-full w-auto max-w-none" />
+                </motion.div>
+                
+                {/* Cloud Layer - Linked directly to MotionValue */}
+                <motion.div 
+                    style={{ x: xCloud }}
+                    className="absolute inset-y-0 left-0 flex opacity-40 mix-blend-screen scale-[1.02]"
+                >
+                    <img src={CLOUD_TEXTURE} alt="" className="h-full w-auto max-w-none" />
+                    <img src={CLOUD_TEXTURE} alt="" className="h-full w-auto max-w-none" />
+                </motion.div>
 
-                {/* Shading Layer (Static Lighting) */}
-                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_25%_25%,rgba(255,255,255,0.1)_0%,rgba(0,0,0,0)_45%,rgba(0,0,0,0.7)_75%,rgba(0,0,0,1)_100%)]" />
+                {/* Shading */}
+                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_25%_25%,rgba(255,255,255,0.08)_0%,rgba(0,0,0,0)_45%,rgba(0,0,0,0.7)_75%,rgba(0,0,0,1)_100%)]" />
                 
-                {/* Atmosphere Interior Fresnel */}
-                <div className="absolute inset-0 pointer-events-none rounded-full shadow-[inset_0_0_60px_rgba(34,211,238,0.4),inset_0_0_120px_rgba(59,130,246,0.1)] opacity-70" />
+                {/* Atmospheric Fresnel */}
+                <div className="absolute inset-0 pointer-events-none rounded-full shadow-[inset_0_0_60px_rgba(34,211,238,0.3),inset_0_0_120px_rgba(59,130,246,0.1)] opacity-70" />
             </div>
 
-            {!isBursting && <GlobeHUD />}
-            
-            {/* 4. Atmospheric Blue Ring */}
-            <div className={`absolute -inset-2 rounded-full border-[3px] border-blue-400/20 blur-[3px] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
+            {/* Atmosphere Ring */}
+            <div className={`absolute -inset-2 rounded-full border-[2px] border-blue-400/20 blur-[2px] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
         </div>
     );
 };
 
 const SplashScreen = ({ onComplete }) => {
     const [phase, setPhase] = useState('spinning');
-    const [speed, setSpeed] = useState(40); // Initial majestic slow crawl
+    const [speedFactor, setSpeedFactor] = useState(1); 
 
     useEffect(() => {
         const sequence = async () => {
-            // Give texture time to load then begin majesty
-            await new Promise(r => setTimeout(r, 2000));
+            // majestic entry
+            await new Promise(r => setTimeout(r, 2200));
             
-            // Phase 2: Noticeable acceleration
+            // Phase 2: Acceleration
             setPhase('accelerating');
-            setSpeed(12);
-            await new Promise(r => setTimeout(r, 2500));
+            setSpeedFactor(6); 
             
-            // Phase 3: The Burst
+            await new Promise(r => setTimeout(r, 2200));
             setPhase('burst');
-            await new Promise(r => setTimeout(r, 600));
             
-            // Phase 4: Intelligence Reveal
+            await new Promise(r => setTimeout(r, 1000));
             setPhase('logo');
-            await new Promise(r => setTimeout(r, 2500));
             
-            // Final Move
+            await new Promise(r => setTimeout(r, 2500));
             setPhase('moving');
+            
             await new Promise(r => setTimeout(r, 1200));
             onComplete();
         };
@@ -200,13 +182,13 @@ const SplashScreen = ({ onComplete }) => {
                             filter: phase === 'burst' ? 'brightness(15) blur(20px)' : 'brightness(1) blur(0px)'
                         }}
                         transition={{ 
-                            duration: phase === 'burst' ? 0.8 : 2.5,
+                            duration: phase === 'burst' ? 1 : 2.5,
                             ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
                         }}
                         className="relative z-10"
                         style={{ filter: 'url(#bloom)' }}
                     >
-                        <UltraRealGlobe rotationSpeed={speed} isBursting={phase === 'burst'} />
+                        <UltraRealGlobe speedFactor={speedFactor} isBursting={phase === 'burst'} />
                     </motion.div>
                 )}
 
@@ -227,17 +209,13 @@ const SplashScreen = ({ onComplete }) => {
 
                         <motion.div
                             layoutId="logo-main"
-                            initial={{ scale: 1.2, opacity: 0, filter: 'blur(15px)' }}
+                            initial={{ scale: 1.1, opacity: 0, filter: 'blur(15px)' }}
                             animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
                             transition={{ 
-                                type: "spring",
-                                stiffness: 40,
-                                damping: 14,
-                                mass: 1.4
+                                type: "spring", stiffness: 45, damping: 15, mass: 1.4
                             }}
                             className="flex flex-col items-center gap-8 relative"
                         >
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border border-cyan-500/5 animate-pulse" />
                             <Logo className="scale-[2.6]" />
                         </motion.div>
                     </motion.div>
@@ -246,10 +224,10 @@ const SplashScreen = ({ onComplete }) => {
 
             {phase === 'burst' && (
                 <motion.div 
-                    className="absolute inset-0 bg-cyan-300/40 z-[10000]"
+                    className="absolute inset-0 bg-cyan-300/60 z-[10000]"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: [0, 1, 0] }}
-                    transition={{ duration: 0.7 }}
+                    transition={{ duration: 0.8 }}
                 />
             )}
         </motion.div>
