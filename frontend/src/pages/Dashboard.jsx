@@ -3,7 +3,7 @@ import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import ArticleCard from '../components/ArticleCard';
 import MapChart from '../components/MapChart';
-import { getArticles, getRiskAnalysis, triggerIngestion } from '../services/api';
+import { getArticles, getAlertAnalysis, triggerIngestion } from '../services/api';
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
     TrendingUp, BarChart3, Globe, Activity, Newspaper,
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-// ── Risk helpers ────────────────────────────────────────
+// ── Alert Level helpers ─────────────────────────────────
 const getFlagEmoji = (countryCode) => {
     if (!countryCode || typeof countryCode !== 'string' || countryCode === 'Global') return '🌐';
     const code = countryCode.trim().toUpperCase();
@@ -23,16 +23,10 @@ const getFlagEmoji = (countryCode) => {
     }
 };
 
-const getRiskColor = (level) => {
-    if (level === 'high') return '#f43f5e'; // rose-500
-    if (level === 'medium') return '#f59e0b'; // amber-500
+const getAlertColor = (status) => {
+    if (status === 'high') return '#f43f5e'; // rose-500
+    if (status === 'medium') return '#f59e0b'; // amber-500
     return '#10b981'; // emerald-500
-};
-
-const getRiskGradient = (level) => {
-    if (level === 'high') return 'from-rose-500/20 to-transparent';
-    if (level === 'medium') return 'from-amber-500/20 to-transparent';
-    return 'from-emerald-500/20 to-transparent';
 };
 
 const COUNTRY_ALIASES = {
@@ -88,6 +82,8 @@ const getArticleCountryName = (article) => article?.country || article?.source?.
 const CustomTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
+    const statusLabel = d.alert_status === 'high' ? 'CRITICAL' : d.alert_status === 'medium' ? 'ELEVATED' : 'STABLE';
+    
     return (
         <div className="glass px-4 py-3 rounded-2xl shadow-2xl border border-white/10">
             <div className="flex items-center gap-2 mb-1.5">
@@ -96,14 +92,14 @@ const CustomTooltip = ({ active, payload }) => {
             </div>
             <div className="space-y-1">
                 <div className="flex items-center justify-between gap-8 text-[11px]">
-                    <span className="text-slate-500 font-bold uppercase tracking-wider">Risk Level</span>
-                    <span className="font-bold uppercase tracking-widest" style={{ color: getRiskColor(d.risk_level) }}>
-                        {d.risk_level}
+                    <span className="text-slate-500 font-bold uppercase tracking-wider">Status</span>
+                    <span className="font-bold uppercase tracking-widest" style={{ color: getAlertColor(d.alert_status) }}>
+                        {statusLabel}
                     </span>
                 </div>
                 <div className="flex items-center justify-between gap-8 text-[11px]">
-                    <span className="text-slate-500 font-bold uppercase tracking-wider">Score</span>
-                    <span className="text-white font-bold tabular-nums">{d.risk_score.toFixed(1)}%</span>
+                    <span className="text-slate-500 font-bold uppercase tracking-wider">Level</span>
+                    <span className="text-white font-bold tabular-nums">{d.alert_level.toFixed(1)}%</span>
                 </div>
             </div>
         </div>
@@ -112,7 +108,7 @@ const CustomTooltip = ({ active, payload }) => {
 
 const Dashboard = () => {
     const [articles, setArticles] = useState([]);
-    const [riskData, setRiskData] = useState([]);
+    const [alertData, setAlertData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedCountry, setSelectedCountry] = useState('');
@@ -134,10 +130,10 @@ const Dashboard = () => {
         }
     };
 
-    const fetchRiskData = async () => {
+    const fetchAlertData = async () => {
         try {
-            const res = await getRiskAnalysis();
-            setRiskData(res.data || []);
+            const res = await getAlertAnalysis();
+            setAlertData(res.data || []);
         } catch (err) {
             console.error(err);
         }
@@ -147,10 +143,8 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
         try {
-            // 1. Trigger fresh ingestion on backend
             await triggerIngestion();
-            // 2. Fetch updated data
-            await Promise.all([fetchArticles(), fetchRiskData()]);
+            await Promise.all([fetchArticles(), fetchAlertData()]);
         } catch (err) {
             console.error(err);
             setError('Intelligence bypass failed. Critical connection timeout.');
@@ -160,15 +154,13 @@ const Dashboard = () => {
     };
 
     useEffect(() => { 
-        // Initial fetch
         fetchArticles(); 
-        fetchRiskData(); 
+        fetchAlertData(); 
     }, []);
 
-    // ── Filter out countries with zero articles ──────────
-    const activeRiskData = useMemo(() => 
-        riskData.filter(r => r.total_articles > 0), 
-    [riskData]);
+    const activeAlertData = useMemo(() => 
+        alertData.filter(r => r.total_articles > 0), 
+    [alertData]);
 
     const countries = useMemo(() => {
         const s = new Set();
@@ -201,8 +193,8 @@ const Dashboard = () => {
     const resetFilters = () => { setSelectedCountry(''); setSelectedRegion(''); setCurrentPage(1); };
     useEffect(() => { setCurrentPage(1); }, [selectedCountry, selectedRegion]);
 
-    const highRiskCount = activeRiskData.filter(r => r.risk_level === 'high').length;
-    const avgRisk = activeRiskData.length > 0 ? (activeRiskData.reduce((s, r) => s + r.risk_score, 0) / activeRiskData.length).toFixed(1) : '0.0';
+    const criticalCount = activeAlertData.filter(r => r.alert_status === 'high').length;
+    const avgAlert = activeAlertData.length > 0 ? (activeAlertData.reduce((s, r) => s + r.alert_level, 0) / activeAlertData.length).toFixed(1) : '0.0';
 
     return (
         <div className="flex flex-col min-h-screen app-bg text-slate-400 font-sans">
@@ -219,24 +211,24 @@ const Dashboard = () => {
                         <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
                             Geopolitical <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 decoration-cyan-500/20 underline underline-offset-8">Intelligence</span>
                         </h1>
-                        <p className="text-slate-500 text-sm font-medium pt-2">Global monitoring network analyzing {articles.length} reports across {activeRiskData.length} strategic zones.</p>
+                        <p className="text-slate-500 text-sm font-medium pt-2">Global monitoring network analyzing {articles.length} reports across {activeAlertData.length} strategic zones.</p>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <div className="glass px-4 py-2 rounded-2xl flex items-center gap-3 border border-emerald-500/20">
                             <Activity size={16} className="text-emerald-400" />
                             <div className="leading-tight">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Global Status</p>
-                                <p className="text-xs font-bold text-emerald-400">STABLE</p>
+                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">System Status</p>
+                                <p className="text-xs font-bold text-emerald-400">OPERATIONAL</p>
                             </div>
                         </div>
                     </div>
                 </header>
 
-                {/* ── SECTION 1: STAT CARDS ────────────────── */}
+                {/* ── SECTION 1: MAP ───────────────────────── */}
                 <section className="mb-12">
                     <MapChart
-                        riskData={activeRiskData}
+                        alertData={activeAlertData}
                         selectedCountry={selectedCountry}
                         onCountrySelect={setSelectedCountry}
                     />
@@ -244,9 +236,9 @@ const Dashboard = () => {
 
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                     {[
-                        { icon: Globe, label: 'Monitored Regions', value: activeRiskData.length, color: 'text-cyan-400', sub: 'Active Strategic Zones' },
-                        { icon: Activity, label: 'Average Risk Score', value: `${avgRisk}%`, color: 'text-amber-400', sub: 'Weighted Regional Index' },
-                        { icon: AlertTriangle, label: 'High Alert Zones', value: highRiskCount, color: 'text-rose-400', sub: 'Immediate Threat Potential' },
+                        { icon: Globe, label: 'Strategic Zones', value: activeAlertData.length, color: 'text-cyan-400', sub: 'Active Monitoring Nodes' },
+                        { icon: Activity, label: 'Alert Level Index', value: `${avgAlert}%`, color: 'text-amber-400', sub: 'Global Stability Metric' },
+                        { icon: AlertTriangle, label: 'Critical Status Zones', value: criticalCount, color: 'text-rose-400', sub: 'Immediate Response Required' },
                         { icon: Newspaper, label: 'Intelligence Volume', value: articles.length, color: 'text-indigo-400', sub: 'Verified Field Reports' },
                     ].map(({ icon: Icon, label, value, color, sub }, i) => (
                         <div
@@ -273,19 +265,18 @@ const Dashboard = () => {
 
                 {/* ── SECTION 2: ANALYTICS ──────────────────── */}
                 <section className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12 items-stretch">
-                    {/* Bar Chart Container */}
                     <div className="xl:col-span-2 glass rounded-[2.5rem] p-8 lg:p-10 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
                                     <BarChart3 size={18} className="text-cyan-400" />
                                 </div>
-                                <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">Regional Risk Matrix</h2>
+                                <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">Regional Alert Matrix</h2>
                             </div>
                         </div>
                         <div className="h-[320px] w-full min-h-[320px]">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
-                                <BarChart data={activeRiskData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={activeAlertData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
                                     <XAxis
                                         dataKey="iso_code"
                                         tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }}
@@ -301,9 +292,9 @@ const Dashboard = () => {
                                         tickFormatter={(v) => `${v}%`}
                                     />
                                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                                    <Bar dataKey="risk_score" radius={[12, 12, 12, 12]} barSize={50}>
-                                        {activeRiskData.map((e) => (
-                                            <Cell key={e.iso_code} fill={getRiskColor(e.risk_level)} fillOpacity={0.9} />
+                                    <Bar dataKey="alert_level" radius={[12, 12, 12, 12]} barSize={50}>
+                                        {activeAlertData.map((e) => (
+                                            <Cell key={e.iso_code} fill={getAlertColor(e.alert_status)} fillOpacity={0.9} />
                                         ))}
                                     </Bar>
                                 </BarChart>
@@ -311,16 +302,15 @@ const Dashboard = () => {
                         </div>
                     </div>
 
-                    {/* Threat Ranking Container */}
                     <div className="glass rounded-[2.5rem] p-8 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
                         <div className="flex items-center gap-3 mb-8">
                             <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
                                 <Zap size={18} className="text-indigo-400" />
                             </div>
-                            <h2 className="text-base font-bold text-white uppercase tracking-widest">Threat Index</h2>
+                            <h2 className="text-base font-bold text-white uppercase tracking-widest">Alert Ranking</h2>
                         </div>
                         <div className="space-y-4">
-                            {activeRiskData.slice(0, 5).map((item, i) => (
+                            {activeAlertData.slice(0, 5).map((item, i) => (
                                 <div
                                     key={item.iso_code}
                                     className="flex items-center gap-4 p-4 rounded-3xl bg-slate-900/40 border border-white/5 transition-transform duration-300 hover:translate-x-1"
@@ -333,11 +323,11 @@ const Dashboard = () => {
                                             <div className="flex-grow h-1 rounded-full bg-slate-800/60 overflow-hidden">
                                                 <div
                                                     className="h-full rounded-full transition-all duration-1000 ease-out"
-                                                    style={{ width: `${item.risk_score}%`, background: getRiskColor(item.risk_level) }}
+                                                    style={{ width: `${item.alert_level}%`, background: getAlertColor(item.alert_status) }}
                                                 />
                                             </div>
-                                            <span className="text-[11px] font-bold tabular-nums" style={{ color: getRiskColor(item.risk_level) }}>
-                                                {item.risk_score.toFixed(0)}%
+                                            <span className="text-[11px] font-bold tabular-nums" style={{ color: getAlertColor(item.alert_status) }}>
+                                                {item.alert_level.toFixed(0)}%
                                             </span>
                                         </div>
                                     </div>
@@ -367,18 +357,18 @@ const Dashboard = () => {
                                     <Search size={18} className="text-cyan-400" />
                                 </div>
                                 <h2 className="text-base font-bold text-white uppercase tracking-widest">
-                                    {selectedCountry ? `News for ${selectedCountry}` : 'Global News'}
+                                    {selectedCountry ? `Satellite Feed: ${selectedCountry}` : 'Global Intelligence Feed'}
                                 </h2>
                             </div>
                             <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest tabular-nums">
-                                {filteredArticles.length} Bulletins Logged
+                                {filteredArticles.length} Reports Logged
                             </p>
                         </div>
 
                         {loading ? (
                             <div className="py-32 flex flex-col items-center justify-center glass rounded-[2.5rem] border border-white/5">
                                 <Loader2 className="text-cyan-400 animate-spin mb-6" size={48} />
-                                <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px]">Processing Satellite Feeds...</p>
+                                <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px]">Filtering Intelligence Stream...</p>
                             </div>
                         ) : error ? (
                             <div className="py-32 flex flex-col items-center justify-center glass rounded-[2.5rem] border border-rose-500/20 text-center px-10">
@@ -449,12 +439,11 @@ const Dashboard = () => {
                 <div className="max-w-2xl mx-auto glass p-6 rounded-[2rem] border border-indigo-500/10">
                     <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
                         <span className="text-indigo-400 font-bold uppercase tracking-widest mr-2">Intelligence Note:</span>
-                        This system is currently built on basic NLP pipelines. Geopolitical nuance is complex, so do not expect sentiment analysis to be 100% accurate. 
-                        If you think you can build a more accurate sentiment engine for geopolitical data—do it! Take it as a fun challenge.
+                        Alert statuses are generated via automated semantic analysis. Geopolitical nuance is complex, and these metrics should be treated as intelligence signals rather than absolute truth. 
                     </p>
                 </div>
                 <p className="text-[10px] text-slate-600 uppercase tracking-[0.25em] font-bold">
-                    GeoIntel Systems • Multi-Source Intelligence • Secure Node 04
+                    GeoIntel Systems • Strategic Monitoring • Secure Node 07
                 </p>
             </footer>
         </div>

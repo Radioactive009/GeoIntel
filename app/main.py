@@ -627,12 +627,12 @@ def get_country_catalog():
 
 
 # =========================================================
-# GEOPOLITICAL RISK ENGINE
+# INTEL ALERT ENGINE
 # =========================================================
-def calculate_risk(db: Session):
+def calculate_alert_status(db: Session):
     """
-    Compute a weighted geopolitical risk score per country using the
-    new semantic risk engine scores stored per article (geo_risk_score).
+    Compute a weighted geopolitical alert level per country using the
+    new semantic engine scores stored per article (geo_risk_score).
 
     Formula:
         country_risk = mean(geo_risk_score for all articles) 
@@ -662,9 +662,9 @@ def calculate_risk(db: Session):
                 "country": country.name,
                 "iso_code": country.iso_code,
                 "total_articles": 0,
-                "high_risk_articles": 0,
-                "risk_score": 0.0,
-                "risk_level": "low",
+                "critical_alerts": 0,
+                "alert_level": 0.0,
+                "alert_status": "low",
             })
             continue
 
@@ -696,23 +696,23 @@ def calculate_risk(db: Session):
             "country": country.name,
             "iso_code": country.iso_code,
             "total_articles": total_articles,
-            "high_risk_articles": high_risk_count,
-            "risk_score": risk_score,
-            "risk_level": risk_level,
+            "critical_alerts": high_risk_count,
+            "alert_level": risk_score,
+            "alert_status": risk_level,
         })
 
-    results.sort(key=lambda r: r["risk_score"], reverse=True)
+    results.sort(key=lambda r: r["alert_level"], reverse=True)
     return results
 
 
-@app.get("/risk-analysis")
-def risk_analysis(db: Session = Depends(get_db)):
-    print("====================================")
-    print("GEOPOLITICAL RISK ANALYSIS")
-    print("====================================")
-
-    ensure_country_catalog_in_db(db)
-    results = calculate_risk(db)
-
-    print(f"OK Risk analysis complete - {len(results)} countries evaluated")
-    return results
+@app.get("/alert-analysis")
+def alert_analysis(db: Session = Depends(get_db)):
+    """Backend-wide intelligence scan to determine global alert statuses."""
+    print("GEOPOLITICAL INTELLIGENCE SCAN")
+    try:
+        results = calculate_alert_status(db)
+        print(f"OK Intelligence scan complete - {len(results)} countries evaluated")
+        return results
+    except Exception as e:
+        print(f"ERROR Intelligence scan: {e}")
+        return []

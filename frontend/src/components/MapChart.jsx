@@ -51,24 +51,24 @@ const normalizeCountry = (value) => {
         .replace(/\s+/g, ' ');
 };
 
-const getRiskColor = (risk) => {
-    if (typeof risk !== 'number') return '#1f2937';
-    if (risk > 70) return '#ef4444';
-    if (risk > 40) return '#f59e0b';
+const getAlertColor = (level) => {
+    if (typeof level !== 'number') return '#1f2937';
+    if (level > 70) return '#ef4444';
+    if (level > 40) return '#f59e0b';
     return '#22c55e';
 };
 
 const getDisplayCountryName = (geoProperties) =>
     geoProperties?.NAME || geoProperties?.ADMIN || geoProperties?.name || 'Unknown';
 
-const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
+const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
     const [tooltip, setTooltip] = useState(null);
     const audioContextRef = useRef(null);
     const lastHoveredCountryRef = useRef('');
     const lastToneAtRef = useRef(0);
     const mapContainerRef = useRef(null);
 
-    const playHoverTone = (countryName, riskScore) => {
+    const playHoverTone = (countryName, alertLevel) => {
         const now = Date.now();
         if (now - lastToneAtRef.current < 45) return;
         lastToneAtRef.current = now;
@@ -89,9 +89,9 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
             const oscillator = ctx.createOscillator();
             const gainNode = ctx.createGain();
 
-            const stableRisk = typeof riskScore === 'number' ? Math.max(0, Math.min(100, riskScore)) : 30;
+            const stableLevel = typeof alertLevel === 'number' ? Math.max(0, Math.min(100, alertLevel)) : 30;
             const countryOffset = (countryName.length % 6) * 8;
-            const frequency = 360 + stableRisk * 2.1 + countryOffset;
+            const frequency = 360 + stableLevel * 2.1 + countryOffset;
 
             oscillator.type = 'triangle';
             oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
@@ -110,17 +110,17 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
         }
     };
 
-    const riskLookup = useMemo(() => {
+    const alertLookup = useMemo(() => {
         const byName = new Map();
         const byIso = new Map();
 
-        riskData.forEach((item) => {
+        alertData.forEach((item) => {
             if (item?.country) byName.set(normalizeCountry(item.country), item);
             if (item?.iso_code) byIso.set(item.iso_code.toUpperCase(), item);
         });
 
         return { byName, byIso };
-    }, [riskData]);
+    }, [alertData]);
 
     const selectedNormalized = normalizeCountry(selectedCountry);
     const TOOLTIP_WIDTH = 190;
@@ -145,7 +145,7 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.12),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.12),transparent_50%)]" />
             <div className="relative z-10">
                 <div className="flex items-center justify-between mb-5">
-                    <h2 className="text-base font-bold text-white uppercase tracking-widest">Global Risk Map</h2>
+                    <h2 className="text-base font-bold text-white uppercase tracking-widest">Intelligence Alert Map</h2>
                     <button
                         type="button"
                         onClick={() => onCountrySelect('')}
@@ -171,14 +171,14 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                                         geo.properties?.iso_a2 ||
                                         geo.properties?.ISO2 ||
                                         '';
-                                    const riskRecord =
-                                        riskLookup.byName.get(normalizedName) ||
-                                        riskLookup.byIso.get(isoCode.toUpperCase()) ||
+                                    const alertRecord =
+                                        alertLookup.byName.get(normalizedName) ||
+                                        alertLookup.byIso.get(isoCode.toUpperCase()) ||
                                         null;
-                                    const riskScore = riskRecord?.risk_score;
+                                    const alertLevel = alertRecord?.alert_level;
                                     const isSelected = selectedNormalized === normalizedName;
 
-                                    const selectedCountryName = riskRecord?.country || countryName;
+                                    const selectedCountryName = alertRecord?.country || countryName;
 
                                     return (
                                         <Geography
@@ -191,11 +191,11 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                                                     x: pos.x,
                                                     y: pos.y,
                                                     countryName,
-                                                    riskScore,
+                                                    alertLevel,
                                                 });
 
                                                 if (lastHoveredCountryRef.current !== countryName) {
-                                                    playHoverTone(countryName, riskScore);
+                                                    playHoverTone(countryName, alertLevel);
                                                     lastHoveredCountryRef.current = countryName;
                                                 }
                                             }}
@@ -209,7 +209,7 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                                             onMouseLeave={() => setTooltip(null)}
                                             style={{
                                                 default: {
-                                                    fill: isSelected ? '#3b82f6' : getRiskColor(riskScore),
+                                                    fill: isSelected ? '#3b82f6' : getAlertColor(alertLevel),
                                                     stroke: '#0f172a',
                                                     strokeWidth: isSelected ? 1.2 : 0.6,
                                                     outline: 'none',
@@ -242,9 +242,9 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                         >
                             <p className="text-xs font-bold text-white">{tooltip.countryName}</p>
                             <p className="text-[11px] text-slate-300">
-                                Risk:{' '}
+                                Alert Level:{' '}
                                 <span className="font-semibold text-cyan-300">
-                                    {typeof tooltip.riskScore === 'number' ? `${tooltip.riskScore.toFixed(1)}%` : 'No data'}
+                                    {typeof tooltip.alertLevel === 'number' ? `${tooltip.alertLevel.toFixed(1)}%` : 'No data'}
                                 </span>
                             </p>
                         </div>
@@ -252,10 +252,10 @@ const MapChart = ({ riskData, selectedCountry, onCountrySelect }) => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4 mt-4 text-[10px] uppercase tracking-widest font-bold text-slate-500">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> Low</span>
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> Medium</span>
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> High</span>
-                    <span className="text-slate-400">Selected country: {selectedCountry || 'None'}</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> STABLE</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ELEVATED</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> CRITICAL</span>
+                    <span className="text-slate-400">Node Selected: {selectedCountry || 'None'}</span>
                 </div>
             </div>
         </div>
