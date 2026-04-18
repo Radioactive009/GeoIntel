@@ -10,7 +10,7 @@ const CLOUD_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/
 const CyberGrid = () => (
     <div className="absolute inset-0 pointer-events-none z-0">
         <div 
-            className="absolute inset-0 opacity-[0.03]"
+            className="absolute inset-0 opacity-[0.04]"
             style={{
                 backgroundImage: `linear-gradient(to right, #22d3ee 1px, transparent 1px), linear-gradient(to bottom, #22d3ee 1px, transparent 1px)`,
                 backgroundSize: '40px 40px',
@@ -29,7 +29,7 @@ const Starfield = () => {
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
             size: Math.random() * 2 + 1,
-            duration: Math.random() * 3 + 2,
+            duration: Math.random() * 5 + 3,
             delay: Math.random() * 2
         }));
     }, []);
@@ -68,8 +68,6 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
 
     useAnimationFrame((time, delta) => {
         if (isBursting) return;
-        
-        // Use the animated speedValue instead of a static factor
         const currentSpeed = speedValue.get();
         if (currentSpeed === 0) return;
 
@@ -88,7 +86,7 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
 
     return (
         <div className="relative flex items-center justify-center scale-110 will-change-transform">
-            <div className={`absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] transition-opacity duration-500 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
+            <div className={`absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
             
             <div className="relative w-[300px] h-[300px] rounded-full overflow-hidden border border-white/10 shadow-2xl bg-black transform-gpu">
                 <motion.div style={{ x: xSurface }} className="absolute inset-y-0 left-0 flex brightness-110 contrast-125 saturate-125">
@@ -103,36 +101,37 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
                 <div className="absolute inset-0 pointer-events-none rounded-full shadow-[inset_0_0_60px_rgba(34,211,238,0.3),inset_0_0_120px_rgba(59,130,246,0.1)] opacity-70" />
             </div>
 
-            <div className={`absolute -inset-2 rounded-full border-[2px] border-blue-400/20 blur-[2px] transition-opacity duration-500 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
+            <div className={`absolute -inset-2 rounded-full border-[2px] border-blue-400/20 blur-[2px] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
         </div>
     );
 };
 
 const SplashScreen = ({ onComplete }) => {
     const [phase, setPhase] = useState('spinning');
-    // speedValue starts at 0 (steady)
     const speedValue = useMotionValue(0);
 
     useEffect(() => {
         const sequence = async () => {
-            // Step 1: Uniform Acceleration (0 to 18 over 1200ms)
-            animate(speedValue, 18, {
-                duration: 1.2,
-                ease: "linear" // Uniform increase
+            // GLOBE PHASE: 3.0 Seconds Total
+            // ── 1. Linear Acceleration (2500ms)
+            animate(speedValue, 20, {
+                duration: 2.5,
+                ease: "linear"
             });
-            await new Promise(r => setTimeout(r, 1200));
+            await new Promise(r => setTimeout(r, 2500));
             
-            // Step 2: Burst (400ms)
+            // ── 2. The Great Burst (500ms)
             setPhase('burst');
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise(r => setTimeout(r, 500));
             
-            // Step 3: Logo Reveal (800ms)
+            // LOGO PHASE: 2.0 Seconds Total
+            // ── 3. Logo Reveal & Stay (1250ms)
             setPhase('logo');
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 1250));
             
-            // Step 4: Final Move to Navbar (600ms)
+            // ── 4. Glide to Navbar & Dissolve (750ms)
             setPhase('moving');
-            await new Promise(r => setTimeout(r, 600));
+            await new Promise(r => setTimeout(r, 750));
             
             onComplete();
         };
@@ -144,7 +143,7 @@ const SplashScreen = ({ onComplete }) => {
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#00040d] overflow-hidden"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 1 }}
         >
             <Starfield />
 
@@ -168,7 +167,7 @@ const SplashScreen = ({ onComplete }) => {
                             filter: phase === 'burst' ? 'brightness(15) blur(20px)' : 'brightness(1) blur(0px)'
                         }}
                         transition={{ 
-                            duration: phase === 'burst' ? 0.4 : 0.8,
+                            duration: phase === 'burst' ? 0.5 : 1.2,
                             ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
                         }}
                         className="relative z-10"
@@ -183,14 +182,14 @@ const SplashScreen = ({ onComplete }) => {
                         key="site-intro"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        transition={{ duration: 0.6 }}
+                        transition={{ duration: 0.8 }}
                         className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none"
                     >
                         <motion.div 
                             className="absolute top-0 w-full h-1 bg-cyan-400/40 blur-sm shadow-[0_0_20px_rgba(34,211,238,0.6)]"
                             initial={{ top: '0%' }}
                             animate={{ top: '100%' }}
-                            transition={{ duration: 0.8, repeat: 1, ease: "linear" }}
+                            transition={{ duration: 1.2, repeat: 1, ease: "linear" }}
                         />
 
                         <motion.div
@@ -198,7 +197,7 @@ const SplashScreen = ({ onComplete }) => {
                             initial={{ scale: 1.1, opacity: 0, filter: 'blur(15px)' }}
                             animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
                             transition={{ 
-                                type: "spring", stiffness: 60, damping: 12, mass: 1
+                                type: "spring", stiffness: 40, damping: 15, mass: 1.4
                             }}
                             className="flex flex-col items-center gap-8 relative"
                         >
@@ -213,7 +212,7 @@ const SplashScreen = ({ onComplete }) => {
                     className="absolute inset-0 bg-cyan-300/60 z-[10000]"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: [0, 1, 0] }}
-                    transition={{ duration: 0.4 }}
+                    transition={{ duration: 0.5 }}
                 />
             )}
         </motion.div>
