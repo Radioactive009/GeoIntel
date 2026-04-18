@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { motion, AnimatePresence, useAnimationFrame, useMotionValue, useTransform } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationFrame, useMotionValue, useTransform, animate } from 'framer-motion';
 import Logo from './Logo';
 
 // Optimized 1K Textures
@@ -29,7 +29,7 @@ const Starfield = () => {
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
             size: Math.random() * 2 + 1,
-            duration: Math.random() * 3 + 2, // Faster blinking for energy
+            duration: Math.random() * 3 + 2,
             delay: Math.random() * 2
         }));
     }, []);
@@ -59,7 +59,7 @@ const Starfield = () => {
     );
 };
 
-const UltraRealGlobe = ({ speedFactor, isBursting }) => {
+const UltraRealGlobe = ({ speedValue, isBursting }) => {
     const surfacePos = useMotionValue(0);
     const cloudPos = useMotionValue(0);
     
@@ -69,8 +69,12 @@ const UltraRealGlobe = ({ speedFactor, isBursting }) => {
     useAnimationFrame((time, delta) => {
         if (isBursting) return;
         
-        const sMove = (delta * 0.005) * speedFactor;
-        const cMove = (delta * 0.006) * speedFactor;
+        // Use the animated speedValue instead of a static factor
+        const currentSpeed = speedValue.get();
+        if (currentSpeed === 0) return;
+
+        const sMove = (delta * 0.005) * currentSpeed;
+        const cMove = (delta * 0.006) * currentSpeed;
 
         let nextS = surfacePos.get() - sMove;
         if (nextS <= -50) nextS = 0;
@@ -106,41 +110,41 @@ const UltraRealGlobe = ({ speedFactor, isBursting }) => {
 
 const SplashScreen = ({ onComplete }) => {
     const [phase, setPhase] = useState('spinning');
-    const [speedFactor, setSpeedFactor] = useState(1.5); 
+    // speedValue starts at 0 (steady)
+    const speedValue = useMotionValue(0);
 
     useEffect(() => {
         const sequence = async () => {
-            // Step 1: Majestic Slow Spin (600ms)
-            await new Promise(r => setTimeout(r, 600));
+            // Step 1: Uniform Acceleration (0 to 18 over 1200ms)
+            animate(speedValue, 18, {
+                duration: 1.2,
+                ease: "linear" // Uniform increase
+            });
+            await new Promise(r => setTimeout(r, 1200));
             
-            // Step 2: High Acceleration (600ms)
-            setPhase('accelerating');
-            setSpeedFactor(12); // Doubled for 3s context
-            await new Promise(r => setTimeout(r, 600));
-            
-            // Step 3: Burst (400ms) - Snappier
+            // Step 2: Burst (400ms)
             setPhase('burst');
             await new Promise(r => setTimeout(r, 400));
             
-            // Step 4: Logo Reveal (800ms) - Give slightly more weight here for impact
+            // Step 3: Logo Reveal (800ms)
             setPhase('logo');
             await new Promise(r => setTimeout(r, 800));
             
-            // Step 5: Final Move to Navbar (600ms)
+            // Step 4: Final Move to Navbar (600ms)
             setPhase('moving');
             await new Promise(r => setTimeout(r, 600));
             
             onComplete();
         };
         sequence();
-    }, [onComplete]);
+    }, [onComplete, speedValue]);
 
     return (
         <motion.div
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#00040d] overflow-hidden"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.6 }} // Faster exit
+            transition={{ duration: 0.6 }}
         >
             <Starfield />
 
@@ -154,7 +158,7 @@ const SplashScreen = ({ onComplete }) => {
             </svg>
 
             <AnimatePresence mode="wait">
-                {(phase === 'spinning' || phase === 'accelerating' || phase === 'burst') && (
+                {(phase === 'spinning' || phase === 'burst') && (
                     <motion.div
                         key="globe-scene"
                         initial={{ scale: 0.9, opacity: 0 }}
@@ -164,13 +168,13 @@ const SplashScreen = ({ onComplete }) => {
                             filter: phase === 'burst' ? 'brightness(15) blur(20px)' : 'brightness(1) blur(0px)'
                         }}
                         transition={{ 
-                            duration: phase === 'burst' ? 0.4 : 0.8, // Faster world transitions
+                            duration: phase === 'burst' ? 0.4 : 0.8,
                             ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
                         }}
                         className="relative z-10"
                         style={{ filter: 'url(#bloom)' }}
                     >
-                        <UltraRealGlobe speedFactor={speedFactor} isBursting={phase === 'burst'} />
+                        <UltraRealGlobe speedValue={speedValue} isBursting={phase === 'burst'} />
                     </motion.div>
                 )}
 
@@ -179,7 +183,7 @@ const SplashScreen = ({ onComplete }) => {
                         key="site-intro"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        transition={{ duration: 0.6 }} // Faster logo fade
+                        transition={{ duration: 0.6 }}
                         className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none"
                     >
                         <motion.div 
@@ -194,7 +198,7 @@ const SplashScreen = ({ onComplete }) => {
                             initial={{ scale: 1.1, opacity: 0, filter: 'blur(15px)' }}
                             animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
                             transition={{ 
-                                type: "spring", stiffness: 60, damping: 12, mass: 1 // Snappier spring
+                                type: "spring", stiffness: 60, damping: 12, mass: 1
                             }}
                             className="flex flex-col items-center gap-8 relative"
                         >
