@@ -29,8 +29,8 @@ const Starfield = () => {
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
             size: Math.random() * 2 + 1,
-            duration: Math.random() * 5 + 3,
-            delay: Math.random() * 5
+            duration: Math.random() * 3 + 2, // Faster blinking for energy
+            delay: Math.random() * 2
         }));
     }, []);
 
@@ -60,22 +60,18 @@ const Starfield = () => {
 };
 
 const UltraRealGlobe = ({ speedFactor, isBursting }) => {
-    // raw values for logic
     const surfacePos = useMotionValue(0);
     const cloudPos = useMotionValue(0);
     
-    // Derived percentage strings for visual linkage
     const xSurface = useTransform(surfacePos, (v) => `${v}%`);
     const xCloud = useTransform(cloudPos, (v) => `${v}%`);
 
     useAnimationFrame((time, delta) => {
         if (isBursting) return;
         
-        // Accurate movement based on frame-delta
         const sMove = (delta * 0.005) * speedFactor;
         const cMove = (delta * 0.006) * speedFactor;
 
-        // Loop from 0 to -50 (since we have 2 side-by-side images)
         let nextS = surfacePos.get() - sMove;
         if (nextS <= -50) nextS = 0;
         
@@ -88,66 +84,52 @@ const UltraRealGlobe = ({ speedFactor, isBursting }) => {
 
     return (
         <div className="relative flex items-center justify-center scale-110 will-change-transform">
-            {/* Atmosphere Bloom */}
-            <div className={`absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] transition-opacity duration-1000 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
+            <div className={`absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] transition-opacity duration-500 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
             
-            {/* The Sphere */}
             <div className="relative w-[300px] h-[300px] rounded-full overflow-hidden border border-white/10 shadow-2xl bg-black transform-gpu">
-                
-                {/* Surface Layer - Linked directly to MotionValue */}
-                <motion.div 
-                    style={{ x: xSurface }}
-                    className="absolute inset-y-0 left-0 flex brightness-110 contrast-125 saturate-125"
-                >
+                <motion.div style={{ x: xSurface }} className="absolute inset-y-0 left-0 flex brightness-110 contrast-125 saturate-125">
                     <img src={EARTH_TEXTURE} alt="" className="h-full w-auto max-w-none" />
                     <img src={EARTH_TEXTURE} alt="" className="h-full w-auto max-w-none" />
                 </motion.div>
-                
-                {/* Cloud Layer - Linked directly to MotionValue */}
-                <motion.div 
-                    style={{ x: xCloud }}
-                    className="absolute inset-y-0 left-0 flex opacity-40 mix-blend-screen scale-[1.02]"
-                >
+                <motion.div style={{ x: xCloud }} className="absolute inset-y-0 left-0 flex opacity-40 mix-blend-screen scale-[1.02]">
                     <img src={CLOUD_TEXTURE} alt="" className="h-full w-auto max-w-none" />
                     <img src={CLOUD_TEXTURE} alt="" className="h-full w-auto max-w-none" />
                 </motion.div>
-
-                {/* Shading */}
                 <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_25%_25%,rgba(255,255,255,0.08)_0%,rgba(0,0,0,0)_45%,rgba(0,0,0,0.7)_75%,rgba(0,0,0,1)_100%)]" />
-                
-                {/* Atmospheric Fresnel */}
                 <div className="absolute inset-0 pointer-events-none rounded-full shadow-[inset_0_0_60px_rgba(34,211,238,0.3),inset_0_0_120px_rgba(59,130,246,0.1)] opacity-70" />
             </div>
 
-            {/* Atmosphere Ring */}
-            <div className={`absolute -inset-2 rounded-full border-[2px] border-blue-400/20 blur-[2px] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
+            <div className={`absolute -inset-2 rounded-full border-[2px] border-blue-400/20 blur-[2px] transition-opacity duration-500 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
         </div>
     );
 };
 
 const SplashScreen = ({ onComplete }) => {
     const [phase, setPhase] = useState('spinning');
-    const [speedFactor, setSpeedFactor] = useState(1); 
+    const [speedFactor, setSpeedFactor] = useState(1.5); 
 
     useEffect(() => {
         const sequence = async () => {
-            // majestic entry
-            await new Promise(r => setTimeout(r, 2200));
+            // Step 1: Majestic Slow Spin (600ms)
+            await new Promise(r => setTimeout(r, 600));
             
-            // Phase 2: Acceleration
+            // Step 2: High Acceleration (600ms)
             setPhase('accelerating');
-            setSpeedFactor(6); 
+            setSpeedFactor(12); // Doubled for 3s context
+            await new Promise(r => setTimeout(r, 600));
             
-            await new Promise(r => setTimeout(r, 2200));
+            // Step 3: Burst (400ms) - Snappier
             setPhase('burst');
+            await new Promise(r => setTimeout(r, 400));
             
-            await new Promise(r => setTimeout(r, 1000));
+            // Step 4: Logo Reveal (800ms) - Give slightly more weight here for impact
             setPhase('logo');
+            await new Promise(r => setTimeout(r, 800));
             
-            await new Promise(r => setTimeout(r, 2500));
+            // Step 5: Final Move to Navbar (600ms)
             setPhase('moving');
+            await new Promise(r => setTimeout(r, 600));
             
-            await new Promise(r => setTimeout(r, 1200));
             onComplete();
         };
         sequence();
@@ -158,7 +140,7 @@ const SplashScreen = ({ onComplete }) => {
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#00040d] overflow-hidden"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 1.5 }}
+            transition={{ duration: 0.6 }} // Faster exit
         >
             <Starfield />
 
@@ -182,7 +164,7 @@ const SplashScreen = ({ onComplete }) => {
                             filter: phase === 'burst' ? 'brightness(15) blur(20px)' : 'brightness(1) blur(0px)'
                         }}
                         transition={{ 
-                            duration: phase === 'burst' ? 1 : 2.5,
+                            duration: phase === 'burst' ? 0.4 : 0.8, // Faster world transitions
                             ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
                         }}
                         className="relative z-10"
@@ -197,14 +179,14 @@ const SplashScreen = ({ onComplete }) => {
                         key="site-intro"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        transition={{ duration: 1.2 }}
+                        transition={{ duration: 0.6 }} // Faster logo fade
                         className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none"
                     >
                         <motion.div 
                             className="absolute top-0 w-full h-1 bg-cyan-400/40 blur-sm shadow-[0_0_20px_rgba(34,211,238,0.6)]"
                             initial={{ top: '0%' }}
                             animate={{ top: '100%' }}
-                            transition={{ duration: 1.2, repeat: 2, ease: "linear" }}
+                            transition={{ duration: 0.8, repeat: 1, ease: "linear" }}
                         />
 
                         <motion.div
@@ -212,7 +194,7 @@ const SplashScreen = ({ onComplete }) => {
                             initial={{ scale: 1.1, opacity: 0, filter: 'blur(15px)' }}
                             animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
                             transition={{ 
-                                type: "spring", stiffness: 45, damping: 15, mass: 1.4
+                                type: "spring", stiffness: 60, damping: 12, mass: 1 // Snappier spring
                             }}
                             className="flex flex-col items-center gap-8 relative"
                         >
@@ -227,7 +209,7 @@ const SplashScreen = ({ onComplete }) => {
                     className="absolute inset-0 bg-cyan-300/60 z-[10000]"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: [0, 1, 0] }}
-                    transition={{ duration: 0.8 }}
+                    transition={{ duration: 0.4 }}
                 />
             )}
         </motion.div>
