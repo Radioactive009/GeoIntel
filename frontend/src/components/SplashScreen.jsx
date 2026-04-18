@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, animate } from 'framer-motion';
 import Logo from './Logo';
 
-// Photo-realistic Earth Texture (High Resolution)
-const EARTH_TEXTURE = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Solarsystemscope_texture_2k_earth_daymap.jpg/2560px-Solarsystemscope_texture_2k_earth_daymap.jpg";
+// Photo-realistic Earth Texture (High Resolution - using a stable Three.js asset)
+const EARTH_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg";
 
 const RealisticGlobe = ({ speed }) => {
     const x = useMotionValue(0);
