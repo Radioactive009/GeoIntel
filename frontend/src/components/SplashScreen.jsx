@@ -166,21 +166,22 @@ const SplashScreen = ({ onComplete }) => {
                 </filter>
             </svg>
 
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
                 {(phase === 'spinning' || phase === 'burst') && (
                     <motion.div
                         key="globe-scene"
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ 
-                            scale: phase === 'burst' ? 12 : 1, // Reduced scale for performance
-                            opacity: phase === 'burst' ? 0 : 1,
+                            scale: phase === 'burst' ? 12 : 1,
+                            opacity: phase === 'burst' ? 0.8 : 1, // Keep visible longer
                             filter: phase === 'burst' 
-                                ? 'brightness(15) blur(15px)' 
+                                ? 'brightness(15) blur(10px)' 
                                 : 'brightness(1) blur(0px)'
                         }}
+                        exit={{ opacity: 0, scale: 15 }} // Slower exit animation
                         transition={{ 
                             duration: phase === 'burst' ? 1.5 : 1.2,
-                            ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
+                            ease: phase === 'burst' ? [0.16, 1, 0.3, 1] : "easeOut"
                         }}
                         className="relative z-10 flex items-center justify-center transform-gpu"
                         style={{ filter: 'url(#bloom)' }}
