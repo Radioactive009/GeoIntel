@@ -24,14 +24,15 @@ const CyberGrid = () => (
 // ── Shockwave Effect ──────────────────────────────────────
 const Shockwave = () => (
     <motion.div
-        className="absolute rounded-full border-[1px] border-cyan-300/40 z-20"
-        initial={{ scale: 0.8, opacity: 0, filter: 'blur(2px)' }}
+        className="absolute rounded-full border-[1px] border-cyan-300/40 z-20 will-change-transform"
+        style={{ transform: 'translateZ(0)' }}
+        initial={{ scale: 0.8, opacity: 0 }}
         animate={{ 
-            scale: 25, 
+            scale: 20, 
             opacity: [0, 1, 0],
-            borderWidth: ['1px', '8px', '1px']
+            borderWidth: ['1px', '4px', '1px']
         }}
-        transition={{ duration: 1.5, ease: [0.1, 1, 0.3, 1] }}
+        transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
     />
 );
 
@@ -88,14 +89,9 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
         const sMove = (delta * 0.005) * currentSpeed;
         const cMove = (delta * 0.006) * currentSpeed;
 
-        let nextS = surfacePos.get() - sMove;
-        if (nextS <= -50) nextS = 0;
-        
-        let nextC = cloudPos.get() - cMove;
-        if (nextC <= -50) nextC = 0;
-
-        surfacePos.set(nextS);
-        cloudPos.set(nextC);
+        // Smoother modulo logic for infinite scroll
+        surfacePos.set((surfacePos.get() - sMove) % 50);
+        cloudPos.set((cloudPos.get() - cMove) % 50);
     });
 
     return (
@@ -128,13 +124,13 @@ const SplashScreen = ({ onComplete }) => {
         const sequence = async () => {
             // GLOBE PHASE: 3.0 Seconds Total
             // ── 1. Linear Acceleration (2500ms)
-            animate(speedValue, 20, {
+            // Using .then() to ensure precise timing sync
+            await animate(speedValue, 20, {
                 duration: 2.5,
                 ease: "linear"
             });
-            await new Promise(r => setTimeout(r, 2500));
             
-            // ── 2. The Great Burst (1500ms) - SLOWED DOWN as requested
+            // ── 2. The Great Burst (1500ms)
             setPhase('burst');
             await new Promise(r => setTimeout(r, 1500));
             
@@ -176,17 +172,17 @@ const SplashScreen = ({ onComplete }) => {
                         key="globe-scene"
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ 
-                            scale: phase === 'burst' ? 25 : 1, // Larger scale for more impact
+                            scale: phase === 'burst' ? 12 : 1, // Reduced scale for performance
                             opacity: phase === 'burst' ? 0 : 1,
                             filter: phase === 'burst' 
-                                ? 'brightness(25) blur(30px) saturate(2)' 
-                                : 'brightness(1) blur(0px) saturate(1)'
+                                ? 'brightness(15) blur(15px)' 
+                                : 'brightness(1) blur(0px)'
                         }}
                         transition={{ 
-                            duration: phase === 'burst' ? 1.5 : 1.2, // Slower duration
-                            ease: phase === 'burst' ? [0.2, 0.8, 0.2, 1] : "easeOut"
+                            duration: phase === 'burst' ? 1.5 : 1.2,
+                            ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
                         }}
-                        className="relative z-10 flex items-center justify-center"
+                        className="relative z-10 flex items-center justify-center transform-gpu"
                         style={{ filter: 'url(#bloom)' }}
                     >
                         {phase === 'burst' && <Shockwave />}
