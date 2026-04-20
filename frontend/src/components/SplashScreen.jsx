@@ -21,6 +21,20 @@ const CyberGrid = () => (
     </div>
 );
 
+// ── Shockwave Effect ──────────────────────────────────────
+const Shockwave = () => (
+    <motion.div
+        className="absolute rounded-full border-[1px] border-cyan-300/40 z-20"
+        initial={{ scale: 0.8, opacity: 0, filter: 'blur(2px)' }}
+        animate={{ 
+            scale: 25, 
+            opacity: [0, 1, 0],
+            borderWidth: ['1px', '8px', '1px']
+        }}
+        transition={{ duration: 1.5, ease: [0.1, 1, 0.3, 1] }}
+    />
+);
+
 // ── Starfield Component ───────────────────────────────────
 const Starfield = () => {
     const stars = useMemo(() => {
@@ -120,9 +134,9 @@ const SplashScreen = ({ onComplete }) => {
             });
             await new Promise(r => setTimeout(r, 2500));
             
-            // ── 2. The Great Burst (500ms)
+            // ── 2. The Great Burst (1500ms) - SLOWED DOWN as requested
             setPhase('burst');
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, 1500));
             
             // LOGO PHASE: 2.0 Seconds Total
             // ── 3. Logo Reveal & Stay (1250ms)
@@ -162,17 +176,20 @@ const SplashScreen = ({ onComplete }) => {
                         key="globe-scene"
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ 
-                            scale: phase === 'burst' ? 18 : 1,
+                            scale: phase === 'burst' ? 25 : 1, // Larger scale for more impact
                             opacity: phase === 'burst' ? 0 : 1,
-                            filter: phase === 'burst' ? 'brightness(15) blur(20px)' : 'brightness(1) blur(0px)'
+                            filter: phase === 'burst' 
+                                ? 'brightness(25) blur(30px) saturate(2)' 
+                                : 'brightness(1) blur(0px) saturate(1)'
                         }}
                         transition={{ 
-                            duration: phase === 'burst' ? 0.5 : 1.2,
-                            ease: phase === 'burst' ? [0.4, 0, 0.2, 1] : "easeOut"
+                            duration: phase === 'burst' ? 1.5 : 1.2, // Slower duration
+                            ease: phase === 'burst' ? [0.2, 0.8, 0.2, 1] : "easeOut"
                         }}
-                        className="relative z-10"
+                        className="relative z-10 flex items-center justify-center"
                         style={{ filter: 'url(#bloom)' }}
                     >
+                        {phase === 'burst' && <Shockwave />}
                         <UltraRealGlobe speedValue={speedValue} isBursting={phase === 'burst'} />
                     </motion.div>
                 )}
@@ -209,10 +226,10 @@ const SplashScreen = ({ onComplete }) => {
 
             {phase === 'burst' && (
                 <motion.div 
-                    className="absolute inset-0 bg-cyan-300/60 z-[10000]"
+                    className="absolute inset-0 bg-cyan-200/40 z-[10000] mix-blend-overlay"
                     initial={{ opacity: 0 }}
-                    animate={{ opacity: [0, 1, 0] }}
-                    transition={{ duration: 0.5 }}
+                    animate={{ opacity: [0, 1, 1, 0], scale: [1, 1.1, 1] }}
+                    transition={{ duration: 1.5, times: [0, 0.1, 0.6, 1] }}
                 />
             )}
         </motion.div>
