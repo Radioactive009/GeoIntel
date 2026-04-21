@@ -7,7 +7,7 @@ import { getArticles, getAlertAnalysis, triggerIngestion } from '../services/api
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
     TrendingUp, BarChart3, Globe, Activity, Newspaper,
-    Zap, Target, AlertTriangle, Search, Mail, Phone
+    Zap, Target, AlertTriangle, Search, Mail, Phone, Github
 } from 'lucide-react';
 import developerImg from '../assets/developer.jpg';
 
@@ -457,7 +457,7 @@ const Dashboard = () => {
                                 </div>
                                 <h3 className="text-3xl font-black text-white tracking-tight">Kislay Kumar</h3>
                             </div>
-                            <div className="flex flex-col sm:flex-row gap-4 sm:gap-8">
+                            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-4 sm:gap-6">
                                 <a href="mailto:kislaykumar20092002@gmail.com" className="flex items-center justify-center sm:justify-start gap-3 text-slate-400 hover:text-cyan-400 transition-all duration-300 transform hover:translate-x-1">
                                     <div className="p-2 rounded-lg bg-white/5 border border-white/5">
                                         <Mail size={14} className="text-cyan-400" />
@@ -469,6 +469,12 @@ const Dashboard = () => {
                                         <Phone size={14} className="text-cyan-400" />
                                     </div>
                                     <span className="text-xs font-bold uppercase tracking-wider">+91 8434460542</span>
+                                </a>
+                                <a href="https://github.com/Radioactive009/GeoIntel" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center sm:justify-start gap-3 text-slate-400 hover:text-cyan-400 transition-all duration-300 transform hover:translate-x-1">
+                                    <div className="p-2 rounded-lg bg-white/5 border border-white/5">
+                                        <Github size={14} className="text-cyan-400" />
+                                    </div>
+                                    <span className="text-xs font-bold uppercase tracking-wider">GitHub Repo</span>
                                 </a>
                             </div>
                         </div>
