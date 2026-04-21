@@ -168,6 +168,8 @@ const Dashboard = () => {
     const filteredChartData = useMemo(() => {
         if (chartFilter === 'top') return activeAlertData.slice(0, 15);
         if (chartFilter === 'critical') return activeAlertData.filter(d => d.alert_status === 'high');
+        if (chartFilter === 'elevated') return activeAlertData.filter(d => d.alert_status === 'medium');
+        if (chartFilter === 'stable') return activeAlertData.filter(d => d.alert_status === 'low');
         return activeAlertData;
     }, [activeAlertData, chartFilter]);
 
@@ -283,16 +285,18 @@ const Dashboard = () => {
                                 <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">Regional Alert Matrix</h2>
                             </div>
 
-                            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5">
+                            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 gap-1">
                                 {[
                                     { id: 'top', label: 'Top 15' },
                                     { id: 'critical', label: 'Critical' },
+                                    { id: 'elevated', label: 'Elevated' },
+                                    { id: 'stable', label: 'Stable' },
                                     { id: 'all', label: 'All' }
                                 ].map(f => (
                                     <button
                                         key={f.id}
                                         onClick={() => setChartFilter(f.id)}
-                                        className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                        className={`px-3 py-1 rounded-lg text-[9px] font-bold transition-all whitespace-nowrap ${
                                             chartFilter === f.id 
                                                 ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' 
                                                 : 'text-slate-500 hover:text-slate-300'
