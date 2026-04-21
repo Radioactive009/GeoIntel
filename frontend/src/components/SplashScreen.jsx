@@ -21,20 +21,75 @@ const CyberGrid = () => (
     </div>
 );
 
-// ── Shockwave Effect ──────────────────────────────────────
-const Shockwave = () => (
-    <motion.div
-        className="absolute rounded-full border-[1px] border-cyan-300/40 z-20 will-change-transform"
-        style={{ transform: 'translateZ(0)' }}
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ 
-            scale: 20, 
-            opacity: [0, 1, 0],
-            borderWidth: ['1px', '4px', '1px']
-        }}
-        transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-    />
-);
+// ── Advanced Shockwaves ──────────────────────────────────
+const Shockwaves = () => {
+    const rings = [
+        { scale: 22, duration: 2.0, delay: 0, color: 'border-cyan-300/40', width: '1px' },
+        { scale: 18, duration: 1.6, delay: 0.15, color: 'border-blue-400/30', width: '2px' },
+        { scale: 25, duration: 2.4, delay: 0.05, color: 'border-indigo-500/20', width: '1px' },
+        { scale: 15, duration: 1.2, delay: 0.25, color: 'border-white/50', width: '3px' }
+    ];
+
+    return (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {rings.map((ring, i) => (
+                <motion.div
+                    key={i}
+                    className={`absolute rounded-full border-solid ${ring.color} z-20 will-change-transform`}
+                    style={{ borderWidth: ring.width }}
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ 
+                        scale: ring.scale, 
+                        opacity: [0, 0.8, 0],
+                    }}
+                    transition={{ 
+                        duration: ring.duration, 
+                        delay: ring.delay,
+                        ease: [0.16, 1, 0.3, 1] 
+                    }}
+                />
+            ))}
+        </div>
+    );
+};
+
+// ── Particle Burst Effect ─────────────────────────────────
+const BurstParticles = () => {
+    const particles = useMemo(() => {
+        return Array.from({ length: 40 }).map((_, i) => ({
+            id: i,
+            angle: (Math.PI * 2 * i) / 40 + (Math.random() - 0.5) * 0.2,
+            distance: 400 + Math.random() * 600,
+            size: Math.random() * 3 + 1,
+            duration: 0.8 + Math.random() * 1.2,
+            delay: Math.random() * 0.2
+        }));
+    }, []);
+
+    return (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {particles.map(p => (
+                <motion.div
+                    key={p.id}
+                    className="absolute bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                    style={{ width: p.size, height: p.size }}
+                    initial={{ x: 0, y: 0, opacity: 0 }}
+                    animate={{ 
+                        x: Math.cos(p.angle) * p.distance,
+                        y: Math.sin(p.angle) * p.distance,
+                        opacity: [0, 1, 0],
+                        scale: [1, 0.5]
+                    }}
+                    transition={{
+                        duration: p.duration,
+                        delay: p.delay,
+                        ease: "easeOut"
+                    }}
+                />
+            ))}
+        </div>
+    );
+};
 
 // ── Starfield Component ───────────────────────────────────
 const Starfield = () => {
@@ -172,21 +227,33 @@ const SplashScreen = ({ onComplete }) => {
                         key="globe-scene"
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ 
-                            scale: phase === 'burst' ? 12 : 1,
-                            opacity: phase === 'burst' ? 0.8 : 1, // Keep visible longer
+                            scale: phase === 'burst' ? [1, 0.9, 15] : 1, // Quick shrink then massive expand
+                            opacity: phase === 'burst' ? [1, 1, 0] : 1,
                             filter: phase === 'burst' 
-                                ? 'brightness(15) blur(10px)' 
+                                ? ['brightness(1) blur(0px)', 'brightness(20) blur(20px)'] 
                                 : 'brightness(1) blur(0px)'
                         }}
-                        exit={{ opacity: 0, scale: 15 }} // Slower exit animation
+                        exit={{ opacity: 0, scale: 20 }}
                         transition={{ 
-                            duration: phase === 'burst' ? 1.5 : 1.2,
-                            ease: phase === 'burst' ? [0.16, 1, 0.3, 1] : "easeOut"
+                            duration: phase === 'burst' ? 2.5 : 1.2, // Slower, more majestic
+                            times: phase === 'burst' ? [0, 0.1, 1] : undefined,
+                            ease: phase === 'burst' ? [0.22, 1, 0.36, 1] : "easeOut"
                         }}
                         className="relative z-10 flex items-center justify-center transform-gpu"
                         style={{ filter: 'url(#bloom)' }}
                     >
-                        {phase === 'burst' && <Shockwave />}
+                        {phase === 'burst' && (
+                            <>
+                                <Shockwaves />
+                                <BurstParticles />
+                                <motion.div 
+                                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.4)_0%,transparent_70%)] z-0"
+                                    initial={{ scale: 0, opacity: 0 }}
+                                    animate={{ scale: [0, 10], opacity: [0, 1, 0] }}
+                                    transition={{ duration: 2, ease: "easeOut" }}
+                                />
+                            </>
+                        )}
                         <UltraRealGlobe speedValue={speedValue} isBursting={phase === 'burst'} />
                     </motion.div>
                 )}
@@ -222,12 +289,22 @@ const SplashScreen = ({ onComplete }) => {
             </AnimatePresence>
 
             {phase === 'burst' && (
-                <motion.div 
-                    className="absolute inset-0 bg-cyan-200/40 z-[10000] mix-blend-overlay"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0, 1, 1, 0], scale: [1, 1.1, 1] }}
-                    transition={{ duration: 1.5, times: [0, 0.1, 0.6, 1] }}
-                />
+                <>
+                    <motion.div 
+                        className="absolute inset-0 bg-white/20 z-[10000] mix-blend-overlay"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 1, 0] }}
+                        transition={{ duration: 0.4, times: [0, 0.2, 1] }}
+                    />
+                    <motion.div 
+                        className="absolute inset-0 z-[10001] pointer-events-none"
+                        animate={{ 
+                            x: [0, -10, 10, -10, 10, 0],
+                            y: [0, 5, -5, 5, -5, 0]
+                        }}
+                        transition={{ duration: 0.5, ease: "easeInOut" }}
+                    />
+                </>
             )}
         </motion.div>
     );
