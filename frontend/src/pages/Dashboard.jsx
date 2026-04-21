@@ -7,8 +7,10 @@ import { getArticles, getAlertAnalysis, triggerIngestion } from '../services/api
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
     TrendingUp, BarChart3, Globe, Activity, Newspaper,
-    Zap, Target, AlertTriangle, Search
+    Zap, Target, AlertTriangle, Search, Mail, Phone
 } from 'lucide-react';
+import developerImg from '../assets/developer.jpg';
+
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 // ── Alert Level helpers ─────────────────────────────────
