@@ -114,6 +114,24 @@ body {
   background: rgba(34, 211, 238, 0.3);
 }
 
+.chart-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.chart-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.1);
+  border-radius: 10px;
+}
+
+.chart-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.15);
+  border-radius: 10px;
+}
+
+.chart-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.3);
+}
+
 /* ── Animations ────────────────────────────────────────── */
 @keyframes subtle-float {
   0%, 100% { transform: translateY(0); }

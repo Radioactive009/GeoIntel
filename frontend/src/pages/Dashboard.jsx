@@ -307,40 +307,45 @@ const Dashboard = () => {
                                 ))}
                             </div>
                         </div>
-                        <div className="h-[320px] w-full min-h-[320px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={filteredChartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
-                                    <XAxis
-                                        dataKey="iso_code"
-                                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                        dy={10}
-                                        interval={chartFilter === 'all' ? 4 : 0}
-                                    />
-                                    <YAxis
-                                        tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                        domain={[0, 100]}
-                                        tickFormatter={(v) => `${v}%`}
-                                    />
-                                    <Tooltip 
-                                        content={<CustomTooltip />} 
-                                        cursor={{ fill: 'rgba(255,255,255,0.03)' }}
-                                        animationDuration={300}
-                                    />
-                                    <Bar 
-                                        dataKey="alert_level" 
-                                        radius={[8, 8, 8, 8]} 
-                                        barSize={chartFilter === 'all' ? 8 : 40}
-                                    >
-                                        {filteredChartData.map((e) => (
-                                            <Cell key={e.iso_code} fill={getAlertColor(e.alert_status)} fillOpacity={0.9} />
-                                        ))}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
+                        <div className="h-[320px] w-full min-h-[320px] overflow-x-auto chart-scrollbar pb-2">
+                            <div style={{ 
+                                minWidth: chartFilter === 'all' ? `${filteredChartData.length * 30}px` : '100%',
+                                height: '100%'
+                            }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={filteredChartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                                        <XAxis
+                                            dataKey="iso_code"
+                                            tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            dy={10}
+                                            interval={0}
+                                        />
+                                        <YAxis
+                                            tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }}
+                                            axisLine={false}
+                                            tickLine={false}
+                                            domain={[0, 100]}
+                                            tickFormatter={(v) => `${v}%`}
+                                        />
+                                        <Tooltip 
+                                            content={<CustomTooltip />} 
+                                            cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                                            animationDuration={300}
+                                        />
+                                        <Bar 
+                                            dataKey="alert_level" 
+                                            radius={[8, 8, 8, 8]} 
+                                            barSize={chartFilter === 'all' ? 20 : 40}
+                                        >
+                                            {filteredChartData.map((e) => (
+                                                <Cell key={e.iso_code} fill={getAlertColor(e.alert_status)} fillOpacity={0.9} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                     </div>
 
