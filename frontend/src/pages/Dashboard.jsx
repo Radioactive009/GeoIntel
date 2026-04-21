@@ -437,16 +437,66 @@ const Dashboard = () => {
                 </div>
             </main>
 
-            <footer className="mt-auto border-t border-slate-800/50 py-10 px-6 text-center space-y-4">
-                <div className="max-w-2xl mx-auto glass p-6 rounded-[2rem] border border-indigo-500/10">
-                    <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
-                        <span className="text-indigo-400 font-bold uppercase tracking-widest mr-2">Intelligence Note:</span>
-                        Alert statuses are generated via automated semantic analysis. Geopolitical nuance is complex, and these metrics should be treated as intelligence signals rather than absolute truth. 
-                    </p>
+            <footer className="mt-auto border-t border-slate-800/50 py-16 px-6 text-center space-y-12">
+                <div className="max-w-5xl mx-auto flex flex-col xl:flex-row items-center gap-8">
+                    {/* Developer Card */}
+                    <div className="flex-grow glass p-8 rounded-[2.5rem] border border-white/5 flex flex-col sm:flex-row items-center gap-8 text-center sm:text-left transition-all duration-500 hover:border-cyan-500/30 group">
+                        <div className="relative shrink-0">
+                            <div className="absolute -inset-2 bg-gradient-to-r from-cyan-500 to-indigo-500 rounded-[2rem] blur-xl opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+                            <img 
+                                src={developerImg} 
+                                alt="Kislay Kumar" 
+                                className="relative w-32 h-32 rounded-[1.5rem] object-cover border border-white/10 shadow-2xl"
+                            />
+                        </div>
+                        <div className="space-y-5">
+                            <div className="space-y-1">
+                                <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
+                                    <Shield size={12} className="text-cyan-400" />
+                                    <p className="text-[10px] font-extrabold text-cyan-400 uppercase tracking-[0.4em]">Project Developer</p>
+                                </div>
+                                <h3 className="text-3xl font-black text-white tracking-tight">Kislay Kumar</h3>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-4 sm:gap-8">
+                                <a href="mailto:kislaykumar20092002@gmail.com" className="flex items-center justify-center sm:justify-start gap-3 text-slate-400 hover:text-cyan-400 transition-all duration-300 transform hover:translate-x-1">
+                                    <div className="p-2 rounded-lg bg-white/5 border border-white/5">
+                                        <Mail size={14} className="text-cyan-400" />
+                                    </div>
+                                    <span className="text-xs font-bold uppercase tracking-wider">kislaykumar20092002@gmail.com</span>
+                                </a>
+                                <a href="tel:+918434460542" className="flex items-center justify-center sm:justify-start gap-3 text-slate-400 hover:text-cyan-400 transition-all duration-300 transform hover:translate-x-1">
+                                    <div className="p-2 rounded-lg bg-white/5 border border-white/5">
+                                        <Phone size={14} className="text-cyan-400" />
+                                    </div>
+                                    <span className="text-xs font-bold uppercase tracking-wider">+91 8434460542</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Intelligence Note */}
+                    <div className="xl:w-1/3 glass p-8 rounded-[2.5rem] border border-white/5 flex flex-col justify-center gap-4 text-left">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Activity size={14} className="text-indigo-400" />
+                            <span className="text-indigo-400 font-extrabold uppercase tracking-widest text-[10px]">Intelligence Note</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed italic">
+                            Alert statuses are generated via automated semantic analysis. Geopolitical nuance is complex, and these metrics should be treated as intelligence signals rather than absolute truth. 
+                        </p>
+                    </div>
                 </div>
-                <p className="text-[10px] text-slate-600 uppercase tracking-[0.25em] font-bold">
-                    GeoIntel Systems • Strategic Monitoring • Secure Node 07
-                </p>
+
+                <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6 px-4">
+                    <p className="text-[10px] text-slate-600 uppercase tracking-[0.4em] font-bold">
+                        GeoIntel Systems • Strategic Monitoring • Hub 07
+                    </p>
+                    <div className="flex items-center gap-4">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                            Secure Node Connection Active • {new Date().getFullYear()}
+                        </p>
+                    </div>
+                </div>
             </footer>
         </div>
     );
