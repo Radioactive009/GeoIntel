@@ -116,6 +116,7 @@ const Dashboard = () => {
     const [selectedCountry, setSelectedCountry] = useState('');
     const [selectedRegion, setSelectedRegion] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [chartFilter, setChartFilter] = useState('top');
     const articlesPerPage = 9;
 
     const fetchArticles = async () => {
@@ -163,6 +164,12 @@ const Dashboard = () => {
     const activeAlertData = useMemo(() => 
         alertData.filter(r => r.total_articles > 0), 
     [alertData]);
+
+    const filteredChartData = useMemo(() => {
+        if (chartFilter === 'top') return activeAlertData.slice(0, 15);
+        if (chartFilter === 'critical') return activeAlertData.filter(d => d.alert_status === 'high');
+        return activeAlertData;
+    }, [activeAlertData, chartFilter]);
 
     const countries = useMemo(() => {
         const s = new Set();
@@ -275,16 +282,37 @@ const Dashboard = () => {
                                 </div>
                                 <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">Regional Alert Matrix</h2>
                             </div>
+
+                            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5">
+                                {[
+                                    { id: 'top', label: 'Top 15' },
+                                    { id: 'critical', label: 'Critical' },
+                                    { id: 'all', label: 'All' }
+                                ].map(f => (
+                                    <button
+                                        key={f.id}
+                                        onClick={() => setChartFilter(f.id)}
+                                        className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                                            chartFilter === f.id 
+                                                ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' 
+                                                : 'text-slate-500 hover:text-slate-300'
+                                        }`}
+                                    >
+                                        {f.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         <div className="h-[320px] w-full min-h-[320px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={activeAlertData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                                <BarChart data={filteredChartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
                                     <XAxis
                                         dataKey="iso_code"
-                                        tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }}
+                                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
                                         axisLine={false}
                                         tickLine={false}
                                         dy={10}
+                                        interval={chartFilter === 'all' ? 4 : 0}
                                     />
                                     <YAxis
                                         tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }}
@@ -293,9 +321,17 @@ const Dashboard = () => {
                                         domain={[0, 100]}
                                         tickFormatter={(v) => `${v}%`}
                                     />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                                    <Bar dataKey="alert_level" radius={[12, 12, 12, 12]} barSize={50}>
-                                        {activeAlertData.map((e) => (
+                                    <Tooltip 
+                                        content={<CustomTooltip />} 
+                                        cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                                        animationDuration={300}
+                                    />
+                                    <Bar 
+                                        dataKey="alert_level" 
+                                        radius={[8, 8, 8, 8]} 
+                                        barSize={chartFilter === 'all' ? 8 : 40}
+                                    >
+                                        {filteredChartData.map((e) => (
                                             <Cell key={e.iso_code} fill={getAlertColor(e.alert_status)} fillOpacity={0.9} />
                                         ))}
                                     </Bar>
