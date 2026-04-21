@@ -21,37 +21,75 @@ const CyberGrid = () => (
     </div>
 );
 
-// ── Advanced Shockwaves ──────────────────────────────────
+// ── Volumetric Shockwaves (Atmospheric Ripples) ──────────
 const Shockwaves = () => {
-    const rings = [
-        { scale: 22, duration: 2.0, delay: 0, color: 'border-cyan-300/40', width: '1px' },
-        { scale: 18, duration: 1.6, delay: 0.15, color: 'border-blue-400/30', width: '2px' },
-        { scale: 25, duration: 2.4, delay: 0.05, color: 'border-indigo-500/20', width: '1px' },
-        { scale: 15, duration: 1.2, delay: 0.25, color: 'border-white/50', width: '3px' }
+    const ripples = [
+        { scale: 12, duration: 2.2, color: 'bg-cyan-400/20', blur: '30px' },
+        { scale: 18, duration: 1.8, color: 'bg-blue-500/10', blur: '60px' },
+        { scale: 15, duration: 1.4, color: 'bg-white/30', blur: '20px' }
     ];
 
     return (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            {rings.map((ring, i) => (
+            {ripples.map((rip, i) => (
                 <motion.div
                     key={i}
-                    className={`absolute rounded-full border-solid ${ring.color} z-20 will-change-transform`}
-                    style={{ borderWidth: ring.width }}
-                    initial={{ scale: 0.6, opacity: 0 }}
+                    className={`absolute rounded-full ${rip.color} z-20 will-change-transform`}
+                    style={{ filter: `blur(${rip.blur})` }}
+                    initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ 
-                        scale: ring.scale, 
-                        opacity: [0, 0.8, 0],
+                        scale: rip.scale, 
+                        opacity: [0, 0.6, 0],
                     }}
                     transition={{ 
-                        duration: ring.duration, 
-                        delay: ring.delay,
-                        ease: [0.16, 1, 0.3, 1] 
+                        duration: rip.duration, 
+                        ease: "easeOut" 
                     }}
                 />
             ))}
         </div>
     );
 };
+
+// ── Optical Lens Flare ──────────────────────────────────
+const LensFlare = () => (
+    <div className="absolute inset-0 pointer-events-none z-[10000] flex items-center justify-center">
+        {/* Central Sun Flare */}
+        <motion.div 
+            className="absolute w-64 h-64 bg-white rounded-full blur-[40px] opacity-0"
+            animate={{ 
+                scale: [0, 10], 
+                opacity: [0, 0.8, 0],
+            }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+        />
+        
+        {/* Horizontal Star Streak */}
+        <motion.div 
+            className="absolute w-[200vw] h-1 bg-gradient-to-r from-transparent via-cyan-300 to-transparent opacity-0"
+            animate={{ 
+                scaleY: [1, 5, 1],
+                opacity: [0, 0.7, 0],
+            }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+        />
+
+        {/* Lens Ghosts */}
+        {[0.4, 0.7, -0.3, -0.6].map((offset, i) => (
+            <motion.div
+                key={i}
+                className="absolute w-12 h-12 rounded-full border border-white/20 bg-white/5 blur-[2px]"
+                animate={{ 
+                    x: [0, 500 * offset],
+                    y: [0, 200 * offset],
+                    opacity: [0, 0.4, 0],
+                    scale: [0, 1.5 + i * 0.5]
+                }}
+                transition={{ duration: 2, ease: "easeOut" }}
+            />
+        ))}
+    </div>
+);
 
 // ── Warp Speed Starfield ────────────────────────────────
 const Starfield = () => {
@@ -220,17 +258,17 @@ const SplashScreen = ({ onComplete }) => {
                         key="globe-scene"
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ 
-                            scale: phase === 'burst' ? [1, 0.92, 18] : 1,
+                            scale: phase === 'burst' ? [1, 0.88, 22] : 1, // Faster recoil and bigger expansion
                             opacity: phase === 'burst' ? [1, 1, 0] : 1,
                         }}
-                        exit={{ opacity: 0, scale: 25 }}
+                        exit={{ opacity: 0, scale: 30 }}
                         transition={{ 
-                            duration: phase === 'burst' ? 2.8 : 1.2,
-                            times: phase === 'burst' ? [0, 0.1, 1] : undefined,
+                            duration: phase === 'burst' ? 2.5 : 1.2,
+                            times: phase === 'burst' ? [0, 0.08, 1] : undefined,
                             type: "spring",
-                            stiffness: 25,
-                            damping: 10,
-                            mass: 1.5
+                            stiffness: 45,
+                            damping: 12,
+                            mass: 1.2
                         }}
                         className="relative z-10 flex items-center justify-center transform-gpu will-change-transform"
                     >
@@ -239,13 +277,13 @@ const SplashScreen = ({ onComplete }) => {
                                 <EnergyVortex />
                                 <Shockwaves />
                                 <motion.div 
-                                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.3)_0%,transparent_70%)] z-0"
+                                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.8)_0%,rgba(34,211,238,0.4)_40%,transparent_70%)] z-0"
                                     initial={{ scale: 0, opacity: 0 }}
                                     animate={{ 
-                                        scale: [0, 20], 
+                                        scale: [0, 25], 
                                         opacity: [0, 1, 0],
                                     }}
-                                    transition={{ duration: 3, ease: "easeOut" }}
+                                    transition={{ duration: 2.2, ease: "easeOut" }}
                                 />
                             </>
                         )}
@@ -276,20 +314,21 @@ const SplashScreen = ({ onComplete }) => {
 
             {phase === 'burst' && (
                 <>
+                    <LensFlare />
                     <motion.div 
-                        className="absolute inset-0 bg-white/40 z-[10000] mix-blend-overlay"
+                        className="absolute inset-0 bg-white/60 z-[10000] mix-blend-overlay"
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: [0, 1, 0.8, 0] }}
-                        transition={{ duration: 0.6, times: [0, 0.2, 0.4, 1] }}
+                        animate={{ opacity: [0, 1, 0.9, 0] }}
+                        transition={{ duration: 0.5, times: [0, 0.15, 0.3, 1] }}
                     />
                     <motion.div 
                         className="absolute inset-0 z-[10001] pointer-events-none"
                         animate={{ 
-                            x: [0, -20, 20, -10, 10, 0],
-                            y: [0, 10, -10, 5, -5, 0],
-                            filter: ['blur(0px)', 'blur(10px)', 'blur(0px)']
+                            x: [0, -30, 30, -15, 15, 0],
+                            y: [0, 15, -15, 8, -8, 0],
+                            filter: ['blur(0px)', 'blur(15px)', 'blur(0px)']
                         }}
-                        transition={{ duration: 0.5, ease: "easeInOut" }}
+                        transition={{ duration: 0.4, ease: "easeInOut" }}
                     />
                 </>
             )}
