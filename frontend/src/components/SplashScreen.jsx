@@ -219,9 +219,10 @@ const SplashScreen = ({ onComplete }) => {
             await animate(speedValue, 20, { duration: 2.5, ease: "linear" });
             
             setPhase('burst');
-            await new Promise(r => setTimeout(r, 2800));
+            await new Promise(r => setTimeout(r, 1800));
             
             setPhase('logo');
+
             await new Promise(r => setTimeout(r, 1250));
             
             setPhase('moving');
