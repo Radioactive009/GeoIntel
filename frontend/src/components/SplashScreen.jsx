@@ -64,15 +64,7 @@ const LensFlare = () => (
             transition={{ duration: 1.5, ease: "easeOut" }}
         />
         
-        {/* Horizontal Star Streak */}
-        <motion.div 
-            className="absolute w-[200vw] h-1 bg-gradient-to-r from-transparent via-cyan-300 to-transparent opacity-0"
-            animate={{ 
-                scaleY: [1, 5, 1],
-                opacity: [0, 0.7, 0],
-            }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-        />
+
 
         {/* Lens Ghosts */}
         {[0.4, 0.7, -0.3, -0.6].map((offset, i) => (
