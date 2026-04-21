@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue, useTransform, animate } from 'framer-motion';
 import Logo from './Logo';
 
@@ -53,46 +53,8 @@ const Shockwaves = () => {
     );
 };
 
-// ── Particle Burst Effect ─────────────────────────────────
-const BurstParticles = () => {
-    const particles = useMemo(() => {
-        return Array.from({ length: 40 }).map((_, i) => ({
-            id: i,
-            angle: (Math.PI * 2 * i) / 40 + (Math.random() - 0.5) * 0.2,
-            distance: 400 + Math.random() * 600,
-            size: Math.random() * 3 + 1,
-            duration: 0.8 + Math.random() * 1.2,
-            delay: Math.random() * 0.2
-        }));
-    }, []);
-
-    return (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            {particles.map(p => (
-                <motion.div
-                    key={p.id}
-                    className="absolute bg-cyan-400 rounded-full shadow-[0_0_8px_rgba(34,211,238,0.8)]"
-                    style={{ width: p.size, height: p.size }}
-                    initial={{ x: 0, y: 0, opacity: 0 }}
-                    animate={{ 
-                        x: Math.cos(p.angle) * p.distance,
-                        y: Math.sin(p.angle) * p.distance,
-                        opacity: [0, 1, 0],
-                        scale: [1, 0.5]
-                    }}
-                    transition={{
-                        duration: p.duration,
-                        delay: p.delay,
-                        ease: "easeOut"
-                    }}
-                />
-            ))}
-        </div>
-    );
-};
-
 // ── Warp Speed Starfield ────────────────────────────────
-const Starfield = ({ isWarping }) => {
+const Starfield = () => {
     const stars = useMemo(() => {
         return Array.from({ length: 180 }).map((_, i) => ({
             id: i,
@@ -100,8 +62,7 @@ const Starfield = ({ isWarping }) => {
             left: `${Math.random() * 100}%`,
             size: Math.random() * 2 + 1,
             duration: Math.random() * 4 + 2,
-            delay: Math.random() * 2,
-            angle: Math.random() * 360
+            delay: Math.random() * 2
         }));
     }, []);
 
@@ -110,26 +71,20 @@ const Starfield = ({ isWarping }) => {
             {stars.map(star => (
                 <motion.div
                     key={star.id}
-                    className="absolute bg-white rounded-full"
+                    className="absolute bg-white rounded-full opacity-[0.15]"
                     style={{
                         top: star.top,
                         left: star.left,
                         width: star.size,
                         height: star.size,
-                        opacity: 0.2
+                        transformZ: 0
                     }}
-                    animate={{ 
-                        opacity: isWarping ? [0.2, 0.8, 0] : [0.1, 0.4, 0.1],
-                        scale: isWarping ? [1, 15] : [1, 1.2, 1],
-                        height: isWarping ? [star.size, star.size * 20] : star.size,
-                        transformOrigin: 'top center',
-                        rotate: isWarping ? star.angle : 0
-                    }}
+                    animate={{ opacity: [0.1, 0.3, 0.1], scale: [1, 1.1, 1] }}
                     transition={{
-                        duration: isWarping ? 1.0 : star.duration,
-                        repeat: isWarping ? 0 : Infinity,
-                        delay: isWarping ? Math.random() * 0.2 : star.delay,
-                        ease: isWarping ? [0.11, 0, 0.5, 0] : "linear"
+                        duration: star.duration,
+                        repeat: Infinity,
+                        delay: star.delay,
+                        ease: "linear"
                     }}
                 />
             ))}
@@ -137,26 +92,27 @@ const Starfield = ({ isWarping }) => {
     );
 };
 
+
 // ── Energy Vortex (Spiral) ───────────────────────────────
 const EnergyVortex = () => (
     <motion.div 
-        className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none"
+        className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none will-change-transform"
         initial={{ rotate: 0, scale: 0.5, opacity: 0 }}
-        animate={{ rotate: 720, scale: 4, opacity: [0, 1, 0] }}
-        transition={{ duration: 2.5, ease: [0.16, 1, 0.3, 1] }}
+        animate={{ rotate: 720, scale: 6, opacity: [0, 1, 0] }}
+        transition={{ duration: 3, ease: "easeOut" }}
     >
-        <svg width="600" height="600" viewBox="0 0 600 600" className="opacity-40 mix-blend-screen filter blur-[1px]">
-            {[...Array(6)].map((_, i) => (
+        <svg width="600" height="600" viewBox="0 0 600 600" className="opacity-30 mix-blend-screen overflow-visible">
+            {[...Array(5)].map((_, i) => (
                 <motion.path
                     key={i}
                     d="M300,300 C300,100 500,100 500,300 C500,500 100,500 100,300"
                     fill="none"
                     stroke={i % 2 === 0 ? "#22d3ee" : "#6366f1"}
-                    strokeWidth="2"
-                    strokeDasharray="10 20"
-                    style={{ rotate: i * 60 }}
+                    strokeWidth="1.5"
+                    strokeDasharray="20 30"
+                    style={{ rotate: i * 72 }}
                     animate={{ strokeDashoffset: [0, -100] }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
                 />
             ))}
         </svg>
@@ -193,17 +149,18 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
         const currentSpeed = speedValue.get();
         if (currentSpeed === 0) return;
 
+        // Move positions based on speed and delta time
         const sMove = (delta * 0.005) * currentSpeed;
         const cMove = (delta * 0.006) * currentSpeed;
 
-        // Smoother modulo logic for infinite scroll
+        // Infinite scroll logic (texture is 2x width, so 0 to -50%)
         surfacePos.set((surfacePos.get() - sMove) % 50);
         cloudPos.set((cloudPos.get() - cMove) % 50);
     });
 
     return (
         <div className="relative flex items-center justify-center scale-110 will-change-transform">
-            <div className={`absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
+            {!isBursting && <div className="absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] animate-pulse" />}
             
             <div className="relative w-[300px] h-[300px] rounded-full overflow-hidden border border-white/10 shadow-2xl bg-black transform-gpu">
                 <motion.div style={{ x: xSurface }} className="absolute inset-y-0 left-0 flex brightness-110 contrast-125 saturate-125">
@@ -217,36 +174,26 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
                 <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_25%_25%,rgba(255,255,255,0.08)_0%,rgba(0,0,0,0)_45%,rgba(0,0,0,0.7)_75%,rgba(0,0,0,1)_100%)]" />
                 <div className="absolute inset-0 pointer-events-none rounded-full shadow-[inset_0_0_60px_rgba(34,211,238,0.3),inset_0_0_120px_rgba(59,130,246,0.1)] opacity-70" />
             </div>
-
-            <div className={`absolute -inset-2 rounded-full border-[2px] border-blue-400/20 blur-[2px] transition-opacity duration-700 ${isBursting ? 'opacity-0' : 'opacity-100'}`} />
         </div>
     );
 };
 
+
 const SplashScreen = ({ onComplete }) => {
     const [phase, setPhase] = useState('spinning');
-    const speedValue = useMotionValue(0);
+    const speedValue = useMotionValue(1);
 
     useEffect(() => {
         const sequence = async () => {
-            // GLOBE PHASE: 3.0 Seconds Total
-            // ── 1. Linear Acceleration (2500ms)
-            // Using .then() to ensure precise timing sync
-            await animate(speedValue, 20, {
-                duration: 2.5,
-                ease: "linear"
-            });
+            // Linear Acceleration
+            await animate(speedValue, 20, { duration: 2.5, ease: "linear" });
             
-            // ── 2. The Great Burst (1500ms)
             setPhase('burst');
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 2800));
             
-            // LOGO PHASE: 2.0 Seconds Total
-            // ── 3. Logo Reveal & Stay (1250ms)
             setPhase('logo');
             await new Promise(r => setTimeout(r, 1250));
             
-            // ── 4. Glide to Navbar & Dissolve (750ms)
             setPhase('moving');
             await new Promise(r => setTimeout(r, 750));
             
@@ -262,17 +209,10 @@ const SplashScreen = ({ onComplete }) => {
             exit={{ opacity: 0 }}
             transition={{ duration: 1 }}
         >
-            <Starfield isWarping={phase === 'burst'} />
+            <Starfield />
 
             {(phase === 'logo' || phase === 'moving') && <CyberGrid />}
             {phase === 'burst' && <GlitchOverlay />}
-
-            <svg style={{ position: 'absolute', width: 0, height: 0 }}>
-                <filter id="bloom">
-                    <feGaussianBlur stdDeviation="6" result="blur" />
-                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                </filter>
-            </svg>
 
             <AnimatePresence>
                 {(phase === 'spinning' || phase === 'burst') && (
@@ -280,35 +220,32 @@ const SplashScreen = ({ onComplete }) => {
                         key="globe-scene"
                         initial={{ scale: 0.9, opacity: 0 }}
                         animate={{ 
-                            scale: phase === 'burst' ? [1, 0.9, 15] : 1, // Quick shrink then massive expand
+                            scale: phase === 'burst' ? [1, 0.92, 18] : 1,
                             opacity: phase === 'burst' ? [1, 1, 0] : 1,
-                            filter: phase === 'burst' 
-                                ? ['brightness(1) blur(0px)', 'brightness(20) blur(20px)'] 
-                                : 'brightness(1) blur(0px)'
                         }}
-                        exit={{ opacity: 0, scale: 20 }}
+                        exit={{ opacity: 0, scale: 25 }}
                         transition={{ 
-                            duration: phase === 'burst' ? 2.5 : 1.2, // Slower, more majestic
+                            duration: phase === 'burst' ? 2.8 : 1.2,
                             times: phase === 'burst' ? [0, 0.1, 1] : undefined,
-                            ease: phase === 'burst' ? [0.22, 1, 0.36, 1] : "easeOut"
+                            type: "spring",
+                            stiffness: 25,
+                            damping: 10,
+                            mass: 1.5
                         }}
-                        className="relative z-10 flex items-center justify-center transform-gpu"
-                        style={{ filter: 'url(#bloom)' }}
+                        className="relative z-10 flex items-center justify-center transform-gpu will-change-transform"
                     >
                         {phase === 'burst' && (
                             <>
                                 <EnergyVortex />
                                 <Shockwaves />
-                                <BurstParticles />
                                 <motion.div 
-                                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.5)_0%,transparent_70%)] z-0"
+                                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.3)_0%,transparent_70%)] z-0"
                                     initial={{ scale: 0, opacity: 0 }}
                                     animate={{ 
-                                        scale: [0, 15], 
-                                        opacity: [0, 1, 0.5, 0],
-                                        rotate: [0, 180]
+                                        scale: [0, 20], 
+                                        opacity: [0, 1, 0],
                                     }}
-                                    transition={{ duration: 2.5, ease: "easeOut" }}
+                                    transition={{ duration: 3, ease: "easeOut" }}
                                 />
                             </>
                         )}
@@ -324,20 +261,11 @@ const SplashScreen = ({ onComplete }) => {
                         transition={{ duration: 0.8 }}
                         className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none"
                     >
-                        <motion.div 
-                            className="absolute top-0 w-full h-1 bg-cyan-400/40 blur-sm shadow-[0_0_20px_rgba(34,211,238,0.6)]"
-                            initial={{ top: '0%' }}
-                            animate={{ top: '100%' }}
-                            transition={{ duration: 1.2, repeat: 1, ease: "linear" }}
-                        />
-
                         <motion.div
                             layoutId="logo-main"
                             initial={{ scale: 1.1, opacity: 0, filter: 'blur(15px)' }}
                             animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
-                            transition={{ 
-                                type: "spring", stiffness: 40, damping: 15, mass: 1.4
-                            }}
+                            transition={{ type: "spring", stiffness: 40, damping: 15, mass: 1.4 }}
                             className="flex flex-col items-center gap-8 relative"
                         >
                             <Logo className="scale-[2.6]" />
@@ -362,12 +290,6 @@ const SplashScreen = ({ onComplete }) => {
                             filter: ['blur(0px)', 'blur(10px)', 'blur(0px)']
                         }}
                         transition={{ duration: 0.5, ease: "easeInOut" }}
-                    />
-                    <motion.div 
-                        className="absolute inset-0 bg-cyan-500/20 z-[10002] mix-blend-screen"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: [0, 0.3, 0] }}
-                        transition={{ duration: 1.5, delay: 0.2 }}
                     />
                 </>
             )}
