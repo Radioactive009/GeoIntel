@@ -91,43 +91,95 @@ const BurstParticles = () => {
     );
 };
 
-// ── Starfield Component ───────────────────────────────────
-const Starfield = () => {
+// ── Warp Speed Starfield ────────────────────────────────
+const Starfield = ({ isWarping }) => {
     const stars = useMemo(() => {
-        return Array.from({ length: 150 }).map((_, i) => ({
+        return Array.from({ length: 180 }).map((_, i) => ({
             id: i,
             top: `${Math.random() * 100}%`,
             left: `${Math.random() * 100}%`,
             size: Math.random() * 2 + 1,
-            duration: Math.random() * 5 + 3,
-            delay: Math.random() * 2
+            duration: Math.random() * 4 + 2,
+            delay: Math.random() * 2,
+            angle: Math.random() * 360
         }));
     }, []);
 
     return (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0 bg-[#00040d]">
             {stars.map(star => (
                 <motion.div
                     key={star.id}
-                    className="absolute bg-white rounded-full opacity-20"
+                    className="absolute bg-white rounded-full"
                     style={{
                         top: star.top,
                         left: star.left,
                         width: star.size,
                         height: star.size,
+                        opacity: 0.2
                     }}
-                    animate={{ opacity: [0.1, 0.4, 0.1], scale: [1, 1.2, 1] }}
+                    animate={{ 
+                        opacity: isWarping ? [0.2, 0.8, 0] : [0.1, 0.4, 0.1],
+                        scale: isWarping ? [1, 15] : [1, 1.2, 1],
+                        height: isWarping ? [star.size, star.size * 20] : star.size,
+                        transformOrigin: 'top center',
+                        rotate: isWarping ? star.angle : 0
+                    }}
                     transition={{
-                        duration: star.duration,
-                        repeat: Infinity,
-                        delay: star.delay,
-                        ease: "linear"
+                        duration: isWarping ? 1.0 : star.duration,
+                        repeat: isWarping ? 0 : Infinity,
+                        delay: isWarping ? Math.random() * 0.2 : star.delay,
+                        ease: isWarping ? [0.11, 0, 0.5, 0] : "linear"
                     }}
                 />
             ))}
         </div>
     );
 };
+
+// ── Energy Vortex (Spiral) ───────────────────────────────
+const EnergyVortex = () => (
+    <motion.div 
+        className="absolute inset-0 flex items-center justify-center z-0 pointer-events-none"
+        initial={{ rotate: 0, scale: 0.5, opacity: 0 }}
+        animate={{ rotate: 720, scale: 4, opacity: [0, 1, 0] }}
+        transition={{ duration: 2.5, ease: [0.16, 1, 0.3, 1] }}
+    >
+        <svg width="600" height="600" viewBox="0 0 600 600" className="opacity-40 mix-blend-screen filter blur-[1px]">
+            {[...Array(6)].map((_, i) => (
+                <motion.path
+                    key={i}
+                    d="M300,300 C300,100 500,100 500,300 C500,500 100,500 100,300"
+                    fill="none"
+                    stroke={i % 2 === 0 ? "#22d3ee" : "#6366f1"}
+                    strokeWidth="2"
+                    strokeDasharray="10 20"
+                    style={{ rotate: i * 60 }}
+                    animate={{ strokeDashoffset: [0, -100] }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                />
+            ))}
+        </svg>
+    </motion.div>
+);
+
+// ── Glitch Displacement Overlay ─────────────────────────
+const GlitchOverlay = () => (
+    <motion.div
+        className="absolute inset-0 z-[10000] border-[20px] border-cyan-500/10 pointer-events-none"
+        animate={{ 
+            x: [0, -15, 10, -5, 15, 0],
+            skewX: [0, 5, -5, 2, -2, 0],
+            filter: [
+                'hue-rotate(0deg) contrast(1)',
+                'hue-rotate(90deg) contrast(1.5)',
+                'hue-rotate(-90deg) contrast(1.2)',
+                'hue-rotate(0deg) contrast(1)'
+            ]
+        }}
+        transition={{ duration: 0.3, repeat: 2 }}
+    />
+);
 
 const UltraRealGlobe = ({ speedValue, isBursting }) => {
     const surfacePos = useMotionValue(0);
@@ -210,9 +262,10 @@ const SplashScreen = ({ onComplete }) => {
             exit={{ opacity: 0 }}
             transition={{ duration: 1 }}
         >
-            <Starfield />
+            <Starfield isWarping={phase === 'burst'} />
 
             {(phase === 'logo' || phase === 'moving') && <CyberGrid />}
+            {phase === 'burst' && <GlitchOverlay />}
 
             <svg style={{ position: 'absolute', width: 0, height: 0 }}>
                 <filter id="bloom">
@@ -244,13 +297,18 @@ const SplashScreen = ({ onComplete }) => {
                     >
                         {phase === 'burst' && (
                             <>
+                                <EnergyVortex />
                                 <Shockwaves />
                                 <BurstParticles />
                                 <motion.div 
-                                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.4)_0%,transparent_70%)] z-0"
+                                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.5)_0%,transparent_70%)] z-0"
                                     initial={{ scale: 0, opacity: 0 }}
-                                    animate={{ scale: [0, 10], opacity: [0, 1, 0] }}
-                                    transition={{ duration: 2, ease: "easeOut" }}
+                                    animate={{ 
+                                        scale: [0, 15], 
+                                        opacity: [0, 1, 0.5, 0],
+                                        rotate: [0, 180]
+                                    }}
+                                    transition={{ duration: 2.5, ease: "easeOut" }}
                                 />
                             </>
                         )}
@@ -291,18 +349,25 @@ const SplashScreen = ({ onComplete }) => {
             {phase === 'burst' && (
                 <>
                     <motion.div 
-                        className="absolute inset-0 bg-white/20 z-[10000] mix-blend-overlay"
+                        className="absolute inset-0 bg-white/40 z-[10000] mix-blend-overlay"
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: [0, 1, 0] }}
-                        transition={{ duration: 0.4, times: [0, 0.2, 1] }}
+                        animate={{ opacity: [0, 1, 0.8, 0] }}
+                        transition={{ duration: 0.6, times: [0, 0.2, 0.4, 1] }}
                     />
                     <motion.div 
                         className="absolute inset-0 z-[10001] pointer-events-none"
                         animate={{ 
-                            x: [0, -10, 10, -10, 10, 0],
-                            y: [0, 5, -5, 5, -5, 0]
+                            x: [0, -20, 20, -10, 10, 0],
+                            y: [0, 10, -10, 5, -5, 0],
+                            filter: ['blur(0px)', 'blur(10px)', 'blur(0px)']
                         }}
                         transition={{ duration: 0.5, ease: "easeInOut" }}
+                    />
+                    <motion.div 
+                        className="absolute inset-0 bg-cyan-500/20 z-[10002] mix-blend-screen"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 0.3, 0] }}
+                        transition={{ duration: 1.5, delay: 0.2 }}
                     />
                 </>
             )}
