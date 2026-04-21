@@ -290,36 +290,20 @@ const SplashScreen = ({ onComplete }) => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.8 }}
-                        className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none"
+                        className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none"
                     >
                         <motion.div
                             layoutId="logo-main"
-                            initial={{ 
-                                scale: 1.1, 
-                                x: 0, 
-                                y: 0, 
-                                opacity: 0, 
-                                filter: 'blur(15px)' 
-                            }}
-                            animate={{ 
-                                scale: phase === 'moving' ? 0.38 : 1, 
-                                x: phase === 'moving' ? '-44vw' : 0, 
-                                y: phase === 'moving' ? '-44vh' : 0,
-                                opacity: 1, 
-                                filter: 'blur(0px)' 
-                            }}
-                            transition={{ 
-                                type: "spring", 
-                                stiffness: phase === 'moving' ? 60 : 40, 
-                                damping: 20, 
-                                mass: 1 
-                            }}
+                            initial={{ scale: 1.1, opacity: 0, filter: 'blur(15px)' }}
+                            animate={{ scale: 1, opacity: 1, filter: 'blur(0px)' }}
+                            transition={{ type: "spring", stiffness: 40, damping: 15, mass: 1.4 }}
                             className="flex flex-col items-center gap-8 relative"
                         >
                             <Logo className="scale-[2.6]" />
                         </motion.div>
                     </motion.div>
                 )}
+
 
             </AnimatePresence>
 
