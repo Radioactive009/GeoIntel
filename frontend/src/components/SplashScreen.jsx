@@ -215,8 +215,9 @@ const SplashScreen = ({ onComplete }) => {
 
     useEffect(() => {
         const sequence = async () => {
-            // Linear Acceleration
-            await animate(speedValue, 20, { duration: 2.5, ease: "linear" });
+            // Extreme Speed Acceleration
+            await animate(speedValue, 100, { duration: 2.5, ease: "easeIn" });
+
             
             setPhase('burst');
             await new Promise(r => setTimeout(r, 1800));
