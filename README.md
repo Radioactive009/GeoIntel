@@ -12,7 +12,7 @@ Integrates News APIs, RSS feeds (BBC, etc.), and web scraping
 Aggregates real-time global news across multiple countries
 
 Designed for scalable data collection
-
+ 
 ⚙️ Automated Data Pipeline
 
 Uses APScheduler for periodic ingestion
