@@ -242,34 +242,54 @@ def ensure_country_catalog_in_db(db: Session) -> None:
     db.commit()
 
 
-def load_cursor() -> int:
-    if not os.path.exists(CURSOR_FILE):
-        return 0
+def load_cursor(db: Session) -> int:
     try:
-        with open(CURSOR_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return int(data.get("cursor", 0))
-    except Exception:
-        return 0
+        state = db.query(models.SystemState).filter(models.SystemState.key == "ingest_cursor").first()
+        if state and state.value:
+            return int(state.value)
+    except Exception as e:
+        logger.warning(f"Could not load ingest cursor from DB: {e}")
+    
+    # Fallback to local file if DB read fails (backward compatibility)
+    if os.path.exists(CURSOR_FILE):
+        try:
+            with open(CURSOR_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return int(data.get("cursor", 0))
+        except Exception:
+            pass
+    return 0
 
 
-def save_cursor(cursor: int) -> None:
+def save_cursor(db: Session, cursor: int) -> None:
+    try:
+        state = db.query(models.SystemState).filter(models.SystemState.key == "ingest_cursor").first()
+        if not state:
+            state = models.SystemState(key="ingest_cursor", value=str(cursor))
+            db.add(state)
+        else:
+            state.value = str(cursor)
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Could not persist ingest cursor to DB: {e}")
+    
+    # Fallback to local file
     try:
         with open(CURSOR_FILE, "w", encoding="utf-8") as f:
             json.dump({"cursor": cursor}, f)
     except Exception:
-        logger.warning("Could not persist ingest cursor")
+        pass
 
 
-def get_country_batch(size: int) -> tuple[list[dict], int]:
+def get_country_batch(db: Session, size: int) -> tuple[list[dict], int]:
     if not COUNTRIES:
         return [], 0
 
     size = max(1, min(size, len(COUNTRIES)))
-    current = load_cursor() % len(COUNTRIES)
+    current = load_cursor(db) % len(COUNTRIES)
     batch = [COUNTRIES[(current + i) % len(COUNTRIES)] for i in range(size)]
     next_cursor = (current + size) % len(COUNTRIES)
-    save_cursor(next_cursor)
+    save_cursor(db, next_cursor)
     return batch, current
 
 
@@ -412,7 +432,7 @@ def auto_ingest_all_countries():
     try:
         logger.info("[TIMER] Scheduled ingestion starting...")
         ensure_country_catalog_in_db(db)
-        batch, start_idx = get_country_batch(INGEST_BATCH_SIZE)
+        batch, start_idx = get_country_batch(db, INGEST_BATCH_SIZE)
         logger.info(
             "[BATCH] Ingest batch: start=%s size=%s of total=%s",
             start_idx,
@@ -601,7 +621,7 @@ def ingest_country_batch(
     db: Session = Depends(get_db)
 ):
     ensure_country_catalog_in_db(db)
-    batch, start_idx = get_country_batch(size)
+    batch, start_idx = get_country_batch(db, size)
     results = {}
     for country_cfg in batch:
         get_or_create_country(db, country_cfg)
@@ -634,27 +654,29 @@ def calculate_alert_status(db: Session):
     Compute a weighted geopolitical alert level per country using the
     new semantic engine scores stored per article (geo_risk_score).
 
-    Formula:
-        country_risk = mean(geo_risk_score for all articles) 
-                       weighted by recency (newer → higher weight)
-
-    Risk levels:
-        >= 65  → high
-        >= 35  → medium
-        <  35  → low
+    Optimized to fetch all countries and articles in 2 queries,
+    grouping them in-memory to prevent N+1 queries.
     """
-
     countries = db.query(models.Country).all()
+    
+    # Query all articles with their sources joined
+    articles = (
+        db.query(models.Article)
+        .join(models.Source, models.Article.source_id == models.Source.id)
+        .all()
+    )
+    
+    # Group articles by country_id in memory
+    from collections import defaultdict
+    articles_by_country = defaultdict(list)
+    for a in articles:
+        if a.source and a.source.country_id:
+            articles_by_country[a.source.country_id].append(a)
+
     results = []
 
     for country in countries:
-        all_articles = (
-            db.query(models.Article)
-            .join(models.Source, models.Article.source_id == models.Source.id)
-            .filter(models.Source.country_id == country.id)
-            .all()
-        )
-
+        all_articles = articles_by_country[country.id]
         total_articles = len(all_articles)
 
         if total_articles == 0:

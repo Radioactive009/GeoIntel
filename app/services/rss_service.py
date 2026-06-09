@@ -51,10 +51,22 @@ def _parse_date(entry) -> str | None:
     return None
 
 
+import time
+import threading
+
+_rss_cache = {
+    "articles": [],
+    "last_fetched": 0.0
+}
+_rss_cache_lock = threading.Lock()
+CACHE_TTL_SECONDS = 300  # 5 minutes
+
+
 def fetch_rss(country_query: str = None) -> list[dict]:
     """
     Fetch articles from all configured RSS feeds (including Google News RSS)
     and return them in NewsAPI-compatible format.
+    Uses an in-memory cache with a 5-minute TTL to prevent redundant network requests.
 
     Args:
         country_query: Optional country name/keyword to filter entries
@@ -63,57 +75,66 @@ def fetch_rss(country_query: str = None) -> list[dict]:
     Returns:
         List of article dicts: {title, description, url, source, publishedAt}
     """
-    all_articles = []
-    google_articles_count = 0
-    query_lower = country_query.lower() if country_query else None
-
-    logger.info("[NET] Starting RSS ingestion (including Google RSS)...")
-
-    for feed_cfg in ALL_RSS_FEEDS:
-        feed_name = feed_cfg["name"]
-        is_google = feed_cfg.get("is_google", False)
-
-        if is_google and google_articles_count == 0:
-            logger.info("[NET] Google RSS ingestion running...")
-
-        try:
-            feed = feedparser.parse(feed_cfg["url"])
-        except Exception as e:
-            logger.warning(f"  [WARN] RSS parse failed for {feed_name}: {e}")
-            continue
-
-        count = 0
-        for entry in feed.entries[:15]:  # cap per feed
-            title = entry.get("title", "")
-            summary = entry.get("summary", entry.get("description", ""))
-            link = entry.get("link", "")
-
-            if not link:
-                continue
-
-            # Optional country filter — skip non-matching entries
-            if query_lower:
-                combined = (title + " " + summary).lower()
-                if query_lower not in combined:
-                    continue
-
-            source_name = f"{feed_name} (Google RSS)" if is_google else f"{feed_name} (RSS)"
-
-            all_articles.append({
-                "title": title,
-                "description": summary,
-                "url": link,
-                "publishedAt": _parse_date(entry),
-                "source": {"name": source_name},
-            })
-            count += 1
-            if is_google:
-                google_articles_count += 1
-
-        if count > 0:
-            logger.info(f"  📡 RSS {feed_name}: {count} articles")
-
-    logger.info(f"✅ Google RSS total: {google_articles_count} articles fetched")
-    logger.info(f"✅ RSS combined total: {len(all_articles)} articles")
+    global _rss_cache
+    now = time.time()
     
-    return all_articles
+    with _rss_cache_lock:
+        if now - _rss_cache["last_fetched"] > CACHE_TTL_SECONDS:
+            logger.info("[NET] RSS cache expired or empty. Starting RSS ingestion from network...")
+            
+            unfiltered_articles = []
+            google_articles_count = 0
+            
+            for feed_cfg in ALL_RSS_FEEDS:
+                feed_name = feed_cfg["name"]
+                is_google = feed_cfg.get("is_google", False)
+                
+                try:
+                    feed = feedparser.parse(feed_cfg["url"])
+                except Exception as e:
+                    logger.warning(f"  [WARN] RSS parse failed for {feed_name}: {e}")
+                    continue
+                
+                count = 0
+                for entry in feed.entries[:15]:
+                    title = entry.get("title", "")
+                    summary = entry.get("summary", entry.get("description", ""))
+                    link = entry.get("link", "")
+                    if not link:
+                        continue
+                    
+                    source_name = f"{feed_name} (Google RSS)" if is_google else f"{feed_name} (RSS)"
+                    unfiltered_articles.append({
+                        "title": title,
+                        "description": summary,
+                        "url": link,
+                        "publishedAt": _parse_date(entry),
+                        "source": {"name": source_name},
+                    })
+                    count += 1
+                    if is_google:
+                        google_articles_count += 1
+                
+                if count > 0:
+                    logger.info(f"  📡 RSS {feed_name}: {count} articles fetched")
+            
+            logger.info(f"✅ Google RSS total: {google_articles_count} articles fetched")
+            logger.info(f"✅ RSS combined total: {len(unfiltered_articles)} articles fetched")
+            
+            _rss_cache["articles"] = unfiltered_articles
+            _rss_cache["last_fetched"] = now
+        else:
+            logger.debug("[CACHE] RSS cache hit. Using cached articles.")
+            
+    query_lower = country_query.lower() if country_query else None
+    if not query_lower:
+        return _rss_cache["articles"]
+        
+    filtered = []
+    for item in _rss_cache["articles"]:
+        combined = ((item.get("title") or "") + " " + (item.get("description") or "")).lower()
+        if query_lower in combined:
+            filtered.append(item)
+            
+    return filtered
+
