@@ -307,20 +307,22 @@ const Dashboard = () => {
                                 ))}
                             </div>
                         </div>
-                        <div className="h-[320px] w-full min-h-[320px] overflow-x-auto chart-scrollbar pb-2">
+                        <div className="h-[350px] w-full min-h-[350px] overflow-x-auto chart-scrollbar pb-4">
                             <div style={{ 
-                                minWidth: chartFilter === 'all' ? `${filteredChartData.length * 30}px` : '100%',
+                                minWidth: chartFilter === 'all' ? `${filteredChartData.length * 45}px` : '100%',
                                 height: '100%'
                             }}>
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={filteredChartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                                    <BarChart data={filteredChartData} margin={{ top: 10, right: 10, bottom: 40, left: -20 }}>
                                         <XAxis
                                             dataKey="iso_code"
                                             tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
                                             axisLine={false}
                                             tickLine={false}
-                                            dy={10}
+                                            dy={15}
                                             interval={0}
+                                            angle={-45}
+                                            textAnchor="end"
                                         />
                                         <YAxis
                                             tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }}
@@ -336,8 +338,8 @@ const Dashboard = () => {
                                         />
                                         <Bar 
                                             dataKey="alert_level" 
-                                            radius={[8, 8, 8, 8]} 
-                                            barSize={chartFilter === 'all' ? 20 : 40}
+                                            radius={[6, 6, 6, 6]} 
+                                            barSize={chartFilter === 'all' ? 18 : 40}
                                         >
                                             {filteredChartData.map((e) => (
                                                 <Cell key={e.iso_code} fill={getAlertColor(e.alert_status)} fillOpacity={0.9} />

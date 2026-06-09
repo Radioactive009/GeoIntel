@@ -75,3 +75,12 @@ class Article(Base):
         if self.source and self.source.country:
             return self.source.country.iso_code
         return None
+
+
+# [GLOBAL] SYSTEM STATE TABLE
+class SystemState(Base):
+    __tablename__ = "system_state"
+
+    key = Column(String, primary_key=True, index=True)
+    value = Column(String)
+
