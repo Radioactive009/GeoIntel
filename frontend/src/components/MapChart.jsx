@@ -10,7 +10,13 @@ import {
 
 const geoUrl = worldTopoJson;
 
-const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
+const MapChart = ({
+    alertData,
+    selectedCountry,
+    onCountrySelect,
+    // Adjustable so the map can align with whatever sits beside it.
+    heightClass = 'h-[360px] md:h-[520px] lg:h-[640px]',
+}) => {
     const [tooltip, setTooltip] = useState(null);
     const audioContextRef = useRef(null);
     const lastHoveredCountryRef = useRef('');
@@ -104,7 +110,7 @@ const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
                     </button>
                 </div>
 
-                <div ref={mapContainerRef} className="relative h-[360px] md:h-[520px] lg:h-[640px]">
+                <div ref={mapContainerRef} className={`relative ${heightClass}`}>
                     <ComposableMap
                         projectionConfig={{ scale: 205 }}
                         className="w-full h-full"

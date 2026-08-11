@@ -29,6 +29,12 @@ GeoIntel AI collects global news, resolves which country each story is about, sc
 - Per-country alert levels computed in a single aggregate query
 - Scores are shrunk toward the global mean by sample size, so a country with one alarming article does not top the world ranking
 
+📺 Live Broadcasts
+- Embeds broadcasters' 24/7 YouTube streams, tied to countries — selecting a country switches the player *and* filters the feed
+- The current live video ID is resolved **server-side**: an embedded player is cross-origin, so the page cannot detect a dead stream on its own
+- Channel IDs are resolved from handles at seed time rather than hardcoded, and unresolvable handles are skipped rather than breaking the seed
+- Only the active player is mounted, so the page never boots a dozen video players at once
+
 📈 Risk History & Escalation
 - Every ingest cycle records where each country stands, one row per country per hour
 - Sparklines on the alert ranking show each country's recent trajectory
@@ -105,6 +111,8 @@ VITE_API_URL=https://your-backend.onrender.com npm run build
 | GET | `/trends` | Risk history per country — `hours`, `points`, `country` |
 | GET | `/movers` | Escalating / de-escalating countries — `hours`, `limit` |
 | POST | `/snapshot` | Force a risk-history capture (runs automatically each cycle) |
+| GET | `/channels` | Broadcaster live streams — `country`, `live_only` |
+| POST | `/channels/refresh` | Seed channels and re-resolve which are live |
 | GET | `/stats` | Counts by risk level, event type and provider |
 | GET | `/countries` · `/sources` | Reference data |
 | POST | `/ingest-batch?size=N` | Run one ingest cycle now |

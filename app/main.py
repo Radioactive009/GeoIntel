@@ -26,7 +26,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import alerts, ingest
+from .services import alerts, channels, ingest
 
 # =========================================================
 # LOGGING / ENV
@@ -68,6 +68,17 @@ def scheduled_ingest() -> None:
         logger.info("[TIMER] Scheduled ingestion complete: %s saved", summary["total_saved"])
     except Exception as e:
         logger.exception("[ERR] Scheduled ingestion failed: %s", e)
+    finally:
+        db.close()
+
+    # Live-stream liveness is independent of article ingestion; a failure here
+    # must never mark the ingest cycle as failed.
+    db = SessionLocal()
+    try:
+        channels.seed_channels(db)
+        channels.refresh_channels(db)
+    except Exception as e:
+        logger.warning("[ERR] Channel refresh failed: %s", e)
     finally:
         db.close()
 
@@ -422,6 +433,40 @@ def capture_snapshot(db: Session = Depends(get_db)):
     """Force a risk-history capture (normally runs at the end of each cycle)."""
     written = alerts.capture_snapshot(db)
     return {"message": "Snapshot captured", "countries_recorded": written}
+
+
+# =========================================================
+# LIVE BROADCAST CHANNELS
+# =========================================================
+@app.get("/channels")
+def get_channels(
+    country: str | None = Query(default=None, description="ISO code or country name"),
+    live_only: bool = Query(default=False),
+    db: Session = Depends(get_db),
+):
+    """
+    Broadcaster streams, live ones first.
+
+    `live_video_id` is resolved server-side — an embedded player is opaque to
+    the page, so the frontend cannot discover a dead stream on its own.
+    """
+    rows = channels.list_channels(db, country=country, live_only=live_only)
+    return {
+        "total": len(rows),
+        "live": sum(1 for row in rows if row["is_live"]),
+        "resolution_mode": "api" if channels.api_key() else "keyless",
+        "channels": rows,
+    }
+
+
+@app.post("/channels/refresh")
+def refresh_channels(
+    force: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    """Re-resolve which channels are currently live and embeddable."""
+    channels.seed_channels(db)
+    return channels.refresh_channels(db, force=force)
 
 
 @app.get("/stats")

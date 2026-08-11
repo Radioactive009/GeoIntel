@@ -5,8 +5,10 @@ import ArticleCard from '../components/ArticleCard';
 import MapChart from '../components/MapChart';
 import Sparkline from '../components/Sparkline';
 import EscalationPanel from '../components/EscalationPanel';
+import LiveBroadcast from '../components/LiveBroadcast';
 import {
-    getArticles, getAlertAnalysis, getStats, getTrends, getMovers, triggerIngestion,
+    getArticles, getAlertAnalysis, getStats, getTrends, getMovers, getChannels,
+    triggerIngestion,
 } from '../services/api';
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
@@ -67,6 +69,8 @@ const Dashboard = () => {
     const [trendSeries, setTrendSeries] = useState({});
     const [movers, setMovers] = useState(null);
     const [trendWindow, setTrendWindow] = useState(168);
+    const [channels, setChannels] = useState([]);
+    const [channelsLoading, setChannelsLoading] = useState(true);
 
     // Articles are paginated and filtered by the backend; the dashboard used
     // to download every article and slice it in the browser.
@@ -127,9 +131,25 @@ const Dashboard = () => {
         }
     }, [trendWindow]);
 
+    // Fetched once for every country: the player switches locally on selection,
+    // so re-fetching per country would restart the stream on every click.
+    const fetchChannels = useCallback(async () => {
+        setChannelsLoading(true);
+        try {
+            const res = await getChannels();
+            setChannels(res.data?.channels || []);
+        } catch (err) {
+            console.error(err);
+            setChannels([]);
+        } finally {
+            setChannelsLoading(false);
+        }
+    }, []);
+
     useEffect(() => { fetchArticles(); }, [fetchArticles]);
     useEffect(() => { fetchOverview(); }, [fetchOverview]);
     useEffect(() => { fetchTrends(); }, [fetchTrends]);
+    useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
     // Reset to the first page whenever the filters change.
     useEffect(() => { setCurrentPage(1); }, [selectedCountry, selectedRegion, selectedLevel]);
@@ -230,13 +250,23 @@ const Dashboard = () => {
                     </div>
                 </header>
 
-                {/* ── SECTION 1: MAP ───────────────────────── */}
-                <section className="mb-12">
-                    <MapChart
-                        alertData={activeAlertData}
-                        selectedCountry={selectedCountry}
-                        onCountrySelect={setSelectedCountry}
-                    />
+                {/* ── SECTION 1: MAP + LIVE BROADCAST ──────── */}
+                <section className="grid grid-cols-1 xl:grid-cols-5 gap-8 mb-12 items-start">
+                    <div className="xl:col-span-3">
+                        <MapChart
+                            alertData={activeAlertData}
+                            selectedCountry={selectedCountry}
+                            onCountrySelect={setSelectedCountry}
+                            heightClass="h-[340px] md:h-[440px] xl:h-[500px]"
+                        />
+                    </div>
+                    <div className="xl:col-span-2">
+                        <LiveBroadcast
+                            channels={channels}
+                            selectedCountry={selectedCountry}
+                            loading={channelsLoading}
+                        />
+                    </div>
                 </section>
 
                 <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">

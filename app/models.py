@@ -105,6 +105,35 @@ class CountryRiskSnapshot(Base):
     )
 
 
+# [LIVE] NEWS CHANNEL
+#
+# A broadcaster's 24/7 YouTube stream, tied to a country so the map selection
+# can drive both the article feed and the live player.
+#
+# `live_video_id` is resolved server-side because an embedded iframe is
+# cross-origin: the page cannot tell whether a stream failed to load, so the
+# check has to happen here and be stored.
+class Channel(Base):
+    __tablename__ = "channels"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    handle = Column(String, unique=True, nullable=False)
+    youtube_channel_id = Column(String, unique=True, nullable=False)
+
+    country_id = Column(Integer, ForeignKey("countries.id"), index=True)
+    language = Column(String)
+    is_enabled = Column(Integer, default=True)
+
+    # Liveness cache, refreshed on a schedule.
+    is_live = Column(Integer, default=False)
+    live_video_id = Column(String)
+    live_title = Column(String)
+    checked_at = Column(DateTime)
+
+    country = relationship("Country")
+
+
 # [GLOBAL] SYSTEM STATE TABLE
 class SystemState(Base):
     __tablename__ = "system_state"

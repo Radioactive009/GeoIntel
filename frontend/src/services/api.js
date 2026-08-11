@@ -55,6 +55,17 @@ export const getTrends = ({ hours = 168, points = 24, country = '' } = {}) => {
 export const getMovers = ({ hours = 168, limit = 5 } = {}) =>
     api.get('/movers', { params: { hours, limit } });
 
+/**
+ * Broadcaster live streams. Liveness is resolved server-side because an
+ * embedded player is cross-origin and opaque to this page.
+ */
+export const getChannels = ({ country = '', liveOnly = false } = {}) => {
+    const params = {};
+    if (country) params.country = country;
+    if (liveOnly) params.live_only = true;
+    return api.get('/channels', { params });
+};
+
 export const getHealth = () => api.get('/health');
 
 export const triggerIngestion = (size = 10) =>
