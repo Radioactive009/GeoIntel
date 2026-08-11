@@ -469,6 +469,47 @@ def refresh_channels(
     return channels.refresh_channels(db, force=force)
 
 
+@app.get("/channels/preview")
+def preview_channel(handle: str = Query(..., description="YouTube handle, with or without @")):
+    """
+    Check a channel before adding it — no database write.
+
+    Distinguishes "handle is wrong" from "channel isn't streaming right now"
+    from "broadcaster blocks embedding", because the fix differs for each.
+    """
+    return channels.preview_handle(handle)
+
+
+@app.post("/channels")
+def create_channel(
+    handle: str = Query(..., description="YouTube handle, with or without @"),
+    name: str | None = Query(default=None, description="Display name; defaults to the handle"),
+    country_iso: str | None = Query(default=None, description="ISO alpha-2, e.g. IN"),
+    language: str | None = Query(default=None, description="e.g. en, hi, ar"),
+    db: Session = Depends(get_db),
+):
+    """Add a channel at runtime — no code change or redeploy needed."""
+    result = channels.add_channel(db, handle, name=name, country_iso=country_iso, language=language)
+    if not result.get("added"):
+        raise HTTPException(status_code=400, detail=result)
+    return result
+
+
+@app.patch("/channels/{channel_id}")
+def toggle_channel(channel_id: int, enabled: bool, db: Session = Depends(get_db)):
+    """Enable or hide a channel without deleting it."""
+    if not channels.set_channel_enabled(db, channel_id, enabled):
+        raise HTTPException(status_code=404, detail="Channel not found")
+    return {"id": channel_id, "is_enabled": enabled}
+
+
+@app.delete("/channels/{channel_id}")
+def remove_channel(channel_id: int, db: Session = Depends(get_db)):
+    if not channels.delete_channel(db, channel_id):
+        raise HTTPException(status_code=404, detail="Channel not found")
+    return {"id": channel_id, "deleted": True}
+
+
 @app.get("/stats")
 def stats(db: Session = Depends(get_db)):
     """Aggregate counts used by the dashboard header."""

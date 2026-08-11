@@ -100,14 +100,26 @@ def api_key() -> str | None:
 # ─────────────────────────────────────────────────────────
 SEED_CHANNELS = [
     # (display name, youtube handle, ISO alpha-2, language)
+    # Handles below were vetted with `preview_handle` — each one resolved and
+    # was observed running an embeddable live stream. Channels that resolve but
+    # rarely stream (CNBC, NBC News, CTV) are deliberately left out: they would
+    # sit permanently offline in the rail.
     ("Al Jazeera English", "aljazeeraenglish", "QA", "en"),
     ("France 24 English", "France24_en", "FR", "en"),
     ("DW News", "dwnews", "DE", "en"),
     ("Sky News", "SkyNews", "GB", "en"),
+    ("Reuters", "Reuters", "GB", "en"),
+    ("GB News", "GBNewsOnline", "GB", "en"),
     ("ABC News (Australia)", "abcnewsaustralia", "AU", "en"),
     ("NDTV", "ndtv", "IN", "en"),
     ("WION", "WION", "IN", "en"),
     ("India Today", "IndiaToday", "IN", "en"),
+    ("Times Now", "TimesNow", "IN", "en"),
+    ("Firstpost", "Firstpost", "IN", "en"),
+    ("CNN News18", "CNNnews18", "IN", "en"),
+    ("Aaj Tak", "aajtak", "IN", "hi"),
+    ("Zee News", "ZeeNews", "IN", "hi"),
+    ("Republic World", "RepublicWorld", "IN", "en"),
     ("TRT World", "trtworld", "TR", "en"),
     ("CNA", "channelnewsasia", "SG", "en"),
     ("Euronews", "euronews", "BE", "en"),
@@ -115,13 +127,21 @@ SEED_CHANNELS = [
     ("ABC News (US)", "ABCNews", "US", "en"),
     ("CBS News", "CBSNews", "US", "en"),
     ("Global News", "globalnews", "CA", "en"),
-    ("Arirang News", "arirangnews", "KR", "en"),
+    ("CBC News", "cbcnews", "CA", "en"),
     ("NHK World-Japan", "nhkworldjapan", "JP", "en"),
     ("CGTN", "CGTN", "CN", "en"),
+    ("TVBS News", "TVBSNEWS01", "TW", "zh"),
     ("Africanews", "africanews", "KE", "en"),
+    ("Citizen TV Kenya", "CitizenTVKenya", "KE", "en"),
+    ("Arise News", "AriseNewsChannel", "NG", "en"),
+    ("eNCA", "eNCAnews", "ZA", "en"),
     ("TVP World", "TVPWorld", "PL", "en"),
-    ("Al Arabiya English", "AlArabiya_Eng", "AE", "en"),
-    ("Kyiv Post", "KyivPost", "UA", "en"),
+    ("Al Arabiya", "AlArabiyaEnglish", "AE", "ar"),
+    ("Sky News Arabia", "skynewsarabia", "AE", "ar"),
+    ("ANC 24/7", "ANCalerts", "PH", "en"),
+    ("GMA Integrated News", "gmanews", "PH", "en"),
+    ("RTVE Noticias", "rtvenoticias", "ES", "es"),
+    ("Milenio", "milenio", "MX", "es"),
 ]
 
 
@@ -331,8 +351,14 @@ def _resolve_via_api(db: Session, channel_rows, key: str) -> dict[str, dict]:
 # ─────────────────────────────────────────────────────────
 def seed_channels(db: Session) -> int:
     """Create channel rows, resolving each handle to a verified channel id."""
-    existing = {c.handle for c in db.query(models.Channel).all()}
-    pending = [c for c in SEED_CHANNELS if c[1] not in existing]
+    rows = db.query(models.Channel).all()
+    existing_handles = {c.handle for c in rows}
+    # Different handles can resolve to the same channel (YouTube redirects
+    # renamed handles), so dedupe on the resolved id too — otherwise the whole
+    # seed transaction dies on a UNIQUE violation.
+    seen_ids = {c.youtube_channel_id for c in rows}
+
+    pending = [c for c in SEED_CHANNELS if c[1] not in existing_handles]
     if not pending:
         return 0
 
@@ -341,8 +367,7 @@ def seed_channels(db: Session) -> int:
     }
 
     def work(entry):
-        name, handle, iso, language = entry
-        return entry, resolve_channel_id(handle)
+        return entry, resolve_channel_id(entry[1])
 
     created = 0
     with futures.ThreadPoolExecutor(max_workers=6) as pool:
@@ -350,6 +375,13 @@ def seed_channels(db: Session) -> int:
             if not channel_id:
                 logger.warning("[CHANNEL] Could not resolve @%s - skipped", handle)
                 continue
+            if channel_id in seen_ids:
+                logger.warning(
+                    "[CHANNEL] @%s resolves to an already-registered channel (%s) - skipped",
+                    handle, channel_id,
+                )
+                continue
+            seen_ids.add(channel_id)
             db.add(models.Channel(
                 name=name,
                 handle=handle,
@@ -404,6 +436,136 @@ def refresh_channels(db: Session, force: bool = False) -> dict:
     db.commit()
     logger.info("[CHANNEL] Refreshed %s channels via %s - %s live", len(channels), mode, live)
     return {"checked": len(channels), "live": live, "mode": mode}
+
+
+def preview_handle(handle: str) -> dict:
+    """
+    Vet a YouTube handle before adding it — no database writes.
+
+    Three things can go wrong and they need different fixes, so they are
+    reported separately rather than as one "didn't work":
+      * the handle does not resolve  -> wrong handle, check the channel URL
+      * it resolves but nothing live -> channel does not run a 24/7 stream
+      * live but not embeddable      -> broadcaster disabled embedding
+    """
+    handle = (handle or "").strip().lstrip("@")
+    if not handle:
+        return {"handle": handle, "usable": False, "reason": "empty handle"}
+
+    channel_id = resolve_channel_id(handle)
+    if not channel_id:
+        return {
+            "handle": handle, "usable": False, "channel_id": None,
+            "reason": "handle_not_found",
+            "detail": "No channel at youtube.com/@" + handle + " — check the exact handle in the channel URL.",
+        }
+
+    video_id, _ = _keyless_live_video(channel_id)
+    if not video_id:
+        return {
+            "handle": handle, "usable": False, "channel_id": channel_id,
+            "reason": "not_live",
+            "detail": "Channel exists but is not streaming right now. Fine to add if it runs a 24/7 stream; it will appear when live.",
+        }
+
+    embeddable, title = _oembed_check(video_id)
+    if not embeddable:
+        return {
+            "handle": handle, "usable": False, "channel_id": channel_id,
+            "live_video_id": video_id, "reason": "not_embeddable",
+            "detail": "Live, but the broadcaster disabled embedding — it cannot be played on the dashboard.",
+        }
+
+    return {
+        "handle": handle, "usable": True, "channel_id": channel_id,
+        "live_video_id": video_id, "live_title": title, "reason": "ok",
+        "detail": "Live and embeddable.",
+    }
+
+
+def add_channel(
+    db: Session,
+    handle: str,
+    name: str | None = None,
+    country_iso: str | None = None,
+    language: str | None = None,
+) -> dict:
+    """Vet and store a channel at runtime, so adding one needs no code change."""
+    handle = (handle or "").strip().lstrip("@")
+    existing = db.query(models.Channel).filter(models.Channel.handle == handle).first()
+    if existing:
+        return {"added": False, "reason": "already_exists", "channel_id": existing.youtube_channel_id}
+
+    preview = preview_handle(handle)
+    if not preview.get("channel_id"):
+        return {"added": False, **preview}
+
+    # A different handle may already point at this same channel.
+    clash = (
+        db.query(models.Channel)
+        .filter(models.Channel.youtube_channel_id == preview["channel_id"])
+        .first()
+    )
+    if clash:
+        return {
+            "added": False, "reason": "already_exists",
+            "detail": f"Already registered as @{clash.handle} ({clash.name}).",
+            "channel_id": clash.youtube_channel_id,
+        }
+
+    country_id = None
+    if country_iso:
+        country_id = (
+            db.query(models.Country.id)
+            .filter(models.Country.iso_code == country_iso.strip().upper())
+            .scalar()
+        )
+        if country_id is None:
+            return {"added": False, "reason": "unknown_country", "detail": f"No country with ISO code {country_iso!r}."}
+
+    channel = models.Channel(
+        name=name or handle,
+        handle=handle,
+        youtube_channel_id=preview["channel_id"],
+        country_id=country_id,
+        language=language,
+        is_enabled=True,
+        is_live=bool(preview.get("usable")),
+        live_video_id=preview.get("live_video_id"),
+        live_title=preview.get("live_title"),
+        checked_at=datetime.utcnow(),
+    )
+    db.add(channel)
+    db.commit()
+    db.refresh(channel)
+
+    return {
+        "added": True,
+        "id": channel.id,
+        "name": channel.name,
+        "channel_id": channel.youtube_channel_id,
+        "is_live": bool(channel.is_live),
+        "reason": preview.get("reason"),
+        "detail": preview.get("detail"),
+    }
+
+
+def set_channel_enabled(db: Session, channel_id: int, enabled: bool) -> bool:
+    channel = db.query(models.Channel).filter(models.Channel.id == channel_id).first()
+    if not channel:
+        return False
+    channel.is_enabled = enabled
+    db.commit()
+    return True
+
+
+def delete_channel(db: Session, channel_id: int) -> bool:
+    channel = db.query(models.Channel).filter(models.Channel.id == channel_id).first()
+    if not channel:
+        return False
+    db.delete(channel)
+    db.commit()
+    return True
 
 
 def list_channels(db: Session, country: str | None = None, live_only: bool = False) -> list[dict]:

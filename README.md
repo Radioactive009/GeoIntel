@@ -112,7 +112,39 @@ VITE_API_URL=https://your-backend.onrender.com npm run build
 | GET | `/movers` | Escalating / de-escalating countries — `hours`, `limit` |
 | POST | `/snapshot` | Force a risk-history capture (runs automatically each cycle) |
 | GET | `/channels` | Broadcaster live streams — `country`, `live_only` |
+| GET | `/channels/preview` | Vet a YouTube handle before adding it (no write) |
+| POST | `/channels` | Add a channel — `handle`, `name`, `country_iso`, `language` |
+| PATCH | `/channels/{id}` | Enable/hide a channel (`enabled=true\|false`) |
+| DELETE | `/channels/{id}` | Remove a channel |
 | POST | `/channels/refresh` | Seed channels and re-resolve which are live |
+
+### Adding a news channel
+
+Check the handle first — `preview` tells you *why* a channel won't work, since
+the three failure modes need different fixes:
+
+```bash
+curl "localhost:8000/channels/preview?handle=aljazeeraenglish"
+```
+
+| `reason` | Meaning |
+|---|---|
+| `ok` | Live and embeddable — safe to add |
+| `handle_not_found` | Wrong handle. Copy it from the channel's URL (`youtube.com/@thehandle`) |
+| `not_live` | Channel exists but isn't streaming now. Still fine to add if it runs a 24/7 stream — it appears once live |
+| `not_embeddable` | Broadcaster disabled embedding; it can never play on the dashboard |
+
+Then add it. No code change or redeploy needed:
+
+```bash
+curl -X POST "localhost:8000/channels?handle=aljazeeraenglish&name=Al%20Jazeera&country_iso=QA&language=en"
+```
+
+`country_iso` is what ties the stream to the map — selecting that country
+switches the player to this channel. To ship a channel as a default for every
+deployment instead, add a tuple to `SEED_CHANNELS` in
+[app/services/channels.py](app/services/channels.py); handles are resolved to
+channel IDs at seed time and unresolvable ones are skipped with a warning.
 | GET | `/stats` | Counts by risk level, event type and provider |
 | GET | `/countries` · `/sources` | Reference data |
 | POST | `/ingest-batch?size=N` | Run one ingest cycle now |
