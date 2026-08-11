@@ -3,7 +3,11 @@ import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import ArticleCard from '../components/ArticleCard';
 import MapChart from '../components/MapChart';
-import { getArticles, getAlertAnalysis, getStats, triggerIngestion } from '../services/api';
+import Sparkline from '../components/Sparkline';
+import EscalationPanel from '../components/EscalationPanel';
+import {
+    getArticles, getAlertAnalysis, getStats, getTrends, getMovers, triggerIngestion,
+} from '../services/api';
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
     BarChart3, Globe, Activity, Newspaper,

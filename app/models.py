@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Index
+from sqlalchemy import (
+    Column, Integer, String, ForeignKey, DateTime, Float, Index, UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -75,6 +77,32 @@ class Article(Base):
 
 # Feed queries filter by country and sort by recency.
 Index("ix_articles_country_published", Article.country_id, Article.published_at)
+
+
+# [TREND] COUNTRY RISK HISTORY
+#
+# One row per country per hour. Without this the dashboard could only ever
+# describe the present, so nothing could say whether a country was escalating
+# or calming down. Bucketed hourly (ingest runs every 30 minutes) and pruned
+# on a retention window, which keeps the table small on SQLite.
+class CountryRiskSnapshot(Base):
+    __tablename__ = "country_risk_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    country_id = Column(Integer, ForeignKey("countries.id"), nullable=False, index=True)
+    captured_at = Column(DateTime, nullable=False, index=True)
+
+    risk_score = Column(Float)       # sample-size adjusted score
+    raw_risk_score = Column(Float)   # unadjusted mean, kept for transparency
+    article_count = Column(Integer)
+    high_count = Column(Integer)
+
+    country = relationship("Country")
+
+    __table_args__ = (
+        UniqueConstraint("country_id", "captured_at", name="uq_country_snapshot"),
+        Index("ix_snapshot_country_time", "country_id", "captured_at"),
+    )
 
 
 # [GLOBAL] SYSTEM STATE TABLE

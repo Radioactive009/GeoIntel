@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..countries import COUNTRIES, build_query, find_country_config
+from . import alerts
 from .country_resolver import resolve_primary_country
 from .gnews_service import fetch_gnews
 from .risk_engine import score_article
@@ -376,10 +377,20 @@ def run_ingest_cycle(db: Session, batch_size: int | None = None) -> dict:
     delete_old_articles(db)
     prune_orphan_sources(db)
 
+    # Record where every country stands now, so the next cycle can say what
+    # changed. Never let a history failure abort an otherwise good ingest.
+    snapshots = 0
+    try:
+        snapshots = alerts.capture_snapshot(db)
+        alerts.prune_snapshots(db)
+    except Exception as e:
+        db.rollback()
+        logger.warning("[ERR] Risk snapshot failed: %s", e)
+
     total = global_saved + sum(results.values())
     logger.info(
-        "[CYCLE] batch_start=%s size=%s global=%s country=%s total_saved=%s",
-        start_idx, len(batch), global_saved, sum(results.values()), total,
+        "[CYCLE] batch_start=%s size=%s global=%s country=%s total_saved=%s snapshots=%s",
+        start_idx, len(batch), global_saved, sum(results.values()), total, snapshots,
     )
     return {
         "batch_start_index": start_idx,
@@ -387,6 +398,7 @@ def run_ingest_cycle(db: Session, batch_size: int | None = None) -> dict:
         "global_saved": global_saved,
         "results": results,
         "total_saved": total,
+        "snapshots_captured": snapshots,
     }
 
 

@@ -44,6 +44,17 @@ export const getAlertAnalysis = (activeOnly = true) =>
 
 export const getStats = () => api.get('/stats');
 
+/** Risk history per country, thinned server-side for sparklines. */
+export const getTrends = ({ hours = 168, points = 24, country = '' } = {}) => {
+    const params = { hours, points };
+    if (country) params.country = country;
+    return api.get('/trends', { params });
+};
+
+/** Countries escalating/de-escalating against their own recent baseline. */
+export const getMovers = ({ hours = 168, limit = 5 } = {}) =>
+    api.get('/movers', { params: { hours, limit } });
+
 export const getHealth = () => api.get('/health');
 
 export const triggerIngestion = (size = 10) =>

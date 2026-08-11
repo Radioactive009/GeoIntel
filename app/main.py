@@ -19,14 +19,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import case, func
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import ingest
+from .services import alerts, ingest
 
 # =========================================================
 # LOGGING / ENV
@@ -38,15 +38,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-
-HIGH_RISK_THRESHOLD = 70
-MEDIUM_RISK_THRESHOLD = 40
-
-# Pseudo-count for the alert average. A country with a single alarming article
-# would otherwise top the global ranking on a sample of one; each country's
-# mean is pulled toward the global mean until it has enough reports to stand on
-# its own. Higher = more conservative.
-ALERT_CONFIDENCE_WEIGHT = max(0.0, float(os.getenv("ALERT_CONFIDENCE_WEIGHT", "5")))
 
 INGEST_INTERVAL_MINUTES = max(5, int(os.getenv("INGEST_INTERVAL_MINUTES", "30")))
 ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() not in ("0", "false", "no")
@@ -371,81 +362,8 @@ def ingest_all_countries(
 
 
 # =========================================================
-# INTEL ALERT ENGINE
+# INTEL ALERT ENGINE + RISK HISTORY
 # =========================================================
-def calculate_alert_status(db: Session) -> list[dict]:
-    """
-    Weighted geopolitical alert level per country.
-
-    Computed by the database in a single aggregate query; this used to load
-    every article into Python on each request.
-    """
-    risk_expr = func.coalesce(
-        models.Article.geo_risk_score,
-        func.abs(func.coalesce(models.Article.sentiment_score, 0.0)) * 100,
-    )
-    high_expr = case((models.Article.geo_risk_level == "high", 1), else_=0)
-
-    rows = (
-        db.query(
-            models.Country.name,
-            models.Country.iso_code,
-            models.Country.region,
-            func.count(models.Article.id).label("total"),
-            func.avg(risk_expr).label("avg_risk"),
-            func.sum(high_expr).label("high_count"),
-        )
-        .outerjoin(models.Article, models.Article.country_id == models.Country.id)
-        .group_by(models.Country.id, models.Country.name, models.Country.iso_code, models.Country.region)
-        .all()
-    )
-
-    # Corpus-wide mean, weighted by article count, used as the shrinkage prior.
-    scored = [(int(t or 0), float(a)) for *_, t, a, _ in rows if t and a is not None]
-    total_articles = sum(t for t, _ in scored)
-    global_mean = (
-        sum(t * a for t, a in scored) / total_articles if total_articles else 0.0
-    )
-
-    results = []
-    for name, iso_code, region, total, avg_risk, high_count in rows:
-        total = int(total or 0)
-        raw_score = float(avg_risk) if total and avg_risk is not None else 0.0
-
-        if total:
-            # Bayesian shrinkage: a mean over one article is not evidence of a
-            # national threat level, so pull it toward the global mean.
-            score = (
-                (total * raw_score + ALERT_CONFIDENCE_WEIGHT * global_mean)
-                / (total + ALERT_CONFIDENCE_WEIGHT)
-            )
-        else:
-            score = 0.0
-
-        score = round(score, 2)
-
-        if score >= HIGH_RISK_THRESHOLD:
-            status = "high"
-        elif score >= MEDIUM_RISK_THRESHOLD:
-            status = "medium"
-        else:
-            status = "low"
-
-        results.append({
-            "country": name,
-            "iso_code": iso_code,
-            "region": region,
-            "total_articles": total,
-            "critical_alerts": int(high_count or 0),
-            "alert_level": score,
-            "raw_alert_level": round(raw_score, 2),
-            "alert_status": status,
-        })
-
-    results.sort(key=lambda r: r["alert_level"], reverse=True)
-    return results
-
-
 @app.get("/alert-analysis", response_model=list[schemas.AlertResponse])
 def alert_analysis(
     active_only: bool = Query(default=False, description="Only countries with articles"),
@@ -453,7 +371,7 @@ def alert_analysis(
 ):
     """Backend-wide intelligence scan producing per-country alert statuses."""
     try:
-        results = calculate_alert_status(db)
+        results = alerts.compute_alert_status(db)
     except Exception as e:
         logger.exception("[ERR] Intelligence scan failed: %s", e)
         raise HTTPException(status_code=500, detail="Intelligence scan failed") from e
@@ -462,6 +380,48 @@ def alert_analysis(
         results = [r for r in results if r["total_articles"] > 0]
     logger.info("[SCAN] Intelligence scan complete - %s countries", len(results))
     return results
+
+
+@app.get("/trends")
+def trends(
+    hours: int = Query(default=168, ge=1, le=24 * 90),
+    points: int = Query(default=24, ge=2, le=200),
+    country: str | None = Query(default=None, description="ISO alpha-2 code"),
+    db: Session = Depends(get_db),
+):
+    """
+    Risk history per country, thinned for sparklines.
+
+    Returns {iso_code: [{t, score, articles}, ...]}.
+    """
+    return {
+        "window_hours": hours,
+        "series": alerts.trend_series(db, hours=hours, max_points=points, iso_code=country),
+    }
+
+
+@app.get("/movers")
+def movers(
+    hours: int = Query(default=168, ge=2, le=24 * 90),
+    limit: int = Query(default=8, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """
+    Countries escalating or de-escalating against their own recent baseline.
+
+    Ranked by z-score rather than raw delta, so a country that always swings
+    wildly does not crowd out a genuine, unusual move somewhere quieter.
+    """
+    result = alerts.compute_movers(db, hours=hours, limit=limit)
+    result["history"] = alerts.history_status(db)
+    return result
+
+
+@app.post("/snapshot")
+def capture_snapshot(db: Session = Depends(get_db)):
+    """Force a risk-history capture (normally runs at the end of each cycle)."""
+    written = alerts.capture_snapshot(db)
+    return {"message": "Snapshot captured", "countries_recorded": written}
 
 
 @app.get("/stats")

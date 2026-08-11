@@ -96,3 +96,23 @@ class AlertResponse(BaseModel):
     # Unadjusted mean, exposed so the adjustment stays inspectable.
     raw_alert_level: float = 0.0
     alert_status: str
+
+
+# ---------- TRENDS ----------
+class TrendPoint(BaseModel):
+    t: datetime
+    score: float
+    articles: int
+
+
+class MoverResponse(BaseModel):
+    iso_code: str
+    country: str
+    current: float
+    baseline: float
+    delta: float
+    # Move expressed against the country's own spread, not a raw delta.
+    z_score: float
+    article_count: int
+    observations: int
+    direction: str
