@@ -33,7 +33,8 @@ const MoverRow = ({ mover, series, rising, onSelect }) => {
                         {mover.delta > 0 ? '+' : ''}{mover.delta.toFixed(1)}
                     </span>
                 </div>
-                <p className="text-[9px] font-bold text-slate-600 tabular-nums uppercase tracking-wider">
+                {/* No `uppercase` here: it would render σ (std-dev) as Σ (summation). */}
+                <p className="text-[9px] font-bold text-slate-600 tabular-nums tracking-wider">
                     {Math.abs(mover.z_score).toFixed(1)}σ
                 </p>
             </div>
@@ -96,7 +97,8 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
                     </p>
                 </div>
             ) : (
-                <div className="space-y-6">
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
                     <section className="space-y-2">
                         <p className="text-[10px] font-extrabold text-rose-400/70 uppercase tracking-[0.2em] px-1">
                             Escalating
@@ -134,8 +136,9 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
                             <p className="text-[11px] text-slate-600 font-medium px-1">No zones de-escalating in this window.</p>
                         )}
                     </section>
+                  </div>
 
-                    <p className="text-[9px] text-slate-600 font-medium leading-relaxed pt-2 border-t border-white/5">
+                    <p className="text-[9px] text-slate-600 font-medium leading-relaxed pt-3 border-t border-white/5">
                         σ is the move measured against that country&apos;s own recent volatility — a large
                         shift in a normally quiet zone outranks routine noise elsewhere.
                     </p>
