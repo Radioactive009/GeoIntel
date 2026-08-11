@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertCircle, AlertTriangle, ShieldCheck, ExternalLink, Globe, Clock } from 'lucide-react';
+import { getFlagEmoji } from '../utils/country';
 
 const alertConfig = {
     high: {
@@ -28,34 +29,48 @@ const alertConfig = {
     },
 };
 
-const getFlagEmoji = (countryCode) => {
-    if (!countryCode || typeof countryCode !== 'string' || countryCode === 'Global') return '🌐';
-    const code = countryCode.trim().toUpperCase();
-    if (code.length !== 2) return '🌐';
-    try {
-        return String.fromCodePoint(...code.split('').map(char => 127397 + char.charCodeAt()));
-    } catch (e) {
-        return '🌐';
-    }
+const EVENT_LABELS = {
+    military: 'Military',
+    diplomatic: 'Diplomatic',
+    economic: 'Economic',
+    political: 'Political',
+    hazard: 'Hazard',
 };
 
 const ArticleCard = ({ article, index }) => {
-    const { title, description, url, published_at, source, sentiment_score, sentiment_label } = article;
-    const sourceName = (source?.name || 'Unknown').replace(/\s\[[A-Z]{2}\]$/, '');
-    const countryName = source?.country?.name || 'Global';
-    const isoCode = source?.country?.iso_code || 'Global';
+    const {
+        title,
+        description,
+        url,
+        published_at,
+        source,
+        country,
+        country_iso_code,
+        geo_risk_score,
+        geo_risk_level,
+        event_type,
+    } = article;
+
+    const sourceName = source?.name || 'Unknown';
+    const countryName = country || 'Unattributed';
+    const isoCode = country_iso_code || 'Global';
 
     const timeAgo = (() => {
-        const diff = Date.now() - new Date(published_at).getTime();
+        const publishedMs = new Date(published_at).getTime();
+        if (Number.isNaN(publishedMs)) return 'Unknown';
+        const diff = Date.now() - publishedMs;
+        if (diff < 0) return 'Just now';
         const hrs = Math.floor(diff / (1000 * 60 * 60));
         if (hrs < 1) return 'Just now';
         if (hrs < 24) return `${hrs}h ago`;
         return `${Math.floor(hrs / 24)}d ago`;
     })();
 
-    // Default to 'low' config if label doesn't match
-    const alert = alertConfig[sentiment_label] || alertConfig.low;
+    // Driven by the risk engine; the card previously showed the legacy
+    // sentiment score, which is only a rescaled alias of this value.
+    const alert = alertConfig[geo_risk_level] || alertConfig.low;
     const AlertIcon = alert.icon;
+    const riskScore = typeof geo_risk_score === 'number' ? geo_risk_score : null;
 
     return (
         <div
@@ -67,20 +82,27 @@ const ArticleCard = ({ article, index }) => {
 
             <div className="p-6 flex flex-col h-full flex-grow">
                 {/* Meta Header */}
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between mb-4 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                         <div className="p-1 rounded-lg bg-white/5 border border-white/10 group-hover:border-cyan-500/30 transition-colors">
                             <span className="text-lg leading-none" title={countryName}>{getFlagEmoji(isoCode)}</span>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[100px]">
+                        <span
+                            className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[120px]"
+                            title={sourceName}
+                        >
                             {sourceName}
                         </span>
                     </div>
 
-                    <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${alert.bg} ${alert.color} border ${alert.border}`}>
+                    <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 shrink-0 ${alert.bg} ${alert.color} border ${alert.border}`}>
                         <AlertIcon size={12} />
                         <span>{alert.label}</span>
-                        <span className="ml-1 opacity-70 border-l border-current pl-1.5">{Math.abs(sentiment_score || 0).toFixed(2)}</span>
+                        {riskScore !== null && (
+                            <span className="ml-1 opacity-70 border-l border-current pl-1.5 tabular-nums">
+                                {riskScore.toFixed(0)}
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -92,6 +114,11 @@ const ArticleCard = ({ article, index }) => {
                     <p className="text-slate-400 text-xs leading-relaxed line-clamp-3 mb-4 font-medium opacity-80 group-hover:opacity-100 transition-opacity">
                         {description || 'Intelligence bulletin summary currently pending analysis.'}
                     </p>
+                    {event_type && (
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                            {EVENT_LABELS[event_type] || event_type}
+                        </span>
+                    )}
                 </div>
 
                 {/* Footer */}
@@ -101,7 +128,7 @@ const ArticleCard = ({ article, index }) => {
                             <Clock size={12} className="text-slate-600" />
                             <span>{timeAgo}</span>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5" title={countryName}>
                             <Globe size={12} className="text-slate-600" />
                             <span className="uppercase">{isoCode}</span>
                         </div>

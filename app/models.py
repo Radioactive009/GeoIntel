@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -13,29 +13,22 @@ class Country(Base):
     iso_code = Column(String, unique=True, nullable=False)
     region = Column(String)
 
-    # Relationships
-    sources = relationship(
-        "Source",
-        back_populates="country",
-        cascade="all, delete"
-    )
+    articles = relationship("Article", back_populates="country_rel")
 
 
 # [DATA] SOURCE TABLE
+#
+# One row per news outlet. Sources used to be duplicated per ingest country
+# ("BBC News [AE]", "BBC News [BV]", ...) which produced 3253 rows for ~1100
+# real outlets and attached a meaningless country to each. An outlet is now
+# country-agnostic; the country lives on the article.
 class Source(Base):
     __tablename__ = "sources"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
-    country_id = Column(Integer, ForeignKey("countries.id"))
 
-    # Relationships
-    country = relationship("Country", back_populates="sources")
-    articles = relationship(
-        "Article",
-        back_populates="source",
-        cascade="all, delete"
-    )
+    articles = relationship("Article", back_populates="source")
 
 
 # [DOC] ARTICLE TABLE
@@ -46,35 +39,42 @@ class Article(Base):
     title = Column(String)
     description = Column(String)
     url = Column(String, unique=True, nullable=False)
-    published_at = Column(DateTime, default=datetime.utcnow)
+    published_at = Column(DateTime, default=datetime.utcnow, index=True)
 
-    source_id = Column(Integer, ForeignKey("sources.id"))
+    source_id = Column(Integer, ForeignKey("sources.id"), index=True)
+    # Country the article is *about*, resolved from its text.
+    country_id = Column(Integer, ForeignKey("countries.id"), index=True)
+    # Which ingest provider delivered it (newsapi | gnews | rss).
+    provider = Column(String)
 
-    # Relationships
     source = relationship("Source", back_populates="articles")
+    country_rel = relationship("Country", back_populates="articles")
 
-    # [LEGACY] SENTIMENT FIELDS (legacy — kept for backwards compatibility)
+    # [LEGACY] SENTIMENT FIELDS (kept for backwards compatibility)
     sentiment_score = Column(Float)
     sentiment_label = Column(String)
 
     # [AI] SEMANTIC RISK ENGINE FIELDS
-    geo_risk_score = Column(Float)   # 0–100
+    geo_risk_score = Column(Float)   # 0-100
     geo_risk_level = Column(String)  # low | medium | high
-    event_type = Column(String)      # military | diplomatic | economic | political
+    event_type = Column(String)      # military | diplomatic | economic | political | hazard
     category = Column(String)        # strategic_activity | conflict | news
 
+    @property
+    def country(self) -> str | None:
+        return self.country_rel.name if self.country_rel else None
 
     @property
-    def country(self):
-        if self.source and self.source.country:
-            return self.source.country.name
-        return None
+    def country_iso_code(self) -> str | None:
+        return self.country_rel.iso_code if self.country_rel else None
 
     @property
-    def country_iso_code(self):
-        if self.source and self.source.country:
-            return self.source.country.iso_code
-        return None
+    def region(self) -> str | None:
+        return self.country_rel.region if self.country_rel else None
+
+
+# Feed queries filter by country and sort by recency.
+Index("ix_articles_country_published", Article.country_id, Article.published_at)
 
 
 # [GLOBAL] SYSTEM STATE TABLE
@@ -83,4 +83,3 @@ class SystemState(Base):
 
     key = Column(String, primary_key=True, index=True)
     value = Column(String)
-

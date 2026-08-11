@@ -1,5 +1,6 @@
 # Environments
 .env
+.env.local
 venv/
 __pycache__/
 *.pyc
@@ -11,6 +12,12 @@ dist/
 
 # Databases
 geopolitics.db
+*.db-journal
+
+# Runtime state (the ingest cursor lives in the system_state table)
+app/.ingest_cursor.json
+server.log
+*.log
 
 # Build
 build/

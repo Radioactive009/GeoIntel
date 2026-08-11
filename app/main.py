@@ -1,89 +1,166 @@
-from fastapi import FastAPI, Depends, Query
-from sqlalchemy.orm import Session, joinedload
-from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime, timedelta
-import requests
-import os
-import json
-from dotenv import load_dotenv
+"""
+GeoIntel AI — FastAPI application.
+
+Assembles the app, schedules ingestion and exposes the read API. The ingestion
+pipeline itself lives in app/services/ingest.py and the country catalog in
+app/countries.py.
+"""
+
+from __future__ import annotations
+
 import logging
+import os
 import threading
-import pycountry
-import pycountry_convert as pc
 import time
-import gc
-from app.services.risk_engine import score_article
-from app.services.gnews_service import fetch_gnews
-from app.services.rss_service import fetch_rss
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
-# =========================================================
-# LOGGING SETUP
-# =========================================================
-logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+from apscheduler.schedulers.background import BackgroundScheduler
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import case, func
+from sqlalchemy.orm import Session, joinedload
 
-from .database import engine, Base, SessionLocal
 from . import models, schemas
-
+from .countries import COUNTRIES
+from .database import Base, SessionLocal, engine
+from .migrations import run_migrations
+from .services import ingest
 
 # =========================================================
-# LOAD ENV
+# LOGGING / ENV
 # =========================================================
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
+HIGH_RISK_THRESHOLD = 70
+MEDIUM_RISK_THRESHOLD = 40
+
+# Pseudo-count for the alert average. A country with a single alarming article
+# would otherwise top the global ranking on a sample of one; each country's
+# mean is pulled toward the global mean until it has enough reports to stand on
+# its own. Higher = more conservative.
+ALERT_CONFIDENCE_WEIGHT = max(0.0, float(os.getenv("ALERT_CONFIDENCE_WEIGHT", "5")))
+
+INGEST_INTERVAL_MINUTES = max(5, int(os.getenv("INGEST_INTERVAL_MINUTES", "30")))
+ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() not in ("0", "false", "no")
+STARTUP_INGEST_DELAY = max(0, int(os.getenv("STARTUP_INGEST_DELAY", "10")))
+
 
 # =========================================================
-# CREATE TABLES + MIGRATE
+# DB SETUP + MIGRATIONS
 # =========================================================
 Base.metadata.create_all(bind=engine)
+run_migrations(engine)
 
-# Auto-migrate: add sentiment columns if they don't exist
-# (SQLAlchemy create_all won't alter existing tables)
-from sqlalchemy import text
 
-with engine.connect() as conn:
-    columns = [row[1] for row in conn.execute(text("PRAGMA table_info(articles)"))]
-    if "sentiment_score" not in columns:
-        conn.execute(text("ALTER TABLE articles ADD COLUMN sentiment_score FLOAT"))
-    if "sentiment_label" not in columns:
-        conn.execute(text("ALTER TABLE articles ADD COLUMN sentiment_label VARCHAR"))
-    # New columns for semantic risk engine
-    if "geo_risk_score" not in columns:
-        conn.execute(text("ALTER TABLE articles ADD COLUMN geo_risk_score FLOAT"))
-    if "geo_risk_level" not in columns:
-        conn.execute(text("ALTER TABLE articles ADD COLUMN geo_risk_level VARCHAR"))
-    if "event_type" not in columns:
-        conn.execute(text("ALTER TABLE articles ADD COLUMN event_type VARCHAR"))
-    if "category" not in columns:
-        conn.execute(text("ALTER TABLE articles ADD COLUMN category VARCHAR"))
-    conn.commit()
+# =========================================================
+# SCHEDULER
+# =========================================================
+scheduler = BackgroundScheduler(timezone="UTC")
+_startup_lock = threading.Lock()
+_startup_done = False
+
+
+def scheduled_ingest() -> None:
+    """Scheduled job: refresh global feeds and a rotating country batch."""
+    db = SessionLocal()
+    try:
+        logger.info("[TIMER] Scheduled ingestion starting...")
+        summary = ingest.run_ingest_cycle(db)
+        logger.info("[TIMER] Scheduled ingestion complete: %s saved", summary["total_saved"])
+    except Exception as e:
+        logger.exception("[ERR] Scheduled ingestion failed: %s", e)
+    finally:
+        db.close()
+
+
+def _bootstrap() -> None:
+    """
+    Seed the catalog and, if the feed is empty, ingest immediately.
+
+    A cold database used to show an empty dashboard for the first 30 minutes.
+    """
+    db = SessionLocal()
+    try:
+        ingest.ensure_country_catalog_in_db(db)
+        logger.info("[OK] Country catalog synced (%s countries)", len(COUNTRIES))
+        empty = ingest.article_count(db) == 0
+    finally:
+        db.close()
+
+    if empty:
+        logger.info("[SYNC] Empty database - ingesting immediately")
+    elif STARTUP_INGEST_DELAY:
+        # Let the server finish binding before the first heavy cycle.
+        time.sleep(STARTUP_INGEST_DELAY)
+
+    scheduled_ingest()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _startup_done
+
+    if ENABLE_SCHEDULER:
+        with _startup_lock:
+            # Guard against uvicorn --reload invoking startup twice.
+            if not _startup_done:
+                _startup_done = True
+                if not scheduler.get_jobs():
+                    scheduler.add_job(
+                        scheduled_ingest,
+                        "interval",
+                        minutes=INGEST_INTERVAL_MINUTES,
+                        id="auto_ingest_job",
+                        replace_existing=True,
+                        max_instances=1,
+                        coalesce=True,
+                    )
+                if not scheduler.running:
+                    scheduler.start()
+                logger.info(
+                    "[OK] Scheduler started - ingestion every %s minutes",
+                    INGEST_INTERVAL_MINUTES,
+                )
+                threading.Thread(target=_bootstrap, daemon=True).start()
+    else:
+        logger.info("[SKIP] Scheduler disabled via ENABLE_SCHEDULER")
+
+    yield
+
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+        logger.info("[STOP] Scheduler shut down")
 
 
 # =========================================================
 # APP INIT
 # =========================================================
-app = FastAPI()
+app = FastAPI(
+    title="GeoIntel AI",
+    description="Geopolitical news intelligence API",
+    version="2.0.0",
+    lifespan=lifespan,
+)
 
-
-# =========================================================
-# CORS
-# =========================================================
+# Comma-separated origin list; "*" keeps local development frictionless.
+_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_origins,
+    allow_credentials=_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# =========================================================
-# DB Dependency
-# =========================================================
 def get_db():
     db = SessionLocal()
     try:
@@ -93,409 +170,40 @@ def get_db():
 
 
 # =========================================================
-# CENTRAL COUNTRY CONFIGURATION
-# =========================================================
-CONTINENT_TO_REGION = {
-    "AF": "Africa",
-    "AS": "Asia",
-    "EU": "Europe",
-    "NA": "North America",
-    "SA": "South America",
-    "OC": "Oceania",
-    "AN": "Antarctica",
-}
-
-MIDDLE_EAST_ISO = {
-    "AE", "BH", "CY", "EG", "IQ", "IR", "IL", "JO", "KW",
-    "LB", "OM", "PS", "QA", "SA", "SY", "TR", "YE",
-}
-
-CURSOR_FILE = os.path.join(os.path.dirname(__file__), ".ingest_cursor.json")
-INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "15")))
-
-
-def resolve_region(alpha2: str) -> str:
-    if alpha2 in MIDDLE_EAST_ISO:
-        return "Middle East"
-    try:
-        continent_code = pc.country_alpha2_to_continent_code(alpha2)
-        return CONTINENT_TO_REGION.get(continent_code, "Global")
-    except Exception:
-        return "Global"
-
-
-def build_country_catalog() -> list[dict]:
-    countries = []
-    for c in pycountry.countries:
-        code = getattr(c, "alpha_2", None)
-        if not code:
-            continue
-
-        # Use canonical short country name for UI/map compatibility.
-        name = c.name
-        query_terms = [f'"{name}"']
-        if getattr(c, "official_name", None):
-            query_terms.append(f'"{c.official_name}"')
-        if getattr(c, "common_name", None):
-            query_terms.append(f'"{c.common_name}"')
-        query_terms.append(code)
-
-        countries.append({
-            "name": name,
-            "code": code,
-            "query": " OR ".join(dict.fromkeys(query_terms)),
-            "region": resolve_region(code),
-        })
-
-    countries.sort(key=lambda x: x["name"])
-    return countries
-
-
-COUNTRIES = build_country_catalog()
-COUNTRY_MAP = {c["code"]: c for c in COUNTRIES}
-
-BASE_QUERY = "politics OR war OR conflict OR sanctions OR diplomacy OR military OR crisis"
-
-
-def build_query(country_query: str) -> str:
-    """Combine country-specific terms with geopolitical base query."""
-    return f"({country_query}) AND ({BASE_QUERY})"
-
-
-# =========================================================
-# HELPER: GET OR CREATE COUNTRY
-# =========================================================
-def get_or_create_country(db: Session, country_data: dict) -> models.Country:
-    country = (
-        db.query(models.Country)
-        .filter(models.Country.iso_code == country_data["code"])
-        .first()
-    )
-    if not country:
-        country = models.Country(
-            name=country_data["name"],
-            iso_code=country_data["code"],
-            region=country_data.get("region", "Unknown")
-        )
-        db.add(country)
-        db.commit()
-        db.refresh(country)
-        print(f"  [OK] Created country: {country.name} ({country.iso_code})")
-    return country
-
-
-# =========================================================
-# HELPER: GET OR CREATE SOURCE
-# =========================================================
-def get_or_create_source(db: Session, source_name: str, country_id: int) -> models.Source:
-    source = (
-        db.query(models.Source)
-        .filter(models.Source.name == source_name)
-        .first()
-    )
-    if not source:
-        source = models.Source(name=source_name, country_id=country_id)
-        db.add(source)
-        db.commit()
-        db.refresh(source)
-    return source
-
-
-# =========================================================
-# HELPER: LOOKUP COUNTRY CONFIG BY ISO CODE
-# =========================================================
-def find_country_config(iso_code: str) -> dict:
-    """Find a country config entry by ISO code, or build a fallback."""
-    iso_code = iso_code.strip().upper()
-    if iso_code in COUNTRY_MAP:
-        return COUNTRY_MAP[iso_code]
-    # Fallback for unknown codes
-    return {"name": iso_code, "code": iso_code, "query": iso_code, "region": "Unknown"}
-
-
-def ensure_country_catalog_in_db(db: Session) -> None:
-    """
-    Ensure DB has the full ISO country catalog and normalized names/regions.
-    This keeps map labels and backend country names aligned.
-    """
-    existing = {c.iso_code: c for c in db.query(models.Country).all()}
-
-    for cfg in COUNTRIES:
-        current = existing.get(cfg["code"])
-        if current:
-            changed = False
-            if current.name != cfg["name"]:
-                current.name = cfg["name"]
-                changed = True
-            if current.region != cfg["region"]:
-                current.region = cfg["region"]
-                changed = True
-            if changed:
-                db.add(current)
-        else:
-            db.add(models.Country(
-                name=cfg["name"],
-                iso_code=cfg["code"],
-                region=cfg["region"],
-            ))
-
-    db.commit()
-
-
-def load_cursor(db: Session) -> int:
-    try:
-        state = db.query(models.SystemState).filter(models.SystemState.key == "ingest_cursor").first()
-        if state and state.value:
-            return int(state.value)
-    except Exception as e:
-        logger.warning(f"Could not load ingest cursor from DB: {e}")
-    
-    # Fallback to local file if DB read fails (backward compatibility)
-    if os.path.exists(CURSOR_FILE):
-        try:
-            with open(CURSOR_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return int(data.get("cursor", 0))
-        except Exception:
-            pass
-    return 0
-
-
-def save_cursor(db: Session, cursor: int) -> None:
-    try:
-        state = db.query(models.SystemState).filter(models.SystemState.key == "ingest_cursor").first()
-        if not state:
-            state = models.SystemState(key="ingest_cursor", value=str(cursor))
-            db.add(state)
-        else:
-            state.value = str(cursor)
-        db.commit()
-    except Exception as e:
-        logger.warning(f"Could not persist ingest cursor to DB: {e}")
-    
-    # Fallback to local file
-    try:
-        with open(CURSOR_FILE, "w", encoding="utf-8") as f:
-            json.dump({"cursor": cursor}, f)
-    except Exception:
-        pass
-
-
-def get_country_batch(db: Session, size: int) -> tuple[list[dict], int]:
-    if not COUNTRIES:
-        return [], 0
-
-    size = max(1, min(size, len(COUNTRIES)))
-    current = load_cursor(db) % len(COUNTRIES)
-    batch = [COUNTRIES[(current + i) % len(COUNTRIES)] for i in range(size)]
-    next_cursor = (current + size) % len(COUNTRIES)
-    save_cursor(db, next_cursor)
-    return batch, current
-
-
-# =========================================================
-# CORE INGESTION LOGIC
-# =========================================================
-def ingest_news_for_country(country_iso: str, db: Session):
-
-    # ── Validate API Keys ────────────────────────────────
-    NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-    print("KEYS NEWS_API_KEY:", "YES" if NEWS_API_KEY else "MISSING NONE")
-
-    # ── Resolve country config ───────────────────────────
-    country_cfg = find_country_config(country_iso)
-    country = get_or_create_country(db, country_cfg)
-    print(f"INGEST Ingesting for: {country.name} ({country.iso_code})")
-
-    # ── Build dynamic query ──────────────────────────────
-    query_string = build_query(country_cfg["query"])
-    print("QUERY Query:", query_string)
-
-    # ── SOURCE 1: NewsAPI ────────────────────────────────
-    newsapi_articles = []
-    if NEWS_API_KEY:
-        try:
-            response = requests.get(
-                "https://newsapi.org/v2/everything",
-                params={
-                    "q": query_string,
-                    "language": "en",
-                    "sortBy": "publishedAt",
-                    "pageSize": 20,
-                    "apiKey": NEWS_API_KEY,
-                },
-                timeout=15,
-            )
-            if response.status_code == 200:
-                data = response.json()
-                newsapi_articles = data.get("articles", [])
-                print(f"  NET NewsAPI: {len(newsapi_articles)} articles")
-            else:
-                print(f"  ERR NewsAPI error: {response.status_code}")
-        except requests.exceptions.RequestException as e:
-            print(f"  ERR NewsAPI request failed: {e}")
-
-    # ── SOURCE 2: GNews ──────────────────────────────────
-    gnews_articles = fetch_gnews(query_string, country_cfg["code"])
-
-    # ── SOURCE 3: RSS Feeds ──────────────────────────────
-    rss_articles = fetch_rss(country_cfg["query"])
-
-    # ── Merge all sources ────────────────────────────────
-    articles = newsapi_articles + gnews_articles + rss_articles
-    print(f"  MERGE Combined: {len(newsapi_articles)} NewsAPI + {len(gnews_articles)} GNews + {len(rss_articles)} RSS = {len(articles)} total")
-
-    if not articles:
-        print("[WARN] No articles from any source")
-        return 0
-
-    # ── Process & store articles ──────────────────────────
-    saved_count = 0
-
-    for item in articles:
-        article_url = item.get("url")
-        if not article_url:
-            continue
-
-        # Duplicate protection (url is UNIQUE in DB)
-        exists = db.query(models.Article).filter(models.Article.url == article_url).first()
-        if exists:
-            continue
-
-        # Source → Country link
-        raw_source_name = item.get("source", {}).get("name") or "Unknown Source"
-        source_name = f"{raw_source_name} [{country.iso_code}]"
-        source = get_or_create_source(db, source_name, country.id)
-
-        # Parse date
-        raw_date = item.get("publishedAt")
-        if raw_date:
-            try:
-                pub_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-            except Exception:
-                pub_date = datetime.utcnow()
-        else:
-            pub_date = datetime.utcnow()
-
-        # ── Semantic Risk Scoring ─────────────────────────
-        text = (item.get("title") or "") + " " + (item.get("description") or "")
-        geo_risk_score, geo_risk_level, event_type, category = score_article(text)
-
-        # Keep legacy sentiment fields as aliases for backwards compatibility
-        sentiment_score = geo_risk_score / 100.0 * -1 if geo_risk_level in ("high", "medium") else geo_risk_score / 100.0
-        sentiment_label = geo_risk_level
-
-        print(f"  RISK {geo_risk_level:>6} | {event_type:>10} | {category:>18} | ({geo_risk_score:>5.1f}/100) | {text[:50]}...")
-
-        new_article = models.Article(
-            title=item.get("title"),
-            description=item.get("description"),
-            url=article_url,
-            source_id=source.id,
-            published_at=pub_date,
-            sentiment_score=sentiment_score,
-            sentiment_label=sentiment_label,
-            geo_risk_score=geo_risk_score,
-            geo_risk_level=geo_risk_level,
-            event_type=event_type,
-            category=category,
-        )
-
-        db.add(new_article)
-        saved_count += 1
-
-    db.commit()
-    print(f"OK {country.name}: {saved_count} articles saved")
-    return saved_count
-
-
-# =========================================================
-# CLEANUP LOGIC (10-DAY RETENTION)
-# =========================================================
-def delete_old_articles(db: Session):
-    threshold = datetime.utcnow() - timedelta(days=10)
-    db.query(models.Article).filter(
-        models.Article.published_at < threshold
-    ).delete()
-    db.commit()
-
-
-# =========================================================
-# AUTOMATIC SCHEDULER (uses COUNTRIES config)
-# =========================================================
-scheduler = BackgroundScheduler()
-
-
-def auto_ingest_all_countries():
-    """Scheduled job: ingest rotating global country batches."""
-    db = SessionLocal()
-    try:
-        logger.info("[TIMER] Scheduled ingestion starting...")
-        ensure_country_catalog_in_db(db)
-        batch, start_idx = get_country_batch(db, INGEST_BATCH_SIZE)
-        logger.info(
-            "[BATCH] Ingest batch: start=%s size=%s of total=%s",
-            start_idx,
-            len(batch),
-            len(COUNTRIES),
-        )
-        for country_cfg in batch:
-            get_or_create_country(db, country_cfg)
-            ingest_news_for_country(country_cfg["code"], db)
-            # ── Memory Safety ──
-            time.sleep(3) # Give RAM and CPU a break
-            gc.collect()  # Force cleanup of processed article objects
-        delete_old_articles(db)
-        logger.info("[TIMER] Scheduled ingestion complete")
-    except Exception as e:
-        logger.info(f"[ERR] Scheduled ingestion failed: {e}")
-    finally:
-        db.close()
-
-
-@app.on_event("startup")
-def start_scheduler():
-    logger.info("[START] Starting background scheduler...")
-    db = SessionLocal()
-    try:
-        ensure_country_catalog_in_db(db)
-        logger.info("OK Country catalog synced in DB (%s countries)", len(COUNTRIES))
-    finally:
-        db.close()
-
-    if not scheduler.get_jobs():
-        scheduler.add_job(
-            auto_ingest_all_countries,
-            "interval",
-            minutes=30,
-            id="auto_ingest_job",
-            replace_existing=True
-        )
-        scheduler.start()
-        logger.info("OK Scheduler started - ingestion every 30 minutes")
-    
-    # Run first ingestion with a slight delay to let server stabilize
-    def delayed_bg_start():
-        time.sleep(10) # Wait 10 seconds before first heavy lift
-        auto_ingest_all_countries()
-
-    threading.Thread(target=delayed_bg_start, daemon=True).start()
-    logger.info("[SYNC] Initial ingestion queued for background start (10s delay)")
-
-
-@app.on_event("shutdown")
-def shutdown_scheduler():
-    if scheduler.running:
-        scheduler.shutdown(wait=False)
-        logger.info("[STOP] Scheduler shut down")
-
-
-# =========================================================
-# ROOT
+# ROOT / HEALTH
 # =========================================================
 @app.get("/")
 def root():
     return {"message": "Geopolitical News Intelligence Backend Running"}
+
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    """Surfaces whether the pipeline is actually producing data."""
+    total = ingest.article_count(db)
+    latest = (
+        db.query(func.max(models.Article.published_at)).scalar()
+        if total else None
+    )
+    attributed = (
+        db.query(func.count(models.Article.id))
+        .filter(models.Article.country_id.isnot(None))
+        .scalar()
+    )
+    return {
+        "status": "ok",
+        "articles": total,
+        "attributed_articles": attributed,
+        "latest_article": latest,
+        "countries": db.query(func.count(models.Country.id)).scalar(),
+        "sources": db.query(func.count(models.Source.id)).scalar(),
+        "scheduler_running": scheduler.running,
+        "providers": {
+            "newsapi": bool(os.getenv("NEWS_API_KEY")),
+            "gnews": bool(os.getenv("GNEWS_API_KEY")),
+            "rss": True,
+        },
+    }
 
 
 # =========================================================
@@ -503,7 +211,7 @@ def root():
 # =========================================================
 @app.post("/countries", response_model=schemas.CountryResponse)
 def create_country(country: schemas.CountryCreate, db: Session = Depends(get_db)):
-    db_country = models.Country(**country.dict())
+    db_country = models.Country(**country.model_dump())
     db.add(db_country)
     db.commit()
     db.refresh(db_country)
@@ -512,8 +220,13 @@ def create_country(country: schemas.CountryCreate, db: Session = Depends(get_db)
 
 @app.get("/countries", response_model=list[schemas.CountryResponse])
 def get_countries(db: Session = Depends(get_db)):
-    ensure_country_catalog_in_db(db)
-    return db.query(models.Country).all()
+    ingest.ensure_country_catalog_in_db(db)
+    return db.query(models.Country).order_by(models.Country.name).all()
+
+
+@app.get("/country-catalog")
+def get_country_catalog():
+    return {"total": len(COUNTRIES), "sample": COUNTRIES[:20]}
 
 
 # =========================================================
@@ -521,7 +234,7 @@ def get_countries(db: Session = Depends(get_db)):
 # =========================================================
 @app.post("/sources", response_model=schemas.SourceResponse)
 def create_source(source: schemas.SourceCreate, db: Session = Depends(get_db)):
-    db_source = models.Source(**source.dict())
+    db_source = models.Source(**source.model_dump())
     db.add(db_source)
     db.commit()
     db.refresh(db_source)
@@ -530,11 +243,7 @@ def create_source(source: schemas.SourceCreate, db: Session = Depends(get_db)):
 
 @app.get("/sources", response_model=list[schemas.SourceResponse])
 def get_sources(db: Session = Depends(get_db)):
-    return (
-        db.query(models.Source)
-        .options(joinedload(models.Source.country))
-        .all()
-    )
+    return db.query(models.Source).order_by(models.Source.name).all()
 
 
 # =========================================================
@@ -542,199 +251,240 @@ def get_sources(db: Session = Depends(get_db)):
 # =========================================================
 @app.post("/articles", response_model=schemas.ArticleResponse)
 def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)):
-    db_article = models.Article(**article.dict())
+    db_article = models.Article(**article.model_dump())
     db.add(db_article)
     db.commit()
     db.refresh(db_article)
     return db_article
 
 
-@app.get("/articles", response_model=list[schemas.ArticleResponse])
-def get_articles(country: str | None = None, db: Session = Depends(get_db)):
+@app.get("/articles", response_model=schemas.ArticlePage)
+def get_articles(
+    country: str | None = None,
+    region: str | None = None,
+    level: str | None = Query(default=None, pattern="^(low|medium|high)$"),
+    q: str | None = None,
+    days: int | None = Query(default=None, ge=1, le=365),
+    limit: int = Query(default=60, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Paginated article feed.
+
+    This used to return the entire table with joins on every request; the
+    frontend then paginated in the browser.
+    """
     query = (
         db.query(models.Article)
         .options(
-            joinedload(models.Article.source)
-            .joinedload(models.Source.country)
+            joinedload(models.Article.source),
+            joinedload(models.Article.country_rel),
         )
     )
 
-    if country:
-        country_term = country.strip()
-        if country_term:
-            query = (
-                query.join(models.Article.source)
-                .join(models.Source.country)
-                .filter(
-                    (models.Country.iso_code == country_term.upper()) |
-                    (models.Country.name.ilike(country_term))
-                )
+    if country or region:
+        query = query.join(models.Article.country_rel)
+        if country:
+            term = country.strip()
+            query = query.filter(
+                (models.Country.iso_code == term.upper())
+                | (models.Country.name.ilike(term))
             )
+        if region:
+            query = query.filter(models.Country.region == region.strip())
 
-    return query.order_by(models.Article.published_at.desc()).all()
+    if level:
+        query = query.filter(models.Article.geo_risk_level == level)
+
+    if q:
+        pattern = f"%{q.strip()}%"
+        query = query.filter(
+            models.Article.title.ilike(pattern)
+            | models.Article.description.ilike(pattern)
+        )
+
+    if days:
+        query = query.filter(
+            models.Article.published_at >= datetime.utcnow() - timedelta(days=days)
+        )
+
+    total = query.with_entities(func.count(models.Article.id)).order_by(None).scalar() or 0
+    items = (
+        query.order_by(models.Article.published_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 # =========================================================
-# MANUAL INGEST ENDPOINT (single country)
+# INGEST ENDPOINTS
 # =========================================================
 @app.post("/ingest-news")
 def ingest_news(country_iso: str, db: Session = Depends(get_db)):
-    saved = ingest_news_for_country(country_iso, db)
+    ingest.ensure_country_catalog_in_db(db)
+    saved = ingest.ingest_news_for_country(country_iso, db)
     return {"message": "News ingestion completed", "articles_saved": saved}
-
-
-# =========================================================
-# MULTI-COUNTRY BATCH INGEST (uses global COUNTRY catalog)
-# =========================================================
-@app.post("/ingest-all")
-def ingest_all_countries(
-    limit: int = Query(default=50, ge=1, le=249),
-    db: Session = Depends(get_db)
-):
-    print("====================================")
-    print("GLOBAL INGESTION")
-    print("====================================")
-
-    ensure_country_catalog_in_db(db)
-    results = {}
-    selected = COUNTRIES[:limit]
-    for country_cfg in selected:
-        get_or_create_country(db, country_cfg)
-        saved = ingest_news_for_country(country_cfg["code"], db)
-        results[country_cfg["code"]] = saved
-
-    total = sum(results.values())
-    print(f"OK Total across {len(selected)} countries: {total}")
-
-    return {
-        "message": "Global ingestion completed",
-        "catalog_total": len(COUNTRIES),
-        "ingested_count": len(selected),
-        "results": results,
-        "total_saved": total
-    }
 
 
 @app.post("/ingest-batch")
 def ingest_country_batch(
-    size: int = Query(default=25, ge=1, le=100),
-    db: Session = Depends(get_db)
+    size: int = Query(default=15, ge=1, le=100),
+    db: Session = Depends(get_db),
 ):
-    ensure_country_catalog_in_db(db)
-    batch, start_idx = get_country_batch(db, size)
-    results = {}
-    for country_cfg in batch:
-        get_or_create_country(db, country_cfg)
-        saved = ingest_news_for_country(country_cfg["code"], db)
-        results[country_cfg["code"]] = saved
-
+    """Run one ingest cycle: global feeds plus the next slice of countries."""
+    summary = ingest.run_ingest_cycle(db, batch_size=size)
     return {
         "message": "Batch ingestion completed",
         "catalog_total": len(COUNTRIES),
-        "batch_start_index": start_idx,
-        "batch_size": len(batch),
-        "total_saved": sum(results.values()),
-        "results": results,
+        **summary,
     }
 
 
-@app.get("/country-catalog")
-def get_country_catalog():
+@app.post("/ingest-all")
+def ingest_all_countries(
+    limit: int = Query(default=50, ge=1, le=249),
+    db: Session = Depends(get_db),
+):
+    ingest.ensure_country_catalog_in_db(db)
+    ingest.ingest_global_feeds(db)
+
+    results = {}
+    for country_cfg in COUNTRIES[:limit]:
+        try:
+            results[country_cfg["code"]] = ingest.ingest_news_for_country(country_cfg["code"], db)
+        except Exception as e:
+            db.rollback()
+            logger.warning("[ERR] Ingest failed for %s: %s", country_cfg["code"], e)
+            results[country_cfg["code"]] = 0
+
     return {
-        "total": len(COUNTRIES),
-        "sample": COUNTRIES[:20]
+        "message": "Global ingestion completed",
+        "catalog_total": len(COUNTRIES),
+        "ingested_count": len(results),
+        "results": results,
+        "total_saved": sum(results.values()),
     }
 
 
 # =========================================================
 # INTEL ALERT ENGINE
 # =========================================================
-def calculate_alert_status(db: Session):
+def calculate_alert_status(db: Session) -> list[dict]:
     """
-    Compute a weighted geopolitical alert level per country using the
-    new semantic engine scores stored per article (geo_risk_score).
+    Weighted geopolitical alert level per country.
 
-    Optimized to fetch all countries and articles in 2 queries,
-    grouping them in-memory to prevent N+1 queries.
+    Computed by the database in a single aggregate query; this used to load
+    every article into Python on each request.
     """
-    countries = db.query(models.Country).all()
-    
-    # Query all articles with their sources joined
-    articles = (
-        db.query(models.Article)
-        .join(models.Source, models.Article.source_id == models.Source.id)
+    risk_expr = func.coalesce(
+        models.Article.geo_risk_score,
+        func.abs(func.coalesce(models.Article.sentiment_score, 0.0)) * 100,
+    )
+    high_expr = case((models.Article.geo_risk_level == "high", 1), else_=0)
+
+    rows = (
+        db.query(
+            models.Country.name,
+            models.Country.iso_code,
+            models.Country.region,
+            func.count(models.Article.id).label("total"),
+            func.avg(risk_expr).label("avg_risk"),
+            func.sum(high_expr).label("high_count"),
+        )
+        .outerjoin(models.Article, models.Article.country_id == models.Country.id)
+        .group_by(models.Country.id, models.Country.name, models.Country.iso_code, models.Country.region)
         .all()
     )
-    
-    # Group articles by country_id in memory
-    from collections import defaultdict
-    articles_by_country = defaultdict(list)
-    for a in articles:
-        if a.source and a.source.country_id:
-            articles_by_country[a.source.country_id].append(a)
+
+    # Corpus-wide mean, weighted by article count, used as the shrinkage prior.
+    scored = [(int(t or 0), float(a)) for *_, t, a, _ in rows if t and a is not None]
+    total_articles = sum(t for t, _ in scored)
+    global_mean = (
+        sum(t * a for t, a in scored) / total_articles if total_articles else 0.0
+    )
 
     results = []
+    for name, iso_code, region, total, avg_risk, high_count in rows:
+        total = int(total or 0)
+        raw_score = float(avg_risk) if total and avg_risk is not None else 0.0
 
-    for country in countries:
-        all_articles = articles_by_country[country.id]
-        total_articles = len(all_articles)
-
-        if total_articles == 0:
-            results.append({
-                "country": country.name,
-                "iso_code": country.iso_code,
-                "total_articles": 0,
-                "critical_alerts": 0,
-                "alert_level": 0.0,
-                "alert_status": "low",
-            })
-            continue
-
-        # ── Use geo_risk_score if available, fall back to |sentiment_score|*100 ──
-        scored = [
-            a.geo_risk_score if a.geo_risk_score is not None
-            else (abs(a.sentiment_score or 0.0) * 100)
-            for a in all_articles
-        ]
-
-        high_risk_count = sum(1 for a in all_articles if (a.geo_risk_level or a.sentiment_label) in ("high",))
-
-        # Simple average (all articles equally weighted)
-        risk_score = round(sum(scored) / total_articles, 2)
-
-        if risk_score >= 70:
-            risk_level = "high"
-        elif risk_score >= 40:
-            risk_level = "medium"
+        if total:
+            # Bayesian shrinkage: a mean over one article is not evidence of a
+            # national threat level, so pull it toward the global mean.
+            score = (
+                (total * raw_score + ALERT_CONFIDENCE_WEIGHT * global_mean)
+                / (total + ALERT_CONFIDENCE_WEIGHT)
+            )
         else:
-            risk_level = "low"
+            score = 0.0
 
-        logger.info(
-            "[SCAN] Risk: %s → score=%.1f level=%s hi=%d/%d",
-            country.name, risk_score, risk_level, high_risk_count, total_articles,
-        )
+        score = round(score, 2)
+
+        if score >= HIGH_RISK_THRESHOLD:
+            status = "high"
+        elif score >= MEDIUM_RISK_THRESHOLD:
+            status = "medium"
+        else:
+            status = "low"
 
         results.append({
-            "country": country.name,
-            "iso_code": country.iso_code,
-            "total_articles": total_articles,
-            "critical_alerts": high_risk_count,
-            "alert_level": risk_score,
-            "alert_status": risk_level,
+            "country": name,
+            "iso_code": iso_code,
+            "region": region,
+            "total_articles": total,
+            "critical_alerts": int(high_count or 0),
+            "alert_level": score,
+            "raw_alert_level": round(raw_score, 2),
+            "alert_status": status,
         })
 
     results.sort(key=lambda r: r["alert_level"], reverse=True)
     return results
 
 
-@app.get("/alert-analysis")
-def alert_analysis(db: Session = Depends(get_db)):
-    """Backend-wide intelligence scan to determine global alert statuses."""
-    print("GEOPOLITICAL INTELLIGENCE SCAN")
+@app.get("/alert-analysis", response_model=list[schemas.AlertResponse])
+def alert_analysis(
+    active_only: bool = Query(default=False, description="Only countries with articles"),
+    db: Session = Depends(get_db),
+):
+    """Backend-wide intelligence scan producing per-country alert statuses."""
     try:
         results = calculate_alert_status(db)
-        print(f"OK Intelligence scan complete - {len(results)} countries evaluated")
-        return results
     except Exception as e:
-        print(f"ERROR Intelligence scan: {e}")
-        return []
+        logger.exception("[ERR] Intelligence scan failed: %s", e)
+        raise HTTPException(status_code=500, detail="Intelligence scan failed") from e
+
+    if active_only:
+        results = [r for r in results if r["total_articles"] > 0]
+    logger.info("[SCAN] Intelligence scan complete - %s countries", len(results))
+    return results
+
+
+@app.get("/stats")
+def stats(db: Session = Depends(get_db)):
+    """Aggregate counts used by the dashboard header."""
+    by_level = dict(
+        db.query(models.Article.geo_risk_level, func.count(models.Article.id))
+        .group_by(models.Article.geo_risk_level)
+        .all()
+    )
+    by_event = dict(
+        db.query(models.Article.event_type, func.count(models.Article.id))
+        .group_by(models.Article.event_type)
+        .all()
+    )
+    by_provider = dict(
+        db.query(models.Article.provider, func.count(models.Article.id))
+        .group_by(models.Article.provider)
+        .all()
+    )
+    return {
+        "total_articles": ingest.article_count(db),
+        "by_risk_level": by_level,
+        "by_event_type": by_event,
+        "by_provider": by_provider,
+    }

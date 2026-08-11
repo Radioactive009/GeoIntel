@@ -1,13 +1,14 @@
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
 
 
 # ---------- COUNTRY ----------
 class CountryBase(BaseModel):
     name: str
     iso_code: str
-    region: str
+    region: Optional[str] = None
 
 
 class CountryCreate(CountryBase):
@@ -17,14 +18,12 @@ class CountryCreate(CountryBase):
 class CountryResponse(CountryBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------- SOURCE ----------
 class SourceBase(BaseModel):
     name: str
-    country_id: int
 
 
 class SourceCreate(SourceBase):
@@ -34,10 +33,8 @@ class SourceCreate(SourceBase):
 class SourceResponse(BaseModel):
     id: int
     name: str
-    country: CountryResponse
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------- ARTICLE ----------
@@ -49,6 +46,7 @@ class ArticleBase(BaseModel):
 
 
 class ArticleCreate(ArticleBase):
+    country_id: Optional[int] = None
     event_type: Optional[str] = None
     category: Optional[str] = None
 
@@ -59,15 +57,42 @@ class ArticleResponse(BaseModel):
     description: Optional[str] = None
     url: str
     published_at: datetime
+    provider: Optional[str] = None
+
     sentiment_score: Optional[float] = None
     sentiment_label: Optional[str] = None
     geo_risk_score: Optional[float] = None
     geo_risk_level: Optional[str] = None
     event_type: Optional[str] = None
     category: Optional[str] = None
+
+    # Flattened from the article's country relationship.
     country: Optional[str] = None
     country_iso_code: Optional[str] = None
-    source: SourceResponse
+    region: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    source: Optional[SourceResponse] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ArticlePage(BaseModel):
+    """Paginated article feed. The old endpoint returned the whole table."""
+    items: list[ArticleResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+# ---------- ALERTS ----------
+class AlertResponse(BaseModel):
+    country: str
+    iso_code: str
+    region: Optional[str] = None
+    total_articles: int
+    critical_alerts: int
+    # Sample-size adjusted score used for ranking and map colour.
+    alert_level: float
+    # Unadjusted mean, exposed so the adjustment stays inspectable.
+    raw_alert_level: float = 0.0
+    alert_status: str

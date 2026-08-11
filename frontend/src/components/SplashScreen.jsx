@@ -1,10 +1,45 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue, useTransform, animate } from 'framer-motion';
+import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
+import worldTopoJson from 'world-atlas/countries-110m.json';
 import Logo from './Logo';
 
-// Optimized 1K Textures
-const EARTH_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_1024.jpg";
-const CLOUD_TEXTURE = "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png";
+// The globe used to hotlink Earth textures from raw.githubusercontent.com,
+// which browsers block (ERR_BLOCKED_BY_ORB) — the sphere rendered solid black
+// and the splash screen depended on a third-party host being reachable.
+// The surface is now drawn from the world-atlas data already bundled for the
+// dashboard map, so it is self-contained and always renders.
+const STRIP_WIDTH = 600;   // equirectangular is 2:1, matching the 300px sphere
+const STRIP_HEIGHT = 300;
+
+const WorldStrip = () => (
+    <div style={{ width: STRIP_WIDTH, height: STRIP_HEIGHT }} className="shrink-0">
+        <ComposableMap
+            projection="geoEquirectangular"
+            width={STRIP_WIDTH}
+            height={STRIP_HEIGHT}
+            projectionConfig={{ scale: STRIP_WIDTH / (2 * Math.PI) }}
+            style={{ width: '100%', height: '100%' }}
+        >
+            <rect x={0} y={0} width={STRIP_WIDTH} height={STRIP_HEIGHT} fill="#04121f" />
+            <Geographies geography={worldTopoJson}>
+                {({ geographies }) =>
+                    geographies.map((geo) => (
+                        <Geography
+                            key={geo.rsmKey}
+                            geography={geo}
+                            style={{
+                                default: { fill: '#0f766e', stroke: '#22d3ee', strokeWidth: 0.3, outline: 'none' },
+                                hover: { fill: '#0f766e', outline: 'none' },
+                                pressed: { fill: '#0f766e', outline: 'none' },
+                            }}
+                        />
+                    ))
+                }
+            </Geographies>
+        </ComposableMap>
+    </div>
+);
 
 // ── Technical Grid Background ─────────────────────────────
 const CyberGrid = () => (
@@ -194,12 +229,22 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
             
             <div className="relative w-[300px] h-[300px] rounded-full overflow-hidden border border-white/10 shadow-2xl bg-black transform-gpu">
                 <motion.div style={{ x: xSurface }} className="absolute inset-y-0 left-0 flex brightness-110 contrast-125 saturate-125">
-                    <img src={EARTH_TEXTURE} alt="" className="h-full w-auto max-w-none" />
-                    <img src={EARTH_TEXTURE} alt="" className="h-full w-auto max-w-none" />
+                    <WorldStrip />
+                    <WorldStrip />
                 </motion.div>
-                <motion.div style={{ x: xCloud }} className="absolute inset-y-0 left-0 flex opacity-40 mix-blend-screen scale-[1.02]">
-                    <img src={CLOUD_TEXTURE} alt="" className="h-full w-auto max-w-none" />
-                    <img src={CLOUD_TEXTURE} alt="" className="h-full w-auto max-w-none" />
+                {/* Cloud band: a drifting gradient veil instead of a remote PNG. */}
+                <motion.div style={{ x: xCloud }} className="absolute inset-y-0 left-0 flex opacity-30 mix-blend-screen scale-[1.02]">
+                    <div
+                        className="shrink-0 h-full"
+                        style={{
+                            width: STRIP_WIDTH * 2,
+                            backgroundImage:
+                                'radial-gradient(ellipse 18% 30% at 12% 35%, rgba(255,255,255,0.55), transparent 60%),' +
+                                'radial-gradient(ellipse 22% 25% at 38% 65%, rgba(255,255,255,0.4), transparent 60%),' +
+                                'radial-gradient(ellipse 15% 35% at 62% 30%, rgba(255,255,255,0.5), transparent 60%),' +
+                                'radial-gradient(ellipse 20% 28% at 86% 60%, rgba(255,255,255,0.42), transparent 60%)',
+                        }}
+                    />
                 </motion.div>
                 <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_25%_25%,rgba(255,255,255,0.08)_0%,rgba(0,0,0,0)_45%,rgba(0,0,0,0.7)_75%,rgba(0,0,0,1)_100%)]" />
                 <div className="absolute inset-0 pointer-events-none rounded-full shadow-[inset_0_0_60px_rgba(34,211,238,0.3),inset_0_0_120px_rgba(59,130,246,0.1)] opacity-70" />

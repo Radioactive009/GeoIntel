@@ -1,65 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldTopoJson from 'world-atlas/countries-110m.json';
+import {
+    normalizeCountry,
+    geoToAlpha2,
+    getGeoName,
+    getAlertColorByLevel,
+} from '../utils/country';
 
 const geoUrl = worldTopoJson;
-
-const COUNTRY_ALIASES = {
-    'united states of america': 'united states',
-    usa: 'united states',
-    russia: 'russian federation',
-    iran: 'iran, islamic republic of',
-    'russian federation': 'russia',
-    'iran (islamic republic of)': 'iran',
-    'dem rep congo': 'congo, the democratic republic of the',
-    'central african rep': 'central african republic',
-    'dominican rep': 'dominican republic',
-    'eq guinea': 'equatorial guinea',
-    'falkland is': 'falkland islands (malvinas)',
-    'bosnia and herz': 'bosnia and herzegovina',
-    laos: "lao people's democratic republic",
-    macedonia: 'north macedonia',
-    moldova: 'moldova, republic of',
-    'north korea': "korea, democratic people's republic of",
-    'south korea': 'korea, republic of',
-    syria: 'syrian arab republic',
-    tanzania: 'tanzania, united republic of',
-    turkey: 'türkiye',
-    venezuela: 'venezuela, bolivarian republic of',
-    vietnam: 'viet nam',
-    bolivia: 'bolivia, plurinational state of',
-    palestine: 'palestine, state of',
-    brunei: 'brunei darussalam',
-    'solomon is': 'solomon islands',
-    's sudan': 'south sudan',
-};
-
-const normalizeCountry = (value) => {
-    if (!value) return '';
-    const normalized = value
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/[().,]/g, '')
-        .replace(/\s+/g, ' ');
-    const aliased = COUNTRY_ALIASES[normalized] || normalized;
-    return aliased
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/[().,]/g, '')
-        .replace(/\s+/g, ' ');
-};
-
-const getAlertColor = (level) => {
-    if (typeof level !== 'number') return '#1f2937';
-    if (level > 70) return '#ef4444';
-    if (level > 40) return '#f59e0b';
-    return '#22c55e';
-};
-
-const getDisplayCountryName = (geoProperties) =>
-    geoProperties?.NAME || geoProperties?.ADMIN || geoProperties?.name || 'Unknown';
 
 const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
     const [tooltip, setTooltip] = useState(null);
@@ -114,7 +63,7 @@ const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
         const byName = new Map();
         const byIso = new Map();
 
-        alertData.forEach((item) => {
+        (alertData || []).forEach((item) => {
             if (item?.country) byName.set(normalizeCountry(item.country), item);
             if (item?.iso_code) byIso.set(item.iso_code.toUpperCase(), item);
         });
@@ -123,8 +72,8 @@ const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
     }, [alertData]);
 
     const selectedNormalized = normalizeCountry(selectedCountry);
-    const TOOLTIP_WIDTH = 190;
-    const TOOLTIP_HEIGHT = 64;
+    const TOOLTIP_WIDTH = 200;
+    const TOOLTIP_HEIGHT = 78;
     const TOOLTIP_GAP = 12;
 
     const getTooltipPosition = (clientX, clientY) => {
@@ -164,39 +113,40 @@ const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
                         <Geographies geography={geoUrl}>
                             {({ geographies }) =>
                                 geographies.map((geo) => {
-                                    const countryName = getDisplayCountryName(geo.properties);
-                                    const normalizedName = normalizeCountry(countryName);
-                                    const isoCode =
-                                        geo.properties?.ISO_A2 ||
-                                        geo.properties?.iso_a2 ||
-                                        geo.properties?.ISO2 ||
-                                        '';
+                                    const geoName = getGeoName(geo.properties);
+                                    const normalizedName = normalizeCountry(geoName);
+                                    // Resolve by ISO code first: the TopoJSON carries a numeric
+                                    // ISO id, which is exact, unlike matching display names.
+                                    const isoCode = geoToAlpha2(geo);
                                     const alertRecord =
+                                        (isoCode && alertLookup.byIso.get(isoCode)) ||
                                         alertLookup.byName.get(normalizedName) ||
-                                        alertLookup.byIso.get(isoCode.toUpperCase()) ||
                                         null;
-                                    const alertLevel = alertRecord?.alert_level;
-                                    const isSelected = selectedNormalized === normalizedName;
 
-                                    const selectedCountryName = alertRecord?.country || countryName;
+                                    const alertLevel = alertRecord?.alert_level;
+                                    const displayName = alertRecord?.country || geoName;
+                                    const isSelected =
+                                        selectedNormalized &&
+                                        selectedNormalized === normalizeCountry(displayName);
 
                                     return (
                                         <Geography
                                             key={geo.rsmKey}
                                             geography={geo}
-                                            onClick={() => onCountrySelect(selectedCountryName)}
+                                            onClick={() => onCountrySelect(isSelected ? '' : displayName)}
                                             onMouseEnter={(event) => {
                                                 const pos = getTooltipPosition(event.clientX, event.clientY);
                                                 setTooltip({
                                                     x: pos.x,
                                                     y: pos.y,
-                                                    countryName,
+                                                    countryName: displayName,
                                                     alertLevel,
+                                                    totalArticles: alertRecord?.total_articles,
                                                 });
 
-                                                if (lastHoveredCountryRef.current !== countryName) {
-                                                    playHoverTone(countryName, alertLevel);
-                                                    lastHoveredCountryRef.current = countryName;
+                                                if (lastHoveredCountryRef.current !== displayName) {
+                                                    playHoverTone(displayName, alertLevel);
+                                                    lastHoveredCountryRef.current = displayName;
                                                 }
                                             }}
                                             onMouseMove={(event) => {
@@ -209,7 +159,7 @@ const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
                                             onMouseLeave={() => setTooltip(null)}
                                             style={{
                                                 default: {
-                                                    fill: isSelected ? '#3b82f6' : getAlertColor(alertLevel),
+                                                    fill: isSelected ? '#3b82f6' : getAlertColorByLevel(alertLevel),
                                                     stroke: '#0f172a',
                                                     strokeWidth: isSelected ? 1.2 : 0.6,
                                                     outline: 'none',
@@ -247,14 +197,18 @@ const MapChart = ({ alertData, selectedCountry, onCountrySelect }) => {
                                     {typeof tooltip.alertLevel === 'number' ? `${tooltip.alertLevel.toFixed(1)}%` : 'No data'}
                                 </span>
                             </p>
+                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-0.5">
+                                {tooltip.totalArticles ? `${tooltip.totalArticles} reports` : 'No reports yet'}
+                            </p>
                         </div>
                     )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4 mt-4 text-[10px] uppercase tracking-widest font-bold text-slate-500">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> STABLE</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#10b981]" /> STABLE</span>
                     <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ELEVATED</span>
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" /> CRITICAL</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f43f5e]" /> CRITICAL</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1f2937]" /> NO DATA</span>
                     <span className="text-slate-400">Node Selected: {selectedCountry || 'None'}</span>
                 </div>
             </div>

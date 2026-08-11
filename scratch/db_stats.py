@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-db_path = r"c:\Users\kisla\Desktop\News\geopolitics.db"
+db_path = r"d:\Projects\News\geopolitics.db"
 if not os.path.exists(db_path):
     print("DB not found")
 else:
