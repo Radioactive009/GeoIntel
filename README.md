@@ -29,6 +29,12 @@ GeoIntel AI collects global news, resolves which country each story is about, sc
 - Per-country alert levels computed in a single aggregate query
 - Scores are shrunk toward the global mean by sample size, so a country with one alarming article does not top the world ranking
 
+📈 Risk History & Escalation
+- Every ingest cycle records where each country stands, one row per country per hour
+- Sparklines on the alert ranking show each country's recent trajectory
+- The escalation board ranks movers by **z-score against each country's own baseline**, not raw delta — so an unusual move in a normally quiet zone outranks routine noise somewhere volatile
+- Countries without enough history are skipped rather than guessed at; the board says how much baseline it still needs
+
 🏗️ System Architecture
 
 ```
@@ -96,6 +102,9 @@ VITE_API_URL=https://your-backend.onrender.com npm run build
 | GET | `/health` | Pipeline status: article counts, attribution rate, providers |
 | GET | `/articles` | Paginated feed — `country`, `region`, `level`, `q`, `days`, `limit`, `offset` |
 | GET | `/alert-analysis` | Per-country alert levels (`active_only=true` to skip empty countries) |
+| GET | `/trends` | Risk history per country — `hours`, `points`, `country` |
+| GET | `/movers` | Escalating / de-escalating countries — `hours`, `limit` |
+| POST | `/snapshot` | Force a risk-history capture (runs automatically each cycle) |
 | GET | `/stats` | Counts by risk level, event type and provider |
 | GET | `/countries` · `/sources` | Reference data |
 | POST | `/ingest-batch?size=N` | Run one ingest cycle now |
@@ -108,6 +117,7 @@ All settings are environment variables — see [.env.example](.env.example). Not
 - `INGEST_BATCH_SIZE`, `INGEST_INTERVAL_MINUTES` — ingestion cadence
 - `RETENTION_DAYS` — how long articles are kept
 - `ALERT_CONFIDENCE_WEIGHT` — how strongly low-sample countries are damped
+- `TREND_RETENTION_DAYS` — how long risk-history snapshots are kept
 - `ENABLE_SCHEDULER` — set `false` on extra web workers so only one runs ingestion
 - `ALLOWED_ORIGINS` — CORS origins for production
 - `DATABASE_URL` — Postgres URL; unset falls back to local SQLite
