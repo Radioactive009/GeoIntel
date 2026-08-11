@@ -64,6 +64,9 @@ const Dashboard = () => {
     const [selectedLevel, setSelectedLevel] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [chartFilter, setChartFilter] = useState('top');
+    const [trendSeries, setTrendSeries] = useState({});
+    const [movers, setMovers] = useState(null);
+    const [trendWindow, setTrendWindow] = useState(168);
 
     // Articles are paginated and filtered by the backend; the dashboard used
     // to download every article and slice it in the browser.
@@ -106,8 +109,27 @@ const Dashboard = () => {
         }
     }, []);
 
+    // Risk history powers both the ranking sparklines and the escalation board.
+    // Failures here must never blank the dashboard — history simply may not
+    // exist yet on a freshly seeded instance.
+    const fetchTrends = useCallback(async () => {
+        try {
+            const [trendRes, moverRes] = await Promise.all([
+                getTrends({ hours: trendWindow, points: 24 }),
+                getMovers({ hours: trendWindow, limit: 5 }),
+            ]);
+            setTrendSeries(trendRes.data?.series || {});
+            setMovers(moverRes.data || null);
+        } catch (err) {
+            console.error(err);
+            setTrendSeries({});
+            setMovers(null);
+        }
+    }, [trendWindow]);
+
     useEffect(() => { fetchArticles(); }, [fetchArticles]);
     useEffect(() => { fetchOverview(); }, [fetchOverview]);
+    useEffect(() => { fetchTrends(); }, [fetchTrends]);
 
     // Reset to the first page whenever the filters change.
     useEffect(() => { setCurrentPage(1); }, [selectedCountry, selectedRegion, selectedLevel]);
@@ -117,7 +139,7 @@ const Dashboard = () => {
         setError(null);
         try {
             await triggerIngestion(10);
-            await Promise.all([fetchArticles(), fetchOverview()]);
+            await Promise.all([fetchArticles(), fetchOverview(), fetchTrends()]);
         } catch (err) {
             console.error(err);
             setError('Intelligence sync failed. The ingestion cycle timed out or the backend is unreachable.');
@@ -346,7 +368,7 @@ const Dashboard = () => {
                                 <button
                                     key={item.iso_code}
                                     onClick={() => setSelectedCountry(item.country)}
-                                    className="w-full text-left flex items-center gap-4 p-4 rounded-3xl bg-slate-900/40 border border-white/5 transition-transform duration-300 hover:translate-x-1"
+                                    className="w-full text-left flex items-center gap-3 p-4 rounded-3xl bg-slate-900/40 border border-white/5 transition-transform duration-300 hover:translate-x-1"
                                 >
                                     <span className="text-xs font-bold text-slate-600 tabular-nums w-4">0{i + 1}</span>
                                     <div className="text-2xl leading-none">{getFlagEmoji(item.iso_code)}</div>
@@ -364,10 +386,27 @@ const Dashboard = () => {
                                             </span>
                                         </div>
                                     </div>
+                                    <Sparkline
+                                        points={trendSeries[item.iso_code]}
+                                        color={getAlertColor(item.alert_status)}
+                                        width={58}
+                                        height={24}
+                                    />
                                 </button>
                             ))}
                         </div>
                     </div>
+                </section>
+
+                {/* ── SECTION 2b: ESCALATION ────────────────── */}
+                <section className="mb-12">
+                    <EscalationPanel
+                        movers={movers}
+                        series={trendSeries}
+                        windowHours={trendWindow}
+                        onWindowChange={setTrendWindow}
+                        onSelect={setSelectedCountry}
+                    />
                 </section>
 
                 {/* ── SECTION 3: INTELLIGENCE FEED ─────────── */}
