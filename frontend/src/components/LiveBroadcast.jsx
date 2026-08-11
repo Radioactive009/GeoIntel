@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Radio, Play, Volume2, VolumeX, ExternalLink, Tv } from 'lucide-react';
-import { getFlagEmoji, normalizeCountry } from '../utils/country';
+import { normalizeCountry } from '../utils/country';
+import ChannelSelect from './ChannelSelect';
 
 /**
  * Live broadcast player.
@@ -21,6 +22,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, loading }) => {
     const userPicked = useRef(false);
 
     const live = useMemo(() => channels.filter((c) => c.is_live && c.live_video_id), [channels]);
+    const offline = useMemo(() => channels.filter((c) => !c.is_live || !c.live_video_id), [channels]);
 
     // Follow the map/sidebar selection unless the viewer has picked a channel.
     const countryMatch = useMemo(() => {
@@ -148,36 +150,14 @@ const LiveBroadcast = ({ channels = [], selectedCountry, loading }) => {
                         </div>
                     </div>
 
-                    {started && (
-                        <p className="text-[11px] text-slate-400 font-medium px-1 line-clamp-1">
-                            <span className="text-white font-bold">{active.name}</span>
-                            {active.live_title ? ` · ${active.live_title}` : ''}
-                        </p>
-                    )}
-
-                    {/* Channel rail — buttons only, no players. */}
-                    <div className="flex gap-2 overflow-x-auto chart-scrollbar pb-2">
-                        {live.map((channel) => {
-                            const isActive = active && channel.id === active.id;
-                            return (
-                                <button
-                                    key={channel.id}
-                                    onClick={() => pick(channel)}
-                                    className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-2xl border transition-all ${
-                                        isActive
-                                            ? 'bg-cyan-500/15 border-cyan-500/40 text-white'
-                                            : 'bg-slate-900/40 border-white/5 text-slate-400 hover:border-white/15 hover:text-white'
-                                    }`}
-                                    title={channel.live_title || channel.name}
-                                >
-                                    <span className="text-base leading-none">
-                                        {getFlagEmoji(channel.country_iso_code)}
-                                    </span>
-                                    <span className="text-[11px] font-bold whitespace-nowrap">{channel.name}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
+                    {/* Searchable picker — a rail of chips stopped scaling once
+                        the catalog grew past a couple of dozen channels. */}
+                    <ChannelSelect
+                        channels={live}
+                        offline={offline}
+                        activeId={active.id}
+                        onSelect={pick}
+                    />
 
                     {selectedCountry && !countryMatch && (
                         <p className="text-[10px] text-slate-600 font-medium px-1">

@@ -250,8 +250,12 @@ const Dashboard = () => {
                     </div>
                 </header>
 
-                {/* ── SECTION 1: MAP + LIVE BROADCAST ──────── */}
-                <section className="grid grid-cols-1 xl:grid-cols-5 gap-8 mb-12 items-start">
+                {/* ── SECTION 1: MAP + LIVE BROADCAST ────────
+                    `relative z-30` is load-bearing: every section below uses
+                    animate-fade-in-up, and a transform creates a stacking
+                    context, so without an explicit z-index here the channel
+                    dropdown would paint underneath the stat cards. */}
+                <section className="relative z-30 grid grid-cols-1 xl:grid-cols-5 gap-8 mb-12 items-start">
                     <div className="xl:col-span-3">
                         <MapChart
                             alertData={activeAlertData}
