@@ -35,6 +35,7 @@ const EVENT_LABELS = {
     economic: 'Economic',
     political: 'Political',
     hazard: 'Hazard',
+    other: 'Unclassified',
 };
 
 const ArticleCard = ({ article, index }) => {

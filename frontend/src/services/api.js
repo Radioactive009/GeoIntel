@@ -68,8 +68,38 @@ export const getChannels = ({ country = '', liveOnly = false } = {}) => {
 
 export const getHealth = () => api.get('/health');
 
+export const getIngestStatus = () => api.get('/ingest-status');
+
+/** Kick off a background ingest cycle. Returns as soon as the server accepts. */
 export const triggerIngestion = (size = 10) =>
-    api.post('/ingest-batch', null, { params: { size }, timeout: 180000 });
+    api.post('/ingest-batch', null, { params: { size } });
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Start an ingest cycle and resolve once it finishes.
+ *
+ * The cycle used to run inside the POST, which regularly outlived both the
+ * axios timeout and the 30-60s gateway timeout on a typical PaaS, so a
+ * successful ingest still surfaced as a failure. The server now runs it in
+ * the background and this polls for completion.
+ */
+export const runIngestion = async (size = 10, { timeoutMs = 300000, intervalMs = 3000 } = {}) => {
+    await triggerIngestion(size);
+
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        await wait(intervalMs);
+        const { data } = await getIngestStatus();
+        if (!data?.running) {
+            if (data?.last_error) throw new Error(data.last_error);
+            return data?.last_summary || null;
+        }
+    }
+    // Ingestion is still going; the caller refreshes anyway and picks up
+    // whatever landed, rather than reporting a failure that did not happen.
+    return null;
+};
 
 export { API_URL };
 export default api;

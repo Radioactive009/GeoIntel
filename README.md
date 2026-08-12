@@ -5,7 +5,7 @@ GeoIntel AI collects global news, resolves which country each story is about, sc
 🚀 Features
 
 📰 Multi-Source News Ingestion
-- RSS feeds from major international outlets (BBC, Al Jazeera, Guardian, DW, France 24, UN News, TASS and more)
+- RSS feeds from major international outlets (BBC, Al Jazeera, Guardian, DW, France 24, TASS and more)
 - A per-country Google News search feed — keyless and unlimited, so the pipeline works with no API keys at all
 - Optional NewsAPI and GNews providers when keys are configured
 - Rotating ingestion across the full 249-country ISO catalog

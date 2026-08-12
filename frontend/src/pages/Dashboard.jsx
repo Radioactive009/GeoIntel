@@ -213,8 +213,23 @@ const Dashboard = () => {
         [activeAlertData]
     );
 
+    // selectedCountry may hold an ISO code (map click) or a name (sidebar).
+    // The backend accepts either; this is purely what the viewer reads.
+    const selectedLabel = useMemo(() => {
+        if (!selectedCountry) return '';
+        const hit = activeAlertData.find((r) =>
+            matchesCountry(selectedCountry, { name: r.country, iso: r.iso_code })
+        );
+        return hit?.country || selectedCountry;
+    }, [activeAlertData, selectedCountry]);
+
     const totalPages = Math.max(1, Math.ceil(totalArticles / ARTICLES_PER_PAGE));
     const idxFirst = (currentPage - 1) * ARTICLES_PER_PAGE;
+
+    // A shrinking result set can strand the viewer past the last page.
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
 
     const resetFilters = () => {
         setSelectedCountry('');
@@ -280,6 +295,7 @@ const Dashboard = () => {
                         <MapChart
                             alertData={activeAlertData}
                             selectedCountry={selectedCountry}
+                            selectedLabel={selectedLabel}
                             onCountrySelect={setSelectedCountry}
                             heightClass="h-[340px] md:h-[440px] xl:h-[500px]"
                         />
@@ -288,6 +304,7 @@ const Dashboard = () => {
                         <LiveBroadcast
                             channels={channels}
                             selectedCountry={selectedCountry}
+                            selectedLabel={selectedLabel}
                             loading={channelsLoading}
                         />
                     </div>
@@ -468,7 +485,9 @@ const Dashboard = () => {
                     <Sidebar
                         countries={countries}
                         regions={regions}
-                        selectedCountry={selectedCountry}
+                        // The label, not the raw value: a map click sets an ISO
+                        // code, which would match no <option> and blank the select.
+                        selectedCountry={selectedLabel}
                         selectedRegion={selectedRegion}
                         selectedLevel={selectedLevel}
                         onCountryChange={setSelectedCountry}
@@ -486,7 +505,7 @@ const Dashboard = () => {
                                     <Search size={18} className="text-cyan-400" />
                                 </div>
                                 <h2 className="text-base font-bold text-white uppercase tracking-widest">
-                                    {selectedCountry ? `Satellite Feed: ${selectedCountry}` : 'Global Intelligence Feed'}
+                                    {selectedCountry ? `Satellite Feed: ${selectedLabel}` : 'Global Intelligence Feed'}
                                 </h2>
                             </div>
                             <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest tabular-nums">
