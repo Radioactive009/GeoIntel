@@ -1,5 +1,6 @@
 from sqlalchemy import (
-    Column, Integer, String, ForeignKey, DateTime, Float, Index, UniqueConstraint,
+    Boolean, Column, Integer, String, ForeignKey, DateTime, Float, Index,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -123,10 +124,14 @@ class Channel(Base):
 
     country_id = Column(Integer, ForeignKey("countries.id"), index=True)
     language = Column(String)
-    is_enabled = Column(Integer, default=True)
+    # Boolean, not Integer: SQLite treats them interchangeably, but Postgres
+    # rejects a Python bool bound to an INTEGER column ("column is of type
+    # integer but expression is of type boolean"), and `.is_(True)` filters
+    # fail the same way. Declaring the real type keeps both backends working.
+    is_enabled = Column(Boolean, default=True, nullable=False)
 
     # Liveness cache, refreshed on a schedule.
-    is_live = Column(Integer, default=False)
+    is_live = Column(Boolean, default=False, nullable=False)
     live_video_id = Column(String)
     live_title = Column(String)
     checked_at = Column(DateTime)

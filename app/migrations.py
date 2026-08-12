@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Legacy source names carried an ingest tag: "BBC News (GNews) [AE]".
 SOURCE_TAG_RE = re.compile(r"\s*\((?:GNews|RSS|Google RSS)\)|\s*\[[A-Z]{2}\]\s*$")
 
+# Marks the one-shot purge of pre-window risk snapshots.
+_HISTORY_RESET_KEY = "migration_risk_history_windowed"
+
 ARTICLE_COLUMNS = {
     "sentiment_score": "FLOAT",
     "sentiment_label": "VARCHAR",
@@ -43,6 +46,35 @@ def _existing_columns(conn, table: str) -> set[str]:
     if table not in inspector.get_table_names():
         return set()
     return {col["name"] for col in inspector.get_columns(table)}
+
+
+def _column_types(conn, table: str) -> dict[str, str]:
+    inspector = inspect(conn)
+    if table not in inspector.get_table_names():
+        return {}
+    return {col["name"]: str(col["type"]).upper() for col in inspector.get_columns(table)}
+
+
+def _flag(conn, key: str) -> bool:
+    """Has this one-shot data migration already run?"""
+    if "system_state" not in inspect(conn).get_table_names():
+        return False
+    row = conn.execute(
+        text("SELECT value FROM system_state WHERE key = :k"), {"k": key}
+    ).fetchone()
+    return bool(row)
+
+
+def _set_flag(conn, key: str, value: str = "done") -> None:
+    if "system_state" not in inspect(conn).get_table_names():
+        return
+    conn.execute(
+        text("DELETE FROM system_state WHERE key = :k"), {"k": key}
+    )
+    conn.execute(
+        text("INSERT INTO system_state (key, value) VALUES (:k, :v)"),
+        {"k": key, "v": value},
+    )
 
 
 def _add_missing_columns(conn) -> None:
@@ -124,6 +156,69 @@ def _drop_source_country(conn) -> None:
     logger.info("[MIGRATE] Cleared legacy sources.country_id links")
 
 
+def _fix_channel_booleans(conn) -> None:
+    """
+    Bring channels.is_enabled / is_live in line with the Boolean model columns.
+
+    These were declared Integer originally and the tables in the wild were
+    created that way. SQLite hides the difference through type affinity, so
+    the mismatch is invisible locally — but Postgres rejects a Python bool
+    bound to an INTEGER column ("column is of type integer but expression is
+    of type boolean") and fails `.is_(True)` filters the same way. Changing
+    the model alone does not touch an existing table: create_all only creates,
+    it never alters, so without this step a deployed Postgres instance keeps
+    failing exactly as before.
+    """
+    columns = _column_types(conn, "channels")
+    if not columns:
+        return
+
+    # The model declares these NOT NULL; legacy rows may hold NULL.
+    for name, default in (("is_enabled", 1), ("is_live", 0)):
+        if name in columns:
+            conn.execute(
+                text(f"UPDATE channels SET {name} = :d WHERE {name} IS NULL"),
+                {"d": default},
+            )
+
+    if conn.dialect.name != "postgresql":
+        return  # SQLite stores bool and int in the same affinity
+
+    for name in ("is_enabled", "is_live"):
+        current = columns.get(name)
+        if not current or "BOOL" in current:
+            continue
+        conn.execute(text(
+            f"ALTER TABLE channels ALTER COLUMN {name} "
+            f"TYPE BOOLEAN USING ({name} <> 0)"
+        ))
+        conn.execute(text(f"ALTER TABLE channels ALTER COLUMN {name} SET NOT NULL"))
+        logger.info("[MIGRATE] channels.%s converted to BOOLEAN", name)
+
+
+def _reset_cumulative_risk_history(conn) -> None:
+    """
+    Drop risk snapshots captured before the window fix.
+
+    Those rows hold the cumulative all-time mean over the whole corpus rather
+    than a reading for their hour, so they are not on the same scale as the
+    windowed rows that replace them. Leaving them in place would make the
+    first real snapshot look like an enormous step change and poison every
+    z-score in compute_movers until they aged out.
+    """
+    if _flag(conn, _HISTORY_RESET_KEY):
+        return
+    if "country_risk_history" not in inspect(conn).get_table_names():
+        return
+    deleted = conn.execute(text("DELETE FROM country_risk_history")).rowcount or 0
+    _set_flag(conn, _HISTORY_RESET_KEY)
+    if deleted:
+        logger.info(
+            "[MIGRATE] Cleared %s pre-window risk snapshots; history rebuilds from "
+            "the next ingest cycle", deleted,
+        )
+
+
 def _backfill_article_countries(conn) -> int:
     """
     Re-resolve the country of every article that has none.
@@ -171,6 +266,15 @@ def run_migrations(engine: Engine) -> None:
         _create_indexes(conn)
         _dedupe_sources(conn)
         _drop_source_country(conn)
+
+    # Each of these can fail independently on a backend-specific quirk without
+    # invalidating the structural work above, so they get their own transaction.
+    for step in (_fix_channel_booleans, _reset_cumulative_risk_history):
+        try:
+            with engine.begin() as conn:
+                step(conn)
+        except Exception as e:
+            logger.warning("[MIGRATE] %s skipped: %s", step.__name__, e)
 
     # Backfill runs in its own transaction so a resolver failure cannot roll
     # back the structural changes above.

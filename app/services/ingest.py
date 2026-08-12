@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -106,12 +107,18 @@ def save_cursor(db: Session, cursor: int) -> None:
 
 
 def get_country_batch(db: Session, size: int) -> tuple[list[dict], int]:
+    """
+    Next slice of the rotating catalog.
+
+    The cursor is *not* advanced here — the caller advances it once the batch
+    has actually been ingested. Advancing up front meant a batch that died
+    mid-cycle was skipped until the cursor wrapped all 249 countries.
+    """
     if not COUNTRIES:
         return [], 0
     size = max(1, min(size, len(COUNTRIES)))
     current = load_cursor(db) % len(COUNTRIES)
     batch = [COUNTRIES[(current + i) % len(COUNTRIES)] for i in range(size)]
-    save_cursor(db, (current + size) % len(COUNTRIES))
     return batch, current
 
 
@@ -169,22 +176,76 @@ def _clean_source_name(raw: str | None) -> str:
     return name or "Unknown Source"
 
 
-def _get_source_map(db: Session, names: set[str]) -> dict[str, models.Source]:
-    """Fetch or create every source in one pass instead of one commit each."""
+def _source_ids(db: Session, names: set[str]) -> dict[str, int]:
+    """
+    Fetch or create every source in one pass instead of one commit each.
+
+    Committed rather than flushed: the article insert below may have to roll
+    back (a racing writer can claim a URL between the duplicate check and the
+    insert), and a rollback would take uncommitted sources with it, leaving
+    the article rows pointing at ids that no longer exist. A source with no
+    articles yet is harmless — prune_orphan_sources clears it.
+    """
     if not names:
         return {}
-    existing = {
-        s.name: s
-        for s in db.query(models.Source).filter(models.Source.name.in_(list(names))).all()
-    }
+
+    def lookup() -> dict[str, int]:
+        return {
+            name: sid
+            for sid, name in db.query(models.Source.id, models.Source.name)
+            .filter(models.Source.name.in_(list(names)))
+            .all()
+        }
+
+    existing = lookup()
     missing = names - set(existing)
+    if not missing:
+        return existing
+
     for name in missing:
-        source = models.Source(name=name)
-        db.add(source)
-        existing[name] = source
-    if missing:
-        db.flush()  # assign ids without committing
-    return existing
+        db.add(models.Source(name=name))
+    try:
+        db.commit()
+    except IntegrityError:
+        # Another ingest thread created the same outlet first.
+        db.rollback()
+    return lookup()
+
+
+def _insert_articles(db: Session, prepared: list[dict]) -> int:
+    """
+    Persist prepared article rows, tolerating a racing duplicate URL.
+
+    articles.url is UNIQUE and the duplicate check upstream is a
+    check-then-insert, so a concurrent cycle (the scheduler overlapping a
+    manual /ingest-batch) can claim a URL in between. One collision used to
+    abort the flush and discard the *whole* batch — verified: five items, one
+    conflict, four good rows lost — and the caller logged it as "0 saved".
+
+    The bulk path stays the fast default; only a conflict falls back to
+    per-row savepoints, so the cost is paid only when it is actually needed.
+    """
+    if not prepared:
+        return 0
+
+    try:
+        db.add_all([models.Article(**row) for row in prepared])
+        db.commit()
+        return len(prepared)
+    except IntegrityError:
+        db.rollback()
+        logger.info("  [RACE] Duplicate URL in batch - retrying %s rows individually", len(prepared))
+
+    saved = 0
+    for row in prepared:
+        try:
+            with db.begin_nested():  # SAVEPOINT: a conflict rolls back this row only
+                db.add(models.Article(**row))
+            saved += 1
+        except IntegrityError:
+            continue  # another writer stored this URL first
+    db.commit()
+    return saved
 
 
 def _existing_urls(db: Session, urls: list[str]) -> set[str]:
@@ -238,12 +299,16 @@ def store_articles(
         _clean_source_name((item.get("source") or {}).get("name"))
         for item in fresh.values()
     }
-    sources = _get_source_map(db, source_names)
+    sources = _source_ids(db, source_names)
 
-    saved = 0
+    prepared: list[dict] = []
     for url, item in fresh.items():
         title = item.get("title")
         description = item.get("description")
+
+        source_id = sources.get(_clean_source_name((item.get("source") or {}).get("name")))
+        if source_id is None:
+            continue  # source row lost a create race and is gone; skip rather than orphan
 
         iso = resolve_primary_country(title, description)
         country_id = country_iso_to_id.get(iso) if iso else None
@@ -260,11 +325,11 @@ def store_articles(
             else geo_risk_score / 100.0
         )
 
-        db.add(models.Article(
+        prepared.append(dict(
             title=title,
             description=description,
             url=url,
-            source_id=sources[_clean_source_name((item.get("source") or {}).get("name"))].id,
+            source_id=source_id,
             country_id=country_id,
             provider=item.get("provider", "rss"),
             published_at=_parse_published(item.get("publishedAt")),
@@ -275,10 +340,8 @@ def store_articles(
             event_type=event_type,
             category=category,
         ))
-        saved += 1
 
-    db.commit()
-    return saved
+    return _insert_articles(db, prepared)
 
 
 def country_iso_to_id(db: Session) -> dict[str, int]:
@@ -347,8 +410,18 @@ def delete_old_articles(db: Session) -> int:
 
 
 def prune_orphan_sources(db: Session) -> int:
-    """Remove sources that no longer have any articles."""
-    subquery = db.query(models.Article.source_id).distinct()
+    """
+    Remove sources that no longer have any articles.
+
+    The NULL filter is load-bearing: `NOT IN (subquery containing NULL)`
+    evaluates to NULL for every row, so a single article with no source_id
+    used to silently disable pruning entirely.
+    """
+    subquery = (
+        db.query(models.Article.source_id)
+        .filter(models.Article.source_id.isnot(None))
+        .distinct()
+    )
     deleted = (
         db.query(models.Source)
         .filter(~models.Source.id.in_(subquery))
@@ -373,6 +446,11 @@ def run_ingest_cycle(db: Session, batch_size: int | None = None) -> dict:
             db.rollback()
             logger.warning("[ERR] Ingest failed for %s: %s", country_cfg["code"], e)
             results[country_cfg["code"]] = 0
+
+    # Advance only after the batch has been attempted, so a crash mid-cycle
+    # retries these countries next time instead of skipping them.
+    if batch:
+        save_cursor(db, (start_idx + len(batch)) % len(COUNTRIES))
 
     delete_old_articles(db)
     prune_orphan_sources(db)

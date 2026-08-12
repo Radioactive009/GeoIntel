@@ -48,7 +48,7 @@ RSS_FEEDS = [
     {"name": "The Guardian World", "url": "https://www.theguardian.com/world/rss"},
     {"name": "France 24", "url": "https://www.france24.com/en/rss"},
     {"name": "Deutsche Welle", "url": "https://rss.dw.com/rdf/rss-en-world"},
-    {"name": "UN News", "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml"},
+    # UN News was dropped: news.un.org now 404s on every published feed path.
     {"name": "Channel News Asia", "url": "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml"},
     {"name": "Sky News World", "url": "https://feeds.skynews.com/feeds/rss/world.xml"},
     {"name": "The Hindu", "url": "https://www.thehindu.com/news/national/feeder/default.rss"},

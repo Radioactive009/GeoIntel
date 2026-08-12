@@ -45,6 +45,74 @@ CASE_SENSITIVE_TERMS = {
 # reached through an explicit alias instead ("North Korea", "South Korea").
 BLOCKED_BARE_NAMES = {"korea", "virgin islands", "congo", "samoa", "ireland"}
 
+# ── Person-name disambiguation ───────────────────────────────────────────
+#
+# Capitalisation alone cannot separate a country from a person: a headline
+# capitalises both. "Jordan Peterson speaks in Toronto" resolved to Jordan,
+# "Chad Johnson signs with new team" to Chad. These terms therefore also
+# require that they are not acting as a given name — judged by whether the
+# very next token is a capitalised word that looks like a surname.
+PERSON_NAME_AMBIGUOUS = {
+    "jordan", "chad", "georgia", "israel", "kenya", "paris", "france",
+    "guinea", "mali", "monaco", "panama", "cuba", "chile", "india",
+    "china", "asia", "africa", "dominica", "grenada", "malta", "somalia",
+    "togo", "niger", "oman", "brazil", "holland", "sierra leone",
+}
+
+# Capitalised words that routinely follow a country in a headline. A term
+# followed by one of these is the country, not half a person's name — without
+# this, title-case headlines ("Jordan Says It Will Reopen Border") would be
+# vetoed wholesale.
+FOLLOWER_STOPWORDS = {
+    # headline verbs
+    "says", "said", "will", "warns", "warned", "urges", "urged", "calls",
+    "called", "seeks", "sought", "backs", "backed", "hits", "bans", "banned",
+    "signs", "signed", "sends", "sent", "denies", "denied", "rejects",
+    "rejected", "accuses", "accused", "slams", "slammed", "vows", "vowed",
+    "eyes", "faces", "faced", "halts", "halted", "opens", "opened", "holds",
+    "held", "marks", "announces", "announced", "launches", "launched",
+    "confirms", "confirmed", "reports", "reported", "plans", "planned",
+    "sets", "set", "cuts", "raises", "raised", "adds", "agrees", "agreed",
+    "moves", "moved", "pushes", "pushed", "wins", "won", "loses", "lost",
+    "begins", "began", "ends", "ended", "returns", "returned", "joins",
+    "joined", "leaves", "left", "takes", "took", "gets", "makes", "made",
+    "keeps", "kept", "blocks", "blocked", "strikes", "struck", "fires",
+    "fired", "orders", "ordered", "extends", "boosts", "cancels", "resumes",
+    # function words
+    "and", "or", "to", "in", "on", "at", "for", "with", "by", "as", "is",
+    "are", "was", "were", "has", "have", "had", "not", "no", "after",
+    "before", "amid", "over", "under", "from", "into", "the", "a", "an",
+    "its", "it", "he", "she", "they", "we", "you", "this", "that",
+    # roles and institutions
+    "pm", "president", "prime", "minister", "ministry", "government", "govt",
+    "army", "navy", "military", "forces", "troops", "official", "officials",
+    "leader", "leaders", "parliament", "cabinet", "court", "police",
+    "central", "bank", "foreign", "defence", "defense", "state", "envoy",
+    "ambassador", "delegation", "team", "coach", "captain",
+    # time words
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+    "sunday", "today", "tomorrow", "yesterday", "january", "february",
+    "march", "april", "may", "june", "july", "august", "september",
+    "october", "november", "december",
+}
+
+# Whole-text vetoes for homonyms that no adjacency rule can catch: the US
+# state of Georgia, and the bird. Matching any of these drops that country
+# from consideration for the article entirely.
+CONTEXT_VETO: dict[str, re.Pattern] = {
+    "GE": re.compile(
+        r"\b(?:u\.?s\.?|american)\s+state\b|\batlanta\b|\bpeach\s+state\b|"
+        r"\bgovernor\b|\bgeorgia\s+(?:tech|bulldogs|southern|state)\b|"
+        r"\bsavannah\b|\bfulton\s+county\b",
+        re.IGNORECASE,
+    ),
+    "TR": re.compile(
+        r"\bthanksgiving\b|\brecipes?\b|\bpoultry\b|\broast(?:ed|ing)?\s+turkey\b|"
+        r"\bstuffing\b|\bcranberr\w*\b|\bgravy\b|\bbutterball\b",
+        re.IGNORECASE,
+    ),
+}
+
 # Extra terms mapped onto ISO alpha-2 codes: aliases, demonyms, capitals and
 # well-known regions. These carry most of the recall for geopolitical news.
 EXTRA_TERMS: dict[str, tuple[str, ...]] = {

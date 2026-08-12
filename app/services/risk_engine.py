@@ -46,14 +46,21 @@ EVENT_WEIGHTS: dict[str, float] = {
     "attack":       0.65,
     "bombing":      0.65,
     "airstrike":    0.65,
+    "airstrikes":   0.65,
+    "assassination": 0.65,
     "missile":      0.60,
     "explosion":    0.60,
     "coup":         0.60,
     "terror":       0.60,
     "killed":       0.60,
+    "shelling":     0.60,
     # Tier 3 — Moderate (0.45 - 0.55)
     "conflict":     0.55,
     "violence":     0.55,
+    "artillery":    0.55,
+    "insurgency":   0.55,
+    "hostage":      0.55,
+    "militants":    0.50,
     "troops":       0.50,
     "military":     0.45,
     "sanctions":    0.45,
@@ -77,12 +84,28 @@ EVENT_WEIGHTS: dict[str, float] = {
 # EVENT TYPE CLASSIFICATION
 # ─────────────────────────────────────────────
 EVENT_TYPES = {
-    "military": ["attack", "missile", "troops", "airstrike", "invasion", "war", "military", "bombing", "explosion", "navy", "army", "airforce"],
+    # "strike"/"strikes"/"shelling"/"drone" were missing, so "Israel strikes
+    # Gaza" matched no military term at all and lost the classification to
+    # "ceasefire" in the diplomatic list — a bombardment filed as diplomacy.
+    "military": ["attack", "missile", "troops", "airstrike", "airstrikes", "strike", "strikes",
+                 "shelling", "drone", "drones", "artillery", "offensive", "rocket", "rockets",
+                 "incursion", "raid", "militants", "insurgents", "warship", "soldiers",
+                 "invasion", "war", "military", "bombing", "explosion", "navy", "army", "airforce"],
     "diplomatic": ["talks", "meeting", "agreement", "summit", "diplomacy", "treaty", "negotiation", "peace", "ceasefire"],
     "economic": ["sanctions", "trade", "oil", "economy", "tariffs", "market", "currency", "finance"],
     "political": ["election", "protest", "government", "parliament", "regime", "coup", "policy"],
     "hazard": ["toxic", "chemical", "hazard", "outbreak", "epidemic", "biological", "contamination", "poison"]
 }
+
+# Ties used to be broken by dict insertion order, which happened to favour
+# "military" by accident. The order is now explicit: a story that reads as
+# both military and diplomatic (strikes during ceasefire talks) is a military
+# story with diplomatic framing, not the other way round.
+EVENT_TYPE_PRIORITY = ("military", "hazard", "political", "economic", "diplomatic")
+
+# Returned when no keyword matches at all. Previously "political", which
+# asserted a classification the engine had no evidence for.
+UNCLASSIFIED_EVENT_TYPE = "other"
 
 # ─────────────────────────────────────────────
 # DYNAMIC MITIGATION SYSTEM
@@ -103,6 +126,35 @@ MITIGATION_CONFIG = {
 }
 
 # ─────────────────────────────────────────────
+# MITIGATION GUARDS
+#
+# A de-escalation phrase only counts if the story is not simultaneously
+# reporting that the de-escalation failed, or reporting casualties.
+# ─────────────────────────────────────────────
+_MITIGATION_VOIDER = re.compile(
+    r"\b(?:collaps\w*|broke\s+down|breaks?\s+down|broken|violat\w*|breach\w*|"
+    r"fail\w*|reject\w*|refus\w*|abandon\w*|withdraw\w*|withdrew|expir\w*|"
+    r"shatter\w*|crumbl\w*|unravel\w*|end(?:s|ed|ing)?\b|despite|"
+    r"short[- ]lived|no\s+ceasefire|without\s+agreement)\b"
+)
+
+# "no casualties" must not itself read as casualties, so negated spans are
+# removed before looking for the real thing.
+_NEGATED_CASUALTY = re.compile(
+    r"\bno\s+(?:reported\s+|confirmed\s+|known\s+)?"
+    r"(?:casualt\w*|fatalit\w*|deaths?|injur\w*|victims?)\b"
+)
+_CASUALTY = re.compile(
+    r"\b(?:killed|killing|dead|deaths?|casualt\w*|fatalit\w*|massacr\w*|"
+    r"wounded|slain|bodies)\b"
+)
+
+
+def _reports_casualties(text_lower: str) -> bool:
+    return bool(_CASUALTY.search(_NEGATED_CASUALTY.sub(" ", text_lower)))
+
+
+# ─────────────────────────────────────────────
 # STRATEGIC ACTIVITY DETECTION
 # ─────────────────────────────────────────────
 CONFLICT_KEYWORDS = ["attack", "killed", "kills", "war", "dead", "death", "destroyed", "violence", "blood", "clash", "fighting", "bombing", "airstrike", "invasion", "casualty", "massacre", "genocide"]
@@ -114,8 +166,13 @@ def _classify_event_type(text: str) -> str:
         for kw in keywords:
              if re.search(rf"\b{re.escape(kw)}\b", text_lower):
                 type_counts[etype] += 1
-    max_type = max(type_counts, key=type_counts.get)
-    return max_type if type_counts[max_type] > 0 else "political"
+    # Sort by hit count, then by the explicit priority above, so the winner
+    # never depends on dict ordering.
+    best = max(
+        EVENT_TYPE_PRIORITY,
+        key=lambda etype: (type_counts.get(etype, 0), -EVENT_TYPE_PRIORITY.index(etype)),
+    )
+    return best if type_counts.get(best, 0) > 0 else UNCLASSIFIED_EVENT_TYPE
 
 def _detect_category(text: str, event_type: str) -> str:
     text_lower = text.lower()
@@ -140,11 +197,29 @@ def _detect_events(text: str) -> Tuple[float, list[str]]:
     return raw, detected
 
 def _detect_mitigation(text: str) -> float:
+    """
+    De-escalation weight, or 0.0 when the text contradicts its own calm words.
+
+    Mitigation used to be a bare substring test, so the *word* "ceasefire" was
+    enough to knock 20 points off a story about a ceasefire collapsing:
+    "Ceasefire collapses as Israel strikes Gaza, dozens killed" scored 66.44
+    (medium) purely because of it. Two guards now apply before any phrase is
+    credited — a contradiction cue anywhere in the text, and casualties that
+    are actually being reported rather than being ruled out.
+    """
     text_lower = text.lower()
+
+    if _MITIGATION_VOIDER.search(text_lower):
+        return 0.0
+    if _reports_casualties(text_lower):
+        return 0.0
+
     max_reduction = 0.0
-    for category, config in MITIGATION_CONFIG.items():
+    for config in MITIGATION_CONFIG.values():
         for phrase in config["phrases"]:
-            if phrase in text_lower:
+            # Word-boundary, not substring: "peace" must not fire on "peaceful
+            # protest crushed".
+            if re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text_lower):
                 max_reduction = max(max_reduction, config["weight"])
     return max_reduction
 
@@ -158,7 +233,7 @@ def score_article(text: str) -> Tuple[float, str, str, str]:
     Returns (risk_score, risk_level, event_type, category)
     """
     if not text or not text.strip():
-        return 0.0, "low", "political", "news"
+        return 0.0, "low", UNCLASSIFIED_EVENT_TYPE, "news"
 
     # 1. Detection
     event_score, events = _detect_events(text)
@@ -193,7 +268,9 @@ def score_article(text: str) -> Tuple[float, str, str, str]:
         final_score = 55.0
         risk_level = "medium"
 
-    logger.info(
+    # debug, not info: this runs once per article, so at the default INFO level
+    # a single backfill emitted a line for every row in the table.
+    logger.debug(
         "[CALC] Lightweight Analysis: Score=%s, Level=%s, Type=%s, Cat=%s | Events=%s",
         final_score, risk_level, event_type, category, events
     )

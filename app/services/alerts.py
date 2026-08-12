@@ -23,7 +23,7 @@ import statistics
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -44,6 +44,21 @@ ALERT_CONFIDENCE_WEIGHT = max(0.0, float(os.getenv("ALERT_CONFIDENCE_WEIGHT", "5
 # populating a usable trend within a day.
 TREND_RETENTION_DAYS = max(1, int(os.getenv("TREND_RETENTION_DAYS", "30")))
 
+# Window a snapshot looks back over.
+#
+# A snapshot must describe a *moment*, not the whole corpus. Without this the
+# capture aggregated every article ever stored, so each hourly row held the
+# cumulative 30-day mean: `article_count` only ever grew (91 -> 126 -> 165 ->
+# 388 for one country) and the score drifted by fractions of a point. Every
+# consumer downstream — sparklines, /trends, and the z-scores in
+# compute_movers — was therefore measuring corpus growth rather than events,
+# and the variance of the series shrank as the corpus grew, so a genuine spike
+# could never clear the baseline.
+#
+# 24h rather than the 1h bucket spacing: an hour of ingest yields one or two
+# articles for most countries, which is too small a sample to score.
+SNAPSHOT_WINDOW_HOURS = max(1, int(os.getenv("SNAPSHOT_WINDOW_HOURS", "24")))
+
 # Escalation needs a baseline to compare against.
 MIN_BASELINE_POINTS = 3
 # Floor on the baseline spread, so a perfectly flat country doesn't produce a
@@ -62,18 +77,29 @@ def risk_level(score: float) -> str:
     return "low"
 
 
-def compute_alert_status(db: Session) -> list[dict]:
+def compute_alert_status(db: Session, since: datetime | None = None) -> list[dict]:
     """
     Weighted geopolitical alert level per country.
 
     Computed by the database in a single aggregate query; this used to load
     every article into Python on each request.
+
+    ``since`` restricts the aggregate to articles published after that moment,
+    which is what makes a point-in-time reading possible. It is applied to the
+    join condition rather than as a WHERE clause: a WHERE on the right-hand
+    table of an outer join silently turns it into an inner join, which would
+    drop every country that has no articles in the window instead of scoring
+    it zero.
     """
     risk_expr = func.coalesce(
         models.Article.geo_risk_score,
         func.abs(func.coalesce(models.Article.sentiment_score, 0.0)) * 100,
     )
     high_expr = case((models.Article.geo_risk_level == "high", 1), else_=0)
+
+    join_condition = models.Article.country_id == models.Country.id
+    if since is not None:
+        join_condition = and_(join_condition, models.Article.published_at >= since)
 
     rows = (
         db.query(
@@ -85,7 +111,7 @@ def compute_alert_status(db: Session) -> list[dict]:
             func.avg(risk_expr).label("avg_risk"),
             func.sum(high_expr).label("high_count"),
         )
-        .outerjoin(models.Article, models.Article.country_id == models.Country.id)
+        .outerjoin(models.Article, join_condition)
         .group_by(
             models.Country.id,
             models.Country.name,
@@ -144,13 +170,21 @@ def _hour_bucket(moment: datetime | None = None) -> datetime:
 
 def capture_snapshot(db: Session, moment: datetime | None = None) -> int:
     """
-    Record the current risk level of every country that has articles.
+    Record where every active country stands *right now*.
+
+    Scored over the trailing SNAPSHOT_WINDOW_HOURS rather than the whole
+    corpus, so `risk_score` and `article_count` describe this moment and the
+    series they form can actually move. See SNAPSHOT_WINDOW_HOURS.
 
     Idempotent within an hour: re-running an ingest cycle updates that hour's
     row rather than appending a duplicate.
     """
     bucket = _hour_bucket(moment)
-    statuses = [row for row in compute_alert_status(db) if row["total_articles"] > 0]
+    since = bucket - timedelta(hours=SNAPSHOT_WINDOW_HOURS)
+    statuses = [
+        row for row in compute_alert_status(db, since=since)
+        if row["total_articles"] > 0
+    ]
     if not statuses:
         return 0
 
