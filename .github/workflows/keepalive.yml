@@ -1,0 +1,100 @@
+# Keeps the API awake and the feed fresh.
+#
+# Two problems, one request. A free-tier host stops the container after ~15
+# minutes with no traffic, so:
+#   * the next real visitor waits 30-60s for a cold boot, and
+#   * the in-process scheduler is stopped too, so no ingestion runs between
+#     visits and the news goes stale.
+#
+# The GET below is itself the traffic that prevents the stop, and its response
+# says whether a cycle is overdue. The backend decides staleness, not this
+# workflow, so GitHub's famously unpunctual cron cannot cause double-ingestion:
+# if a run fires late, or twice, /health simply reports "not stale" and nothing
+# further happens.
+#
+# ── Setup ────────────────────────────────────────────────────────────────
+# Settings > Secrets and variables > Actions
+#   Variables > API_URL        = https://your-service.onrender.com
+#   Secrets   > ADMIN_API_KEY  = the same value as the backend's env var
+#
+# ADMIN_API_KEY is optional. Without it the job still keeps the service awake;
+# it just cannot trigger ingestion, so you rely on the in-process scheduler.
+#
+# ── Caveats ──────────────────────────────────────────────────────────────
+# * GitHub delays scheduled runs under load; 10 minutes is chosen to leave
+#   slack inside the ~15 minute idle window, but it is not a hard guarantee.
+# * GitHub disables scheduled workflows after 60 days without repository
+#   activity. If the service starts sleeping again months from now, check that
+#   this workflow is still enabled before looking anywhere else.
+# * Render's free plan allows 750 instance-hours/month against a ~730 hour
+#   month, so keeping ONE service always-on fits. Two will not.
+name: Keep API awake and news fresh
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wake the service and refresh if overdue
+        env:
+          API_URL: ${{ vars.API_URL }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${API_URL:-}" ]; then
+            echo "::warning::API_URL variable is not set — nothing to ping."
+            exit 0
+          fi
+          BASE="${API_URL%/}"
+
+          # --max-time 120: if the container had stopped, this request is the
+          # one paying the cold start. Waiting for it is the entire point.
+          echo "Waking $BASE ..."
+          health=$(curl --silent --show-error --location \
+                        --max-time 120 --retry 3 --retry-delay 20 --retry-connrefused \
+                        "$BASE/health")
+
+          stale=$(echo "$health"   | jq -r '.stale // false')
+          running=$(echo "$health" | jq -r '.ingest_running // false')
+          age=$(echo "$health"     | jq -r '.minutes_since_ingest // "never"')
+          count=$(echo "$health"   | jq -r '.articles // 0')
+
+          echo "awake · $count stories · last refresh: ${age} min ago · stale=$stale"
+
+          if [ "$stale" != "true" ]; then
+            echo "Feed is current — no refresh needed."
+            exit 0
+          fi
+          if [ "$running" = "true" ]; then
+            echo "A cycle is already in flight — leaving it alone."
+            exit 0
+          fi
+          if [ -z "${ADMIN_API_KEY:-}" ]; then
+            echo "::warning::Feed is stale but ADMIN_API_KEY is not set, so it cannot be refreshed here."
+            exit 0
+          fi
+
+          echo "Feed is stale — triggering a cycle."
+          # Returns 202 immediately; the cycle runs in the background, so this
+          # step must not wait for it to finish.
+          code=$(curl --silent --show-error --location --request POST \
+                      --max-time 60 \
+                      --header "X-API-Key: $ADMIN_API_KEY" \
+                      --output /dev/null --write-out '%{http_code}' \
+                      "$BASE/ingest-batch?size=15")
+
+          case "$code" in
+            202|200) echo "Refresh started." ;;
+            401)     echo "::error::ADMIN_API_KEY does not match the backend."; exit 1 ;;
+            *)       echo "::error::Trigger returned $code"; exit 1 ;;
+          esac
