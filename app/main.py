@@ -469,6 +469,24 @@ def refresh_channels(
     return channels.refresh_channels(db, force=force)
 
 
+@app.get("/channels/diagnostics")
+def channel_diagnostics(db: Session = Depends(get_db)):
+    """
+    Explain why channels are missing on *this* host.
+
+    Deployment failures are environment-specific — a cloud host may be blocked
+    from scraping YouTube, a key may be referrer-restricted, or the scheduler
+    may be disabled — so each dependency is probed and reported separately.
+    """
+    return channels.diagnostics(db)
+
+
+@app.post("/channels/repair")
+def repair_channels(db: Session = Depends(get_db)):
+    """Re-resolve stored channel ids that point at the wrong channel."""
+    return channels.repair_channel_ids(db)
+
+
 @app.get("/channels/preview")
 def preview_channel(handle: str = Query(..., description="YouTube handle, with or without @")):
     """

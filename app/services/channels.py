@@ -148,11 +148,39 @@ SEED_CHANNELS = [
 # ─────────────────────────────────────────────────────────
 # RESOLUTION HELPERS
 # ─────────────────────────────────────────────────────────
-def resolve_channel_id(handle: str) -> str | None:
-    """Resolve a @handle to its UC... channel id from the public channel page."""
-    url = f"https://www.youtube.com/@{handle}"
+def _resolve_channel_id_api(handle: str, key: str) -> str | None:
+    """channels.list?forHandle — 1 quota unit, authoritative, works from any IP."""
     try:
-        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        response = requests.get(
+            f"{YOUTUBE_API}/channels",
+            params={"part": "id", "forHandle": handle, "key": key},
+            timeout=REQUEST_TIMEOUT,
+        )
+        if response.status_code != 200:
+            logger.warning("  [WARN] channels.list %s for @%s: %s",
+                           response.status_code, handle, response.text[:120])
+            return None
+        items = response.json().get("items", [])
+        return items[0]["id"] if items else None
+    except (requests.RequestException, ValueError, KeyError, IndexError):
+        return None
+
+
+def _resolve_channel_id_scrape(handle: str) -> str | None:
+    """
+    Fallback for when no API key is configured.
+
+    Order matters. The page HTML contains a `"channelId"` for every channel it
+    references — recommendations, shelf items, related channels — and the first
+    match is frequently NOT the page's owner. That mis-resolved Al Jazeera
+    English to Al Jazeera Arabic. The canonical link and `externalId` both
+    identify the page owner, so they are tried first and bare `channelId` is
+    used only as a last resort.
+    """
+    try:
+        response = requests.get(
+            f"https://www.youtube.com/@{handle}", headers=HEADERS, timeout=REQUEST_TIMEOUT
+        )
     except requests.RequestException as e:
         logger.warning("  [WARN] Channel lookup failed for @%s: %s", handle, e)
         return None
@@ -161,13 +189,37 @@ def resolve_channel_id(handle: str) -> str | None:
         return None
 
     html = response.text
-    match = re.search(r'"(?:channelId|externalId)":"(UC[\w-]{22})"', html)
-    if match:
-        return match.group(1)
-    canonical = re.search(
-        r'<link rel="canonical" href="https://www\.youtube\.com/channel/(UC[\w-]{22})"', html
-    )
-    return canonical.group(1) if canonical else None
+    for pattern in (
+        r'<link rel="canonical" href="https://www\.youtube\.com/channel/(UC[\w-]{22})"',
+        r'"externalId":"(UC[\w-]{22})"',
+        r'"channelId":"(UC[\w-]{22})"',
+    ):
+        match = re.search(pattern, html)
+        if match:
+            return match.group(1)
+    return None
+
+
+def resolve_channel_id(handle: str) -> str | None:
+    """
+    Resolve a @handle to its UC... channel id.
+
+    Prefers the Data API: it is authoritative, costs 1 quota unit, and — unlike
+    scraping — is not blocked from datacenter IPs, which is what makes channel
+    seeding work on a host like Render.
+    """
+    handle = (handle or "").strip().lstrip("@")
+    if not handle:
+        return None
+
+    key = api_key()
+    if key:
+        resolved = _resolve_channel_id_api(handle, key)
+        if resolved:
+            return resolved
+        logger.info("  [CHANNEL] API could not resolve @%s, falling back to page lookup", handle)
+
+    return _resolve_channel_id_scrape(handle)
 
 
 def _keyless_live_video(channel_id: str) -> tuple[str | None, str | None]:
@@ -292,12 +344,29 @@ def _resolve_via_api(db: Session, channel_rows, key: str) -> dict[str, dict]:
         for c in channel_rows
     }
 
-    # 1. Free discovery.
+    # 1. Free discovery via the public page.
     with futures.ThreadPoolExecutor(max_workers=6) as pool:
         discovered = dict(zip(
             [c.youtube_channel_id for c in channel_rows],
             pool.map(lambda c: _keyless_live_video(c.youtube_channel_id)[0], channel_rows),
         ))
+
+    # Fall back to the id we already know about. This is what lets the system
+    # work on a host where page scraping is blocked (cloud IPs are commonly
+    # served a consent wall): without it, every refresh re-discovers from
+    # scratch, so only the handful of channels covered by the search budget
+    # could ever be live, and they would flip between refreshes. 24/7 streams
+    # keep the same video id for a long time, and verifying a cached id costs
+    # nothing extra — it rides along in the same batched videos.list call.
+    scraped = sum(1 for v in discovered.values() if v)
+    for channel in channel_rows:
+        if not discovered.get(channel.youtube_channel_id) and channel.live_video_id:
+            discovered[channel.youtube_channel_id] = channel.live_video_id
+    if not scraped and channel_rows:
+        logger.warning(
+            "[CHANNEL] Page discovery found nothing for any channel — this host is likely "
+            "blocked from youtube.com; relying on cached ids and the API search budget."
+        )
 
     # 2. One batched, authoritative check.
     candidates = [vid for vid in discovered.values() if vid]
@@ -320,8 +389,18 @@ def _resolve_via_api(db: Session, channel_rows, key: str) -> dict[str, dict]:
     missed = [c for c in channel_rows if not apply(c.youtube_channel_id, discovered.get(c.youtube_channel_id))]
 
     # 3. Bounded fallback, limited by both a per-refresh cap and a per-day one.
+    #
+    # On a cold database (fresh deploy, or a host with an ephemeral disk) there
+    # are no cached ids to fall back on, so a small per-refresh cap would take
+    # many cycles to populate the rail. Allow the first fill to use the whole
+    # remaining daily allowance — it is still hard-bounded, and afterwards
+    # cheap verification keeps the streams alive.
     _, used_today = _budget_state(db)
-    budget = min(SEARCH_BUDGET_PER_REFRESH, max(0, SEARCH_BUDGET_PER_DAY - used_today))
+    cold_start = not any(c.live_video_id for c in channel_rows)
+    per_refresh_cap = SEARCH_BUDGET_PER_DAY if cold_start else SEARCH_BUDGET_PER_REFRESH
+    if cold_start:
+        logger.info("[CHANNEL] Cold start - allowing a larger one-off discovery burst")
+    budget = min(per_refresh_cap, max(0, SEARCH_BUDGET_PER_DAY - used_today))
     searches = 0
     retry_ids = []
     for channel in missed:
@@ -438,6 +517,132 @@ def refresh_channels(db: Session, force: bool = False) -> dict:
     return {"checked": len(channels), "live": live, "mode": mode}
 
 
+def repair_channel_ids(db: Session) -> dict:
+    """
+    Re-resolve stored channel ids against the authoritative source.
+
+    Rows seeded before the resolver was fixed can point at a *different*
+    channel than their handle (the page scrape picked up a referenced channel),
+    which shows up as a broadcaster playing another outlet's stream.
+    """
+    key = api_key()
+    if not key:
+        return {"repaired": 0, "checked": 0, "reason": "no_api_key"}
+
+    rows = db.query(models.Channel).all()
+    taken = {c.youtube_channel_id: c.id for c in rows}
+    repaired, checked = [], 0
+
+    for channel in rows:
+        checked += 1
+        correct = _resolve_channel_id_api(channel.handle, key)
+        if not correct or correct == channel.youtube_channel_id:
+            continue
+        owner = taken.get(correct)
+        if owner is not None and owner != channel.id:
+            logger.warning(
+                "[CHANNEL] @%s should be %s but that id is already used - skipped",
+                channel.handle, correct,
+            )
+            continue
+        repaired.append({"handle": channel.handle, "was": channel.youtube_channel_id, "now": correct})
+        taken.pop(channel.youtube_channel_id, None)
+        taken[correct] = channel.id
+        channel.youtube_channel_id = correct
+        # Cached stream belonged to the wrong channel — force a re-resolve.
+        channel.live_video_id = None
+        channel.live_title = None
+        channel.is_live = False
+        channel.checked_at = None
+
+    db.commit()
+    if repaired:
+        logger.info("[CHANNEL] Repaired %s mis-resolved channel ids", len(repaired))
+    return {"checked": checked, "repaired": len(repaired), "changes": repaired}
+
+
+def diagnostics(db: Session) -> dict:
+    """
+    Why are there no live channels *here*?
+
+    Written for deployed environments: locally everything works, but a cloud
+    host can fail at a specific step (YouTube blocks datacenter IPs from page
+    scraping, an API key can be HTTP-referrer restricted so server-side calls
+    get 403, or the scheduler may never have run). Each dependency is probed
+    separately so the failing one is named rather than guessed at.
+    """
+    key = api_key()
+    report: dict = {
+        "api_key_configured": bool(key),
+        "channels_in_db": db.query(models.Channel).count(),
+        "channels_live": db.query(models.Channel).filter(models.Channel.is_live.is_(True)).count(),
+        "checks": {},
+    }
+
+    # 1. Can we reach youtube.com at all (page scraping path)?
+    try:
+        response = requests.get(
+            "https://www.youtube.com/@nhkworldjapan", headers=HEADERS, timeout=REQUEST_TIMEOUT
+        )
+        blocked = "consent" in response.url or response.status_code != 200
+        report["checks"]["youtube_page_scrape"] = {
+            "ok": not blocked,
+            "status": response.status_code,
+            "final_url": response.url[:90],
+            "note": "Datacenter IPs are often served a consent wall; keyless discovery then finds nothing."
+            if blocked else "Page fetch works from this host.",
+        }
+    except requests.RequestException as e:
+        report["checks"]["youtube_page_scrape"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    # 2. Does the API key work server-side (no Referer header is sent)?
+    if key:
+        try:
+            response = requests.get(
+                f"{YOUTUBE_API}/videos",
+                params={"part": "status", "id": "dQw4w9WgXcQ", "key": key},
+                timeout=REQUEST_TIMEOUT,
+            )
+            ok = response.status_code == 200
+            report["checks"]["youtube_api"] = {
+                "ok": ok,
+                "status": response.status_code,
+                "note": "OK" if ok else (
+                    "403 usually means the key is HTTP-referrer restricted. Server-to-server "
+                    "calls send no Referer, so restrict by IP (or leave unrestricted) instead."
+                ),
+                "error": None if ok else response.text[:200],
+            }
+        except requests.RequestException as e:
+            report["checks"]["youtube_api"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    else:
+        report["checks"]["youtube_api"] = {
+            "ok": False,
+            "note": "YOUTUBE_API_KEY is not set on this host. Without it, seeding relies on page "
+                    "scraping, which many cloud hosts are blocked from.",
+        }
+
+    # 3. Can we resolve one known handle end to end?
+    resolved = resolve_channel_id("nhkworldjapan")
+    report["checks"]["handle_resolution"] = {
+        "ok": bool(resolved),
+        "resolved": resolved,
+        "note": "If this fails, seed_channels creates no rows and the player has nothing to show.",
+    }
+
+    report["scheduler_env"] = {
+        "ENABLE_SCHEDULER": os.getenv("ENABLE_SCHEDULER", "true"),
+        "CHANNEL_REFRESH_MINUTES": CHANNEL_REFRESH_MINUTES,
+    }
+    failing = [name for name, c in report["checks"].items() if not c.get("ok")]
+    report["failing_checks"] = failing
+    report["summary"] = (
+        "All channel dependencies healthy." if not failing
+        else "Failing: " + ", ".join(failing)
+    )
+    return report
+
+
 def preview_handle(handle: str) -> dict:
     """
     Vet a YouTube handle before adding it — no database writes.
@@ -461,6 +666,13 @@ def preview_handle(handle: str) -> dict:
         }
 
     video_id, _ = _keyless_live_video(channel_id)
+    if not video_id:
+        # On a host blocked from scraping, the page lookup always comes back
+        # empty; ask the API before declaring the channel offline. This is a
+        # user-triggered action, so the 100-unit search is acceptable here.
+        key = api_key()
+        if key:
+            video_id = _search_live(channel_id, key)
     if not video_id:
         return {
             "handle": handle, "usable": False, "channel_id": channel_id,
