@@ -13,13 +13,15 @@ import os
 import threading
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+from html import escape
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -359,8 +361,16 @@ def get_articles(
     country: str | None = None,
     region: str | None = None,
     level: str | None = Query(default=None, pattern="^(low|medium|high)$"),
+    event_type: str | None = Query(
+        default=None,
+        pattern="^(military|diplomatic|economic|political|hazard|other)$",
+    ),
     q: str | None = None,
     days: int | None = Query(default=None, ge=1, le=365),
+    include_duplicates: bool = Query(
+        default=False,
+        description="Include syndicated re-reports of a story already in the feed",
+    ),
     limit: int = Query(default=60, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -395,6 +405,14 @@ def get_articles(
     if level:
         query = query.filter(models.Article.geo_risk_level == level)
 
+    if event_type:
+        query = query.filter(models.Article.event_type == event_type)
+
+    if not include_duplicates:
+        # One event, one card. `isnot(True)` keeps rows stored before the
+        # column existed, whose flag is NULL.
+        query = query.filter(models.Article.is_duplicate.isnot(True))
+
     q_term = (q or "").strip()
     if q_term:
         pattern = f"%{_like_escape(q_term)}%"
@@ -416,7 +434,210 @@ def get_articles(
         .all()
     )
 
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+    # How many outlets carried each story on this page. One extra grouped
+    # query for the whole page rather than a correlated subquery per row.
+    keys = [a.story_key for a in items if a.story_key]
+    counts: dict[str, int] = {}
+    if keys:
+        counts = dict(
+            db.query(models.Article.story_key, func.count(models.Article.id))
+            .filter(models.Article.story_key.in_(list(set(keys))))
+            .group_by(models.Article.story_key)
+            .all()
+        )
+
+    payload = []
+    for article in items:
+        row = schemas.ArticleResponse.model_validate(article)
+        row.duplicate_count = max(0, counts.get(article.story_key, 1) - 1)
+        payload.append(row)
+
+    return {"items": payload, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/articles/{article_id}", response_model=schemas.ArticleDetail)
+def get_article(article_id: int, db: Session = Depends(get_db)):
+    """
+    One article plus its related coverage.
+
+    Two relationships already exist in the data and were never surfaced: the
+    story cluster (the same event as carried by other outlets) and the
+    country links. Together they make a real article page possible without
+    any new analysis.
+    """
+    article = (
+        db.query(models.Article)
+        .options(
+            joinedload(models.Article.source),
+            joinedload(models.Article.country_rel),
+            joinedload(models.Article.country_secondary_rel),
+        )
+        .filter(models.Article.id == article_id)
+        .first()
+    )
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    def _decorate(rows):
+        return [schemas.ArticleResponse.model_validate(row) for row in rows]
+
+    base = (
+        db.query(models.Article)
+        .options(joinedload(models.Article.source), joinedload(models.Article.country_rel))
+        .filter(models.Article.id != article.id)
+    )
+
+    # Same event, different outlet.
+    also_reported = []
+    if article.story_key:
+        also_reported = base.filter(models.Article.story_key == article.story_key).limit(8).all()
+
+    # Same country, different event.
+    related = []
+    if article.country_id:
+        query = base.filter(
+            models.Article.country_id == article.country_id,
+            models.Article.is_duplicate.isnot(True),
+        )
+        if article.story_key:
+            # Exclude this event's cluster. Written as an explicit NULL check
+            # rather than `isnot(value)`: that renders `IS NOT 'key'`, which
+            # SQLite tolerates but Postgres rejects as a syntax error.
+            query = query.filter(
+                or_(
+                    models.Article.story_key.is_(None),
+                    models.Article.story_key != article.story_key,
+                )
+            )
+        related = query.order_by(models.Article.published_at.desc()).limit(6).all()
+
+    payload = schemas.ArticleDetail.model_validate(article)
+    payload.also_reported_by = _decorate(also_reported)
+    payload.related = _decorate(related)
+    return payload
+
+
+@app.get("/feed.xml", response_class=Response)
+def rss_feed(
+    country: str | None = None,
+    limit: int = Query(default=40, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    The site's own RSS feed — a publication should be subscribable.
+
+    Mirrors the default feed: canonical stories only, newest first.
+    """
+    query = (
+        db.query(models.Article)
+        .options(joinedload(models.Article.source), joinedload(models.Article.country_rel))
+        .filter(models.Article.is_duplicate.isnot(True))
+    )
+    if country:
+        term = country.strip()
+        query = query.join(models.Article.country_rel).filter(
+            (models.Country.iso_code == term.upper())
+            | (models.Country.name.ilike(_like_escape(term), escape="\\"))
+        )
+    articles = query.order_by(models.Article.published_at.desc()).limit(limit).all()
+
+    site = os.getenv("SITE_URL", "https://geointel.app").rstrip("/")
+
+    def esc(value: str | None) -> str:
+        return escape(value or "", quote=True)
+
+    items = "".join(
+        f"<item>"
+        f"<title>{esc(a.title)}</title>"
+        f"<link>{esc(a.url)}</link>"
+        f"<guid isPermaLink=\"false\">geointel-{a.id}</guid>"
+        f"<description>{esc(a.description)}</description>"
+        f"<pubDate>{format_datetime(a.published_at.replace(tzinfo=timezone.utc))}</pubDate>"
+        f"<source url=\"{site}\">{esc(a.source.name if a.source else 'GeoIntel')}</source>"
+        + (f"<category>{esc(a.country_rel.name)}</category>" if a.country_rel else "")
+        + "</item>"
+        for a in articles
+    )
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<rss version="2.0"><channel>'
+        "<title>GeoIntel — Global Conflict &amp; Risk Monitor</title>"
+        f"<link>{site}</link>"
+        "<description>Geopolitical news attributed to a country and scored for risk.</description>"
+        "<language>en</language>"
+        f"{items}"
+        "</channel></rss>"
+    )
+    return Response(content=xml, media_type="application/rss+xml")
+
+
+@app.get("/sitemap.xml", response_class=Response)
+def sitemap(db: Session = Depends(get_db)):
+    """
+    Sitemap covering the standing pages, every covered country, and recent
+    stories. Generated rather than static because the content changes hourly.
+    """
+    site = os.getenv("SITE_URL", "https://geointel.app").rstrip("/")
+    urls: list[tuple[str, str | None]] = [
+        (f"{site}/", None),
+        (f"{site}/about", None),
+        (f"{site}/methodology", None),
+        (f"{site}/sources", None),
+    ]
+    urls += [(f"{site}/topic/{topic}", None) for topic in
+             ("military", "diplomatic", "economic", "political", "hazard")]
+
+    covered = (
+        db.query(models.Country.iso_code)
+        .join(models.Article, models.Article.country_id == models.Country.id)
+        .distinct()
+        .all()
+    )
+    urls += [(f"{site}/country/{row[0]}", None) for row in covered]
+
+    recent = (
+        db.query(models.Article.id, models.Article.published_at)
+        .filter(models.Article.is_duplicate.isnot(True))
+        .order_by(models.Article.published_at.desc())
+        .limit(2000)
+        .all()
+    )
+    urls += [
+        (f"{site}/story/{article_id}", published.date().isoformat() if published else None)
+        for article_id, published in recent
+    ]
+
+    body = "".join(
+        f"<url><loc>{escape(loc)}</loc>"
+        + (f"<lastmod>{lastmod}</lastmod>" if lastmod else "")
+        + "</url>"
+        for loc, lastmod in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{body}</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/relations", response_model=schemas.RelationsResponse)
+def relations(
+    hours: int = Query(default=168, ge=1, le=24 * 90),
+    limit: int = Query(default=12, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """
+    Active country pairs — who is in the news *with* whom.
+
+    Built from the second country the resolver finds in each article, which
+    was previously computed and discarded.
+    """
+    return {
+        "window_hours": hours,
+        "pairs": alerts.compute_relations(db, hours=hours, limit=limit),
+    }
 
 
 # =========================================================
@@ -533,6 +754,19 @@ def trends(
     return {
         "window_hours": hours,
         "series": alerts.trend_series(db, hours=hours, max_points=points, iso_code=country),
+    }
+
+
+@app.get("/history-frames", response_model=schemas.HistoryFramesResponse)
+def history_frames(
+    hours: int = Query(default=168, ge=1, le=24 * 90),
+    frames: int = Query(default=36, ge=2, le=200),
+    db: Session = Depends(get_db),
+):
+    """World risk levels at each captured hour, for replaying the map."""
+    return {
+        "window_hours": hours,
+        "frames": alerts.history_frames(db, hours=hours, max_frames=frames),
     }
 
 

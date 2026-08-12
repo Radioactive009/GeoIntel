@@ -21,8 +21,18 @@ export default {
                 }
             },
             fontFamily: {
-                sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-                mono: ['"JetBrains Mono"', 'monospace'],
+                // These must match what index.html actually loads. They did
+                // not: the config asked for Plus Jakarta Sans and JetBrains
+                // Mono while the page fetched Outfit and Inter, so every
+                // `font-sans` element — the whole app shell — silently fell
+                // back to the browser's default sans.
+                sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                display: ['Outfit', 'Inter', 'system-ui', 'sans-serif'],
+                serif: ['"Source Serif 4"', 'Georgia', 'Cambria', 'serif'],
+                mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+            },
+            maxWidth: {
+                prose: '68ch',
             },
             animation: {
                 'shimmer': 'shimmer 2s linear infinite',

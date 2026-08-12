@@ -166,6 +166,28 @@ body {
   animation: fade-in-up 0.5s ease-out forwards;
 }
 
+/* Country dossier entering beside the map. */
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-left {
+    animation: fade-in 0.2s ease-out forwards;
+  }
+}
+
 
 /* ── Planet Animations ─────────────────────────────────── */
 @keyframes planet-revolve {

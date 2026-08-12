@@ -26,15 +26,22 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..countries import COUNTRIES, build_query, find_country_config
 from . import alerts
-from .country_resolver import resolve_primary_country
+from .country_resolver import resolve_countries
 from .gnews_service import fetch_gnews
+from .reliability import reliability_for
 from .risk_engine import score_article
 from .rss_service import fetch_country_rss, fetch_global_rss
+from .story import story_key
 
 logger = logging.getLogger(__name__)
 
 NEWSAPI_PAGE_SIZE = 20
 NEWSAPI_TIMEOUT = 15
+
+# How far back a story stays "the same story". Beyond this a matching headline
+# is treated as a new event rather than a duplicate — recurring headlines
+# ("Russian attacks kill 9 in Ukraine") do describe different days.
+STORY_CLUSTER_DAYS = 3
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
@@ -219,13 +226,33 @@ def _source_ids(db: Session, names: set[str]) -> dict[str, int]:
         return existing
 
     for name in missing:
-        db.add(models.Source(name=name))
+        db.add(models.Source(name=name, reliability=reliability_for(name)))
     try:
         db.commit()
     except IntegrityError:
         # Another ingest thread created the same outlet first.
         db.rollback()
     return lookup()
+
+
+def _known_story_keys(db: Session, keys: list[str]) -> set[str]:
+    """Which of these stories the feed already carries a canonical copy of."""
+    if not keys:
+        return set()
+    horizon = datetime.utcnow() - timedelta(days=STORY_CLUSTER_DAYS)
+    found: set[str] = set()
+    for start in range(0, len(keys), 400):
+        rows = (
+            db.query(models.Article.story_key)
+            .filter(
+                models.Article.story_key.in_(keys[start:start + 400]),
+                models.Article.is_duplicate.is_(False),
+                models.Article.published_at >= horizon,
+            )
+            .all()
+        )
+        found.update(row[0] for row in rows)
+    return found
 
 
 def _insert_articles(db: Session, prepared: list[dict]) -> int:
@@ -352,6 +379,12 @@ def store_articles(
     }
     sources = _source_ids(db, source_names)
 
+    # One story arrives from many outlets at once, so the batch is clustered
+    # against itself as well as against what is already stored; otherwise the
+    # five copies in a single fetch would all be canonical.
+    keys_in_batch = {url: story_key(item.get("title")) for url, item in fresh.items()}
+    seen_keys = _known_story_keys(db, sorted({k for k in keys_in_batch.values() if k}))
+
     prepared: list[dict] = []
     for url, item in fresh.items():
         title = item.get("title")
@@ -361,10 +394,21 @@ def store_articles(
         if source_id is None:
             continue  # source row lost a create race and is gone; skip rather than orphan
 
-        iso = resolve_primary_country(title, description)
-        country_id = country_iso_to_id.get(iso) if iso else None
+        # The resolver ranks every country it finds; the runner-up is what
+        # makes a story bilateral ("India and China hold border talks").
+        codes = resolve_countries(title, description)
+        country_id = country_iso_to_id.get(codes[0]) if codes else None
         if country_id is None:
             country_id = fallback_country_id
+        secondary_id = country_iso_to_id.get(codes[1]) if len(codes) > 1 else None
+        if secondary_id == country_id:
+            secondary_id = None
+
+        key = keys_in_batch[url]
+        # An unkeyable headline is too generic to cluster, so it stands alone.
+        duplicate = bool(key) and key in seen_keys
+        if key:
+            seen_keys.add(key)
 
         text = f"{title or ''} {description or ''}"
         geo_risk_score, geo_risk_level, event_type, category = score_article(text)
@@ -383,6 +427,9 @@ def store_articles(
             image_url=_clean_image_url(item),
             source_id=source_id,
             country_id=country_id,
+            country_id_secondary=secondary_id,
+            story_key=key,
+            is_duplicate=duplicate,
             provider=item.get("provider", "rss"),
             published_at=_parse_published(item.get("publishedAt")),
             sentiment_score=sentiment_score,

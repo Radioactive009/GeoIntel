@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Star } from 'lucide-react';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldTopoJson from 'world-atlas/countries-110m.json';
 import {
@@ -19,6 +20,10 @@ const MapChart = ({
     onCountrySelect,
     // Adjustable so the map can align with whatever sits beside it.
     heightClass = 'h-[360px] md:h-[520px] lg:h-[640px]',
+    // Optional history transport rendered beneath the legend.
+    timeline = null,
+    isWatched,
+    onToggleWatch,
 }) => {
     const [tooltip, setTooltip] = useState(null);
     const audioContextRef = useRef(null);
@@ -88,6 +93,17 @@ const MapChart = ({
         return { byName, byIso };
     }, [alertData]);
 
+    // The selection may already be a code (map click) or a name (sidebar);
+    // the watch toggle keys on the code either way.
+    const selectedIso = useMemo(() => {
+        if (!selectedCountry) return '';
+        if (selectedCountry.length === 2) return selectedCountry.toUpperCase();
+        const hit = (alertData || []).find(
+            (r) => normalizeCountry(r.country) === normalizeCountry(selectedCountry)
+        );
+        return hit?.iso_code || '';
+    }, [alertData, selectedCountry]);
+
     const TOOLTIP_WIDTH = 200;
     const TOOLTIP_HEIGHT = 78;
     const TOOLTIP_GAP = 12;
@@ -109,15 +125,23 @@ const MapChart = ({
         <div className="glass rounded-[2.5rem] p-5 lg:p-6 relative overflow-hidden animate-fade-in-up">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.12),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.12),transparent_50%)]" />
             <div className="relative z-10">
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-5 gap-4">
                     <h2 className="text-base font-bold text-white uppercase tracking-widest">Intelligence Alert Map</h2>
-                    <button
-                        type="button"
-                        onClick={() => onCountrySelect('')}
-                        className="text-[10px] font-bold tracking-widest uppercase text-slate-400 hover:text-cyan-400 transition-colors"
-                    >
-                        Clear Selection
-                    </button>
+                    {selectedCountry ? (
+                        <button
+                            type="button"
+                            onClick={() => onCountrySelect('')}
+                            className="text-[10px] font-bold tracking-widest uppercase text-slate-400 hover:text-cyan-400 transition-colors shrink-0"
+                        >
+                            Clear Selection
+                        </button>
+                    ) : (
+                        // Nothing on the map says it is clickable until something
+                        // is selected, so the affordance is stated outright.
+                        <span className="text-[10px] font-bold tracking-widest uppercase text-slate-600 shrink-0 hidden sm:block">
+                            Select a zone for its dossier
+                        </span>
+                    )}
                 </div>
 
                 <div ref={mapContainerRef} className={`relative ${heightClass}`}>
@@ -234,7 +258,21 @@ const MapChart = ({
                     <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f43f5e]" /> CRITICAL</span>
                     <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1f2937]" /> NO DATA</span>
                     <span className="text-slate-400">Node Selected: {selectedLabel || selectedCountry || 'None'}</span>
+                    {selectedCountry && onToggleWatch && (
+                        <button
+                            onClick={() => onToggleWatch(selectedIso)}
+                            className={`flex items-center gap-1.5 transition-colors ${
+                                isWatched?.(selectedIso) ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'
+                            }`}
+                            title={isWatched?.(selectedIso) ? 'Remove from watchlist' : 'Add to watchlist'}
+                        >
+                            <Star size={11} fill={isWatched?.(selectedIso) ? 'currentColor' : 'none'} />
+                            {isWatched?.(selectedIso) ? 'Watching' : 'Watch'}
+                        </button>
+                    )}
                 </div>
+
+                {timeline}
             </div>
         </div>
     );

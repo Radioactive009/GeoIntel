@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { AlertCircle, AlertTriangle, ShieldCheck, ExternalLink, Globe, Clock } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ShieldCheck, ExternalLink, Globe, Clock, Layers } from 'lucide-react';
 import { getFlagEmoji } from '../utils/country';
+import { timeAgo } from '../utils/time';
 
 const alertConfig = {
     high: {
@@ -51,6 +52,7 @@ const ArticleCard = ({ article, index }) => {
         geo_risk_score,
         geo_risk_level,
         event_type,
+        duplicate_count = 0,
     } = article;
 
     // Most feeds publish lead artwork, but Google News publishes none, so a
@@ -65,16 +67,7 @@ const ArticleCard = ({ article, index }) => {
     const countryName = country || 'Unattributed';
     const isoCode = country_iso_code || 'Global';
 
-    const timeAgo = (() => {
-        const publishedMs = new Date(published_at).getTime();
-        if (Number.isNaN(publishedMs)) return 'Unknown';
-        const diff = Date.now() - publishedMs;
-        if (diff < 0) return 'Just now';
-        const hrs = Math.floor(diff / (1000 * 60 * 60));
-        if (hrs < 1) return 'Just now';
-        if (hrs < 24) return `${hrs}h ago`;
-        return `${Math.floor(hrs / 24)}d ago`;
-    })();
+    const age = timeAgo(published_at);
 
     // Driven by the risk engine; the card previously showed the legacy
     // sentiment score, which is only a rescaled alias of this value.
@@ -145,11 +138,25 @@ const ArticleCard = ({ article, index }) => {
                     <p className="text-slate-400 text-xs leading-relaxed line-clamp-3 mb-4 font-medium opacity-80 group-hover:opacity-100 transition-opacity">
                         {description || 'Intelligence bulletin summary currently pending analysis.'}
                     </p>
-                    {event_type && (
-                        <span className="inline-block px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                            {EVENT_LABELS[event_type] || event_type}
-                        </span>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {event_type && (
+                            <span className="inline-block px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                {EVENT_LABELS[event_type] || event_type}
+                            </span>
+                        )}
+                        {/* The same wire story reaches the pipeline once per outlet.
+                            Only the canonical copy is shown; this says how many
+                            others carried it rather than repeating the card. */}
+                        {duplicate_count > 0 && (
+                            <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-widest text-cyan-300"
+                                title={`Also reported by ${duplicate_count} other outlet${duplicate_count === 1 ? '' : 's'}`}
+                            >
+                                <Layers size={9} />
+                                +{duplicate_count} outlets
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Footer */}
@@ -157,7 +164,7 @@ const ArticleCard = ({ article, index }) => {
                     <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 tracking-wider">
                         <div className="flex items-center gap-1.5">
                             <Clock size={12} className="text-slate-600" />
-                            <span>{timeAgo}</span>
+                            <span>{age}</span>
                         </div>
                         <div className="flex items-center gap-1.5" title={countryName}>
                             <Globe size={12} className="text-slate-600" />

@@ -16,7 +16,11 @@ class Country(Base):
     iso_code = Column(String, unique=True, nullable=False)
     region = Column(String)
 
-    articles = relationship("Article", back_populates="country_rel")
+    # foreign_keys is required now that Article has two FKs into this table;
+    # without it SQLAlchemy cannot tell which one defines the relationship.
+    articles = relationship(
+        "Article", back_populates="country_rel", foreign_keys="Article.country_id"
+    )
 
 
 # [DATA] SOURCE TABLE
@@ -30,6 +34,10 @@ class Source(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, nullable=False)
+    # Weight this outlet carries in a country's alert average. A tabloid's
+    # alarm should not move a national threat level as much as a wire
+    # service's. 1.0 is neutral; see services/reliability.py.
+    reliability = Column(Float, default=1.0, nullable=False)
 
     articles = relationship("Article", back_populates="source")
 
@@ -51,11 +59,24 @@ class Article(Base):
     source_id = Column(Integer, ForeignKey("sources.id"), index=True)
     # Country the article is *about*, resolved from its text.
     country_id = Column(Integer, ForeignKey("countries.id"), index=True)
+    # Second country named, when the story involves a pair (India/China,
+    # Israel/Palestine). The resolver already ranks every country it finds;
+    # this keeps the runner-up instead of discarding it, which is what makes
+    # the bilateral view possible.
+    country_id_secondary = Column(Integer, ForeignKey("countries.id"), index=True)
     # Which ingest provider delivered it (newsapi | gnews | rss).
     provider = Column(String)
 
+    # Identity of the underlying event, shared by every outlet reporting it.
+    story_key = Column(String, index=True)
+    # True for the non-canonical copies of a story already in the feed. The
+    # rows are kept rather than dropped so the card can say how many outlets
+    # carried it.
+    is_duplicate = Column(Boolean, default=False, nullable=False)
+
     source = relationship("Source", back_populates="articles")
-    country_rel = relationship("Country", back_populates="articles")
+    country_rel = relationship("Country", back_populates="articles", foreign_keys=[country_id])
+    country_secondary_rel = relationship("Country", foreign_keys=[country_id_secondary])
 
     # [LEGACY] SENTIMENT FIELDS (kept for backwards compatibility)
     sentiment_score = Column(Float)
@@ -79,9 +100,19 @@ class Article(Base):
     def region(self) -> str | None:
         return self.country_rel.region if self.country_rel else None
 
+    @property
+    def country_secondary(self) -> str | None:
+        return self.country_secondary_rel.name if self.country_secondary_rel else None
+
+    @property
+    def country_secondary_iso_code(self) -> str | None:
+        return self.country_secondary_rel.iso_code if self.country_secondary_rel else None
+
 
 # Feed queries filter by country and sort by recency.
 Index("ix_articles_country_published", Article.country_id, Article.published_at)
+# The feed hides duplicates and orders by recency on every request.
+Index("ix_articles_duplicate_published", Article.is_duplicate, Article.published_at)
 
 
 # [TREND] COUNTRY RISK HISTORY

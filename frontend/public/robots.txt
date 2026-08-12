@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Search result pages are per-query and add nothing to an index.
+Disallow: /search
+
+Sitemap: https://geointel.app/sitemap.xml

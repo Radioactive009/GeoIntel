@@ -1,11 +1,28 @@
-import React from 'react';
-import { Filter, XCircle, Globe, MapPin, Cpu, AlertTriangle } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Filter, XCircle, Globe, MapPin, Cpu, AlertTriangle, Search, X, Calendar, Crosshair } from 'lucide-react';
 
 const RISK_LEVELS = [
-    { id: '', label: 'All Threat Levels' },
-    { id: 'high', label: 'Critical' },
-    { id: 'medium', label: 'Elevated' },
-    { id: 'low', label: 'Stable' },
+    { id: '', label: 'All risk levels' },
+    { id: 'high', label: 'High' },
+    { id: 'medium', label: 'Medium' },
+    { id: 'low', label: 'Low' },
+];
+
+const EVENT_TYPES = [
+    { id: '', label: 'All event types' },
+    { id: 'military', label: 'Military' },
+    { id: 'diplomatic', label: 'Diplomatic' },
+    { id: 'economic', label: 'Economic' },
+    { id: 'political', label: 'Political' },
+    { id: 'hazard', label: 'Hazard' },
+    { id: 'other', label: 'Unclassified' },
+];
+
+const TIME_RANGES = [
+    { id: 0, label: 'All' },
+    { id: 1, label: '24h' },
+    { id: 7, label: '7d' },
+    { id: 30, label: '30d' },
 ];
 
 const Sidebar = ({
@@ -14,13 +31,32 @@ const Sidebar = ({
     selectedCountry,
     selectedRegion,
     selectedLevel,
+    selectedEventType,
+    selectedDays,
+    searchTerm,
     onCountryChange,
     onRegionChange,
     onLevelChange,
+    onEventTypeChange,
+    onDaysChange,
+    onSearchChange,
     onReset,
     stats,
 }) => {
-    const hasFilters = Boolean(selectedCountry || selectedRegion || selectedLevel);
+    const hasFilters = Boolean(
+        selectedCountry || selectedRegion || selectedLevel
+        || selectedEventType || selectedDays || searchTerm
+    );
+
+    // Local mirror so typing stays responsive; the committed value is
+    // debounced upward so the feed is not refetched on every keystroke.
+    const [draft, setDraft] = useState(searchTerm);
+    useEffect(() => { setDraft(searchTerm); }, [searchTerm]);
+    useEffect(() => {
+        if (draft === searchTerm) return undefined;
+        const timer = setTimeout(() => onSearchChange(draft), 350);
+        return () => clearTimeout(timer);
+    }, [draft, searchTerm, onSearchChange]);
     const total = stats?.total_articles || 0;
     const highCount = stats?.by_risk_level?.high || 0;
     // Share of the corpus currently flagged critical.
@@ -35,13 +71,13 @@ const Sidebar = ({
                         <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
                             <Filter size={16} className="text-cyan-400" />
                         </div>
-                        <span className="text-sm font-bold text-white uppercase tracking-wider">Intelligence Filters</span>
+                        <span className="text-sm font-bold text-white uppercase tracking-wider">Filter stories</span>
                     </div>
                     {hasFilters && (
                         <button
                             onClick={onReset}
                             className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors active:scale-90"
-                            title="Reset Filters"
+                            title="Clear all filters"
                         >
                             <XCircle size={18} />
                         </button>
@@ -50,18 +86,70 @@ const Sidebar = ({
 
                 {/* Filters Group */}
                 <div className="space-y-6">
+                    {/* Keyword search */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 px-1">
+                            <Search size={12} className="text-slate-500" />
+                            <label htmlFor="feed-search" className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">
+                                Keyword Search
+                            </label>
+                        </div>
+                        <div className="relative">
+                            <input
+                                id="feed-search"
+                                type="search"
+                                value={draft}
+                                onChange={(e) => setDraft(e.target.value)}
+                                placeholder="e.g. sanctions, Kyiv…"
+                                className="input-field w-full pr-9 hover:border-cyan-500/30 transition-colors"
+                            />
+                            {draft && (
+                                <button
+                                    onClick={() => { setDraft(''); onSearchChange(''); }}
+                                    aria-label="Clear search"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                                >
+                                    <X size={13} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Time range */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 px-1">
+                            <Calendar size={12} className="text-slate-500" />
+                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Time range</label>
+                        </div>
+                        <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 gap-1">
+                            {TIME_RANGES.map((range) => (
+                                <button
+                                    key={range.id}
+                                    onClick={() => onDaysChange(range.id)}
+                                    className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                                        selectedDays === range.id
+                                            ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20'
+                                            : 'text-slate-500 hover:text-slate-300'
+                                    }`}
+                                >
+                                    {range.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
                     {/* Region Selector */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
                             <Globe size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Select Region</label>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Region</label>
                         </div>
                         <select
                             value={selectedRegion}
                             onChange={(e) => onRegionChange(e.target.value)}
                             className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
                         >
-                            <option value="">Global Coverage</option>
+                            <option value="">All regions</option>
                             {regions.map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                     </div>
@@ -70,23 +158,23 @@ const Sidebar = ({
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
                             <MapPin size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Select Country</label>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Country</label>
                         </div>
                         <select
                             value={selectedCountry}
                             onChange={(e) => onCountryChange(e.target.value)}
                             className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
                         >
-                            <option value="">All Operational Zones</option>
+                            <option value="">All countries</option>
                             {countries.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
 
-                    {/* Threat Level Selector */}
+                    {/* Risk level */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
                             <AlertTriangle size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Threat Level</label>
+                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Risk level</label>
                         </div>
                         <select
                             value={selectedLevel}
@@ -94,6 +182,21 @@ const Sidebar = ({
                             className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
                         >
                             {RISK_LEVELS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Event Type Selector */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2 px-1">
+                            <Crosshair size={12} className="text-slate-500" />
+                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Event type</label>
+                        </div>
+                        <select
+                            value={selectedEventType}
+                            onChange={(e) => onEventTypeChange(e.target.value)}
+                            className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
+                        >
+                            {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                         </select>
                     </div>
                 </div>
@@ -105,18 +208,18 @@ const Sidebar = ({
                             <div className="p-1.5 rounded-lg bg-emerald-500/10">
                                 <Cpu size={14} className="text-emerald-400" />
                             </div>
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">Risk Engine</span>
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">Scoring</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-slate-500">Model</span>
-                            <span className="text-[10px] font-bold text-emerald-400">KEYWORD + VADER</span>
+                            <span className="text-[10px] font-medium text-slate-500">Method</span>
+                            <span className="text-[10px] font-bold text-emerald-400">Keywords + sentiment</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-slate-500">Reports Scored</span>
+                            <span className="text-[10px] font-medium text-slate-500">Stories scored</span>
                             <span className="text-[10px] font-bold text-slate-300 tabular-nums">{total}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-slate-500">Critical Share</span>
+                            <span className="text-[10px] font-medium text-slate-500">Share high risk</span>
                             <span className="text-[10px] font-bold text-rose-400 tabular-nums">{highShare}%</span>
                         </div>
                         <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">

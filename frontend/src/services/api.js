@@ -27,7 +27,10 @@ export const getArticles = ({
     country = '',
     region = '',
     level = '',
+    eventType = '',
     q = '',
+    days = 0,
+    includeDuplicates = false,
     limit = 60,
     offset = 0,
 } = {}) => {
@@ -35,14 +38,23 @@ export const getArticles = ({
     if (country) params.country = country;
     if (region) params.region = region;
     if (level) params.level = level;
+    if (eventType) params.event_type = eventType;
     if (q) params.q = q;
+    if (days) params.days = days;
+    if (includeDuplicates) params.include_duplicates = true;
     return api.get('/articles', { params });
 };
+
+/** One story plus its cluster siblings and same-country coverage. */
+export const getArticle = (id) => api.get(`/articles/${id}`);
 
 export const getAlertAnalysis = (activeOnly = true) =>
     api.get('/alert-analysis', { params: { active_only: activeOnly } });
 
 export const getStats = () => api.get('/stats');
+
+/** Every publication the feed has drawn from — used by the Sources page. */
+export const getSources = () => api.get('/sources');
 
 /** Risk history per country, thinned server-side for sparklines. */
 export const getTrends = ({ hours = 168, points = 24, country = '' } = {}) => {
@@ -54,6 +66,18 @@ export const getTrends = ({ hours = 168, points = 24, country = '' } = {}) => {
 /** Countries escalating/de-escalating against their own recent baseline. */
 export const getMovers = ({ hours = 168, limit = 5 } = {}) =>
     api.get('/movers', { params: { hours, limit } });
+
+/** Country pairs appearing in the same stories — the flashpoints board. */
+export const getRelations = ({ hours = 168, limit = 10 } = {}) =>
+    api.get('/relations', { params: { hours, limit } });
+
+/**
+ * Aligned world snapshots for replaying the map through time.
+ * Each frame shares one timestamp across every country, which /trends cannot
+ * provide because it thins each country's series independently.
+ */
+export const getHistoryFrames = ({ hours = 168, frames = 36 } = {}) =>
+    api.get('/history-frames', { params: { hours, frames } });
 
 /**
  * Broadcaster live streams. Liveness is resolved server-side because an

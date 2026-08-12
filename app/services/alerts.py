@@ -23,8 +23,8 @@ import statistics
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, case, func
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, case, desc, func
+from sqlalchemy.orm import Session, aliased
 
 from .. import models
 
@@ -97,9 +97,25 @@ def compute_alert_status(db: Session, since: datetime | None = None) -> list[dic
     )
     high_expr = case((models.Article.geo_risk_level == "high", 1), else_=0)
 
-    join_condition = models.Article.country_id == models.Country.id
+    # Duplicate reports of one event are coverage volume, not extra risk —
+    # counting a syndicated wire story once per outlet would let a country's
+    # level track how widely it was picked up. `isnot(True)` rather than
+    # `== False` so rows predating the column (NULL) still count.
+    join_condition = and_(
+        models.Article.country_id == models.Country.id,
+        models.Article.is_duplicate.isnot(True),
+    )
     if since is not None:
         join_condition = and_(join_condition, models.Article.published_at >= since)
+
+    # Weighted mean rather than a plain average: one alarmist headline from a
+    # low-confidence aggregator should not move a national threat level as far
+    # as a wire report. Sources predating the column, and articles with no
+    # source, fall back to the neutral 1.0.
+    weight_expr = func.coalesce(models.Source.reliability, 1.0)
+    weighted_risk = func.sum(risk_expr * weight_expr) / func.nullif(
+        func.sum(case((models.Article.id.isnot(None), weight_expr), else_=0.0)), 0.0
+    )
 
     rows = (
         db.query(
@@ -108,10 +124,11 @@ def compute_alert_status(db: Session, since: datetime | None = None) -> list[dic
             models.Country.iso_code,
             models.Country.region,
             func.count(models.Article.id).label("total"),
-            func.avg(risk_expr).label("avg_risk"),
+            weighted_risk.label("avg_risk"),
             func.sum(high_expr).label("high_count"),
         )
         .outerjoin(models.Article, join_condition)
+        .outerjoin(models.Source, models.Article.source_id == models.Source.id)
         .group_by(
             models.Country.id,
             models.Country.name,
@@ -276,6 +293,33 @@ def trend_series(
     return {iso: _downsample(points, max_points) for iso, points in grouped.items()}
 
 
+def history_frames(db: Session, hours: int = 168, max_frames: int = 36) -> list[dict]:
+    """
+    Aligned per-hour snapshots of the whole world, for replaying the map.
+
+    ``trend_series`` cannot drive this: it thins each country's series
+    independently, and a country only has rows for hours it had coverage, so
+    index *i* means a different moment for each country. Grouping by the
+    capture bucket instead gives every frame one shared timestamp.
+
+    Payload stays small — a frame is a flat {iso: score} map, so 36 frames
+    across ~150 countries is tens of kilobytes rather than megabytes.
+    """
+    buckets: dict[datetime, dict[str, float]] = defaultdict(dict)
+    for iso, _name, captured_at, score, _articles in _load_window(db, hours):
+        buckets[captured_at][iso] = round(float(score or 0.0), 2)
+
+    ordered = sorted(buckets)
+    if max_frames > 0 and len(ordered) > max_frames:
+        step = len(ordered) / max_frames
+        picked = [ordered[min(int(i * step), len(ordered) - 1)] for i in range(max_frames)]
+        if picked[-1] != ordered[-1]:
+            picked[-1] = ordered[-1]  # the newest frame must be the live one
+        ordered = picked
+
+    return [{"t": moment, "scores": buckets[moment]} for moment in ordered]
+
+
 def compute_movers(db: Session, hours: int = 168, limit: int = 8) -> dict:
     """
     Countries whose risk moved most against their own recent baseline.
@@ -328,6 +372,74 @@ def compute_movers(db: Session, hours: int = 168, limit: int = 8) -> dict:
         "rising": rising[:limit],
         "falling": falling[:limit],
     }
+
+
+def compute_relations(db: Session, hours: int = 168, limit: int = 12) -> list[dict]:
+    """
+    Country pairs that keep appearing in the same stories.
+
+    The resolver already ranks every country it finds in an article; storing
+    the runner-up alongside the primary turns each article into an edge
+    (India-China, Israel-Palestine). Aggregating those edges surfaces active
+    flashpoints without any additional analysis.
+
+    Pairs are normalised so A-B and B-A aggregate together, which the database
+    cannot do for us — the ordering is decided in Python after grouping.
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+    primary = aliased(models.Country)
+    secondary = aliased(models.Country)
+
+    risk_expr = func.coalesce(models.Article.geo_risk_score, 0.0)
+
+    rows = (
+        db.query(
+            primary.iso_code,
+            primary.name,
+            secondary.iso_code,
+            secondary.name,
+            func.count(models.Article.id).label("articles"),
+            func.avg(risk_expr).label("avg_risk"),
+            func.max(models.Article.published_at).label("latest"),
+        )
+        .join(primary, models.Article.country_id == primary.id)
+        .join(secondary, models.Article.country_id_secondary == secondary.id)
+        .filter(
+            models.Article.published_at >= since,
+            models.Article.is_duplicate.isnot(True),
+        )
+        .group_by(primary.iso_code, primary.name, secondary.iso_code, secondary.name)
+        .all()
+    )
+
+    merged: dict[tuple[str, str], dict] = {}
+    for iso_a, name_a, iso_b, name_b, articles, avg_risk, latest in rows:
+        # Order-independent identity, so both directions land on one entry.
+        pair = tuple(sorted((iso_a, iso_b)))
+        names = {iso_a: name_a, iso_b: name_b}
+        entry = merged.setdefault(pair, {
+            "iso_codes": list(pair),
+            "countries": [names[pair[0]], names[pair[1]]],
+            "articles": 0,
+            "_risk_total": 0.0,
+            "latest": None,
+        })
+        entry["articles"] += int(articles or 0)
+        entry["_risk_total"] += float(avg_risk or 0.0) * int(articles or 0)
+        if latest and (entry["latest"] is None or latest > entry["latest"]):
+            entry["latest"] = latest
+
+    results = []
+    for entry in merged.values():
+        count = entry.pop("articles")
+        risk_total = entry.pop("_risk_total")
+        entry["articles"] = count
+        entry["avg_risk"] = round(risk_total / count, 2) if count else 0.0
+        entry["status"] = risk_level(entry["avg_risk"])
+        results.append(entry)
+
+    results.sort(key=lambda r: (-r["articles"], -r["avg_risk"]))
+    return results[:limit]
 
 
 def history_status(db: Session) -> dict:

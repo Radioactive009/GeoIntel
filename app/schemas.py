@@ -73,10 +73,39 @@ class ArticleResponse(BaseModel):
     country: Optional[str] = None
     country_iso_code: Optional[str] = None
     region: Optional[str] = None
+    # Second country in the story, when it is about a pair.
+    country_secondary: Optional[str] = None
+    country_secondary_iso_code: Optional[str] = None
+
+    # Other outlets that carried this same story. Filled in by the endpoint.
+    duplicate_count: int = 0
 
     source: Optional[SourceResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ---------- RELATIONS ----------
+class RelationPair(BaseModel):
+    iso_codes: list[str]
+    countries: list[str]
+    articles: int
+    avg_risk: float
+    status: str
+    latest: Optional[datetime] = None
+
+
+class RelationsResponse(BaseModel):
+    window_hours: int
+    pairs: list[RelationPair]
+
+
+class ArticleDetail(ArticleResponse):
+    """One article with the coverage around it, for the story page."""
+    # Same event as carried by other outlets, from the story cluster.
+    also_reported_by: list[ArticleResponse] = []
+    # Other recent stories about the same country.
+    related: list[ArticleResponse] = []
 
 
 class ArticlePage(BaseModel):
@@ -111,6 +140,17 @@ class TrendPoint(BaseModel):
 class TrendsResponse(BaseModel):
     window_hours: int
     series: dict[str, list[TrendPoint]]
+
+
+class HistoryFrame(BaseModel):
+    t: datetime
+    # iso_code -> risk score at that hour
+    scores: dict[str, float]
+
+
+class HistoryFramesResponse(BaseModel):
+    window_hours: int
+    frames: list[HistoryFrame]
 
 
 class MoverResponse(BaseModel):

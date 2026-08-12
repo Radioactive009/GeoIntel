@@ -21,6 +21,9 @@ SOURCE_TAG_RE = re.compile(r"\s*\((?:GNews|RSS|Google RSS)\)|\s*\[[A-Z]{2}\]\s*$
 
 # Marks the one-shot purge of pre-window risk snapshots.
 _HISTORY_RESET_KEY = "migration_risk_history_windowed"
+# One-shot backfills for columns added after articles were already stored.
+_CLUSTER_BACKFILL_KEY = "migration_story_clusters"
+_SECONDARY_BACKFILL_KEY = "migration_secondary_countries"
 
 ARTICLE_COLUMNS = {
     "sentiment_score": "FLOAT",
@@ -30,8 +33,15 @@ ARTICLE_COLUMNS = {
     "event_type": "VARCHAR",
     "category": "VARCHAR",
     "country_id": "INTEGER",
+    "country_id_secondary": "INTEGER",
     "provider": "VARCHAR",
     "image_url": "VARCHAR",
+    "story_key": "VARCHAR",
+    "is_duplicate": "BOOLEAN DEFAULT 0",
+}
+
+SOURCE_COLUMNS = {
+    "reliability": "FLOAT DEFAULT 1.0",
 }
 
 INDEXES = {
@@ -79,13 +89,14 @@ def _set_flag(conn, key: str, value: str = "done") -> None:
 
 
 def _add_missing_columns(conn) -> None:
-    columns = _existing_columns(conn, "articles")
-    if not columns:
-        return
-    for name, sql_type in ARTICLE_COLUMNS.items():
-        if name not in columns:
-            conn.execute(text(f"ALTER TABLE articles ADD COLUMN {name} {sql_type}"))
-            logger.info("[MIGRATE] Added articles.%s", name)
+    for table, spec in (("articles", ARTICLE_COLUMNS), ("sources", SOURCE_COLUMNS)):
+        columns = _existing_columns(conn, table)
+        if not columns:
+            continue
+        for name, sql_type in spec.items():
+            if name not in columns:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
+                logger.info("[MIGRATE] Added %s.%s", table, name)
 
 
 def _create_indexes(conn) -> None:
@@ -260,6 +271,108 @@ def _backfill_article_countries(conn) -> int:
     return len(updates)
 
 
+def _backfill_story_clusters(conn) -> None:
+    """
+    Assign a story key to every article and flag the redundant copies.
+
+    Existing rows predate clustering, so without this the feed keeps showing
+    the same wire story several times until the whole corpus rotates out.
+    Canonical copy = the earliest published of a cluster, so the feed keeps
+    whichever outlet broke it.
+    """
+    if _flag(conn, _CLUSTER_BACKFILL_KEY):
+        return
+    columns = _existing_columns(conn, "articles")
+    if "story_key" not in columns:
+        return
+
+    from .services.story import story_key
+
+    rows = conn.execute(
+        text("SELECT id, title, published_at FROM articles ORDER BY published_at ASC, id ASC")
+    ).fetchall()
+    if not rows:
+        _set_flag(conn, _CLUSTER_BACKFILL_KEY)
+        return
+
+    seen: set[str] = set()
+    updates = []
+    for article_id, title, _published in rows:
+        key = story_key(title)
+        duplicate = bool(key) and key in seen
+        if key:
+            seen.add(key)
+        updates.append({"aid": article_id, "key": key, "dup": 1 if duplicate else 0})
+
+    statement = text("UPDATE articles SET story_key = :key, is_duplicate = :dup WHERE id = :aid")
+    for start in range(0, len(updates), 500):
+        conn.execute(statement, updates[start:start + 500])
+
+    _set_flag(conn, _CLUSTER_BACKFILL_KEY)
+    logger.info(
+        "[MIGRATE] Clustered %s articles; %s flagged as duplicate reports",
+        len(updates), sum(u["dup"] for u in updates),
+    )
+
+
+def _backfill_secondary_countries(conn) -> None:
+    """Resolve the runner-up country for articles that have none recorded."""
+    if _flag(conn, _SECONDARY_BACKFILL_KEY):
+        return
+    if "country_id_secondary" not in _existing_columns(conn, "articles"):
+        return
+
+    from .services.country_resolver import resolve_countries
+
+    rows = conn.execute(
+        text("SELECT id, title, description, country_id FROM articles")
+    ).fetchall()
+    iso_to_id = {
+        iso: cid
+        for cid, iso in conn.execute(text("SELECT id, iso_code FROM countries")).fetchall()
+    }
+
+    updates = []
+    for article_id, title, description, primary_id in rows:
+        codes = resolve_countries(title, description)
+        for code in codes[1:]:
+            candidate = iso_to_id.get(code)
+            if candidate and candidate != primary_id:
+                updates.append({"cid": candidate, "aid": article_id})
+                break
+
+    for start in range(0, len(updates), 500):
+        conn.execute(
+            text("UPDATE articles SET country_id_secondary = :cid WHERE id = :aid"),
+            updates[start:start + 500],
+        )
+
+    _set_flag(conn, _SECONDARY_BACKFILL_KEY)
+    logger.info("[MIGRATE] Recorded a second country for %s articles", len(updates))
+
+
+def _backfill_source_reliability(conn) -> None:
+    """Score every stored outlet. Re-runs cheaply when the tier list changes."""
+    if "reliability" not in _existing_columns(conn, "sources"):
+        return
+
+    from .services.reliability import DEFAULT_RELIABILITY, reliability_for
+
+    rows = conn.execute(text("SELECT id, name FROM sources")).fetchall()
+    updates = [
+        {"w": reliability_for(name), "sid": source_id}
+        for source_id, name in rows
+    ]
+    changed = sum(1 for u in updates if u["w"] != DEFAULT_RELIABILITY)
+    for start in range(0, len(updates), 500):
+        conn.execute(
+            text("UPDATE sources SET reliability = :w WHERE id = :sid"),
+            updates[start:start + 500],
+        )
+    if changed:
+        logger.info("[MIGRATE] Weighted %s/%s sources away from neutral", changed, len(updates))
+
+
 def run_migrations(engine: Engine) -> None:
     """Bring an existing database up to the current schema. Safe to re-run."""
     with engine.begin() as conn:
@@ -270,7 +383,13 @@ def run_migrations(engine: Engine) -> None:
 
     # Each of these can fail independently on a backend-specific quirk without
     # invalidating the structural work above, so they get their own transaction.
-    for step in (_fix_channel_booleans, _reset_cumulative_risk_history):
+    for step in (
+        _fix_channel_booleans,
+        _reset_cumulative_risk_history,
+        _backfill_source_reliability,
+        _backfill_story_clusters,
+        _backfill_secondary_countries,
+    ):
         try:
             with engine.begin() as conn:
                 step(conn)
