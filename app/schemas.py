@@ -46,6 +46,7 @@ class ArticleBase(BaseModel):
 
 
 class ArticleCreate(ArticleBase):
+    image_url: Optional[str] = None
     country_id: Optional[int] = None
     event_type: Optional[str] = None
     category: Optional[str] = None
@@ -56,6 +57,8 @@ class ArticleResponse(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     url: str
+    # Null whenever the feed published no artwork (all Google News items).
+    image_url: Optional[str] = None
     published_at: datetime
     provider: Optional[str] = None
 

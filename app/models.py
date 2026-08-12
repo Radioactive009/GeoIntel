@@ -42,6 +42,10 @@ class Article(Base):
     title = Column(String)
     description = Column(String)
     url = Column(String, unique=True, nullable=False)
+    # Lead artwork from the feed, when it publishes one. Google News carries
+    # no image of any kind, so this is null for a large share of rows and the
+    # UI must render without it rather than treating it as guaranteed.
+    image_url = Column(String)
     published_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     source_id = Column(Integer, ForeignKey("sources.id"), index=True)

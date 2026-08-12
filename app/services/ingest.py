@@ -176,6 +176,22 @@ def _clean_source_name(raw: str | None) -> str:
     return name or "Unknown Source"
 
 
+def _clean_image_url(item: dict) -> str | None:
+    """
+    Normalise the lead image across providers.
+
+    NewsAPI calls it urlToImage, GNews calls it image, and the RSS layer
+    resolves one from whichever media element the feed used. Only absolute
+    http(s) URLs are kept: a relative or data: URL cannot be rendered from the
+    dashboard's origin, and storing one just produces a broken card.
+    """
+    raw = item.get("image") or item.get("urlToImage")
+    url = (raw or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        return None
+    return url[:1000] if len(url) > 1000 else url
+
+
 def _source_ids(db: Session, names: set[str]) -> dict[str, int]:
     """
     Fetch or create every source in one pass instead of one commit each.
@@ -262,6 +278,30 @@ def _existing_urls(db: Session, urls: list[str]) -> set[str]:
     return found
 
 
+def _backfill_images(db: Session, by_url: dict[str, str]) -> int:
+    """Attach artwork to already-stored articles that have none."""
+    if not by_url:
+        return 0
+
+    urls = list(by_url)
+    updated = 0
+    for start in range(0, len(urls), 400):
+        chunk = urls[start:start + 400]
+        rows = (
+            db.query(models.Article)
+            .filter(models.Article.url.in_(chunk), models.Article.image_url.is_(None))
+            .all()
+        )
+        for article in rows:
+            article.image_url = by_url[article.url]
+            updated += 1
+
+    if updated:
+        db.commit()
+        logger.info("  [IMG] Backfilled artwork for %s existing articles", updated)
+    return updated
+
+
 def store_articles(
     db: Session,
     items: list[dict],
@@ -291,6 +331,17 @@ def store_articles(
         return 0
 
     already_stored = _existing_urls(db, list(by_url))
+
+    # Articles seen before are skipped as duplicates, so a row stored while a
+    # feed was omitting artwork — or before image_url existed at all — would
+    # stay blank forever even though the feed now carries one. Fill those in
+    # on the way past; it is the newest articles that are still in the feeds,
+    # which is exactly what the dashboard shows first.
+    _backfill_images(db, {
+        url: img for url in already_stored
+        if (img := _clean_image_url(by_url[url]))
+    })
+
     fresh = {url: item for url, item in by_url.items() if url not in already_stored}
     if not fresh:
         return 0
@@ -329,6 +380,7 @@ def store_articles(
             title=title,
             description=description,
             url=url,
+            image_url=_clean_image_url(item),
             source_id=source_id,
             country_id=country_id,
             provider=item.get("provider", "rss"),

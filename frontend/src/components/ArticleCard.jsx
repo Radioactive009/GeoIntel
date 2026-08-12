@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AlertCircle, AlertTriangle, ShieldCheck, ExternalLink, Globe, Clock } from 'lucide-react';
 import { getFlagEmoji } from '../utils/country';
 
@@ -43,6 +43,7 @@ const ArticleCard = ({ article, index }) => {
         title,
         description,
         url,
+        image_url,
         published_at,
         source,
         country,
@@ -51,6 +52,14 @@ const ArticleCard = ({ article, index }) => {
         geo_risk_level,
         event_type,
     } = article;
+
+    // Most feeds publish lead artwork, but Google News publishes none, so a
+    // large share of articles have no image at all. The band is therefore
+    // rendered only when one exists — a grid of identical placeholders reads
+    // worse than a clean text card. A URL that fails to load (expired asset,
+    // hotlink block) collapses the band the same way.
+    const [imageFailed, setImageFailed] = useState(false);
+    const showImage = Boolean(image_url) && !imageFailed;
 
     const sourceName = source?.name || 'Unknown';
     const countryName = country || 'Unattributed';
@@ -80,6 +89,27 @@ const ArticleCard = ({ article, index }) => {
         >
             {/* Alert Status Bar */}
             <div className={`h-1 w-full bg-gradient-to-r ${alert.gradient}`} />
+
+            {/* Lead image */}
+            {showImage && (
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-slate-900/80 shrink-0">
+                    <img
+                        src={image_url}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+                        loading="lazy"
+                        decoding="async"
+                        // Several news CDNs reject cross-origin hotlinks by Referer;
+                        // sending none is accepted more widely than sending ours.
+                        referrerPolicy="no-referrer"
+                        onError={() => setImageFailed(true)}
+                    />
+                    {/* Keeps the card body reading as one surface rather than a
+                        photo with a panel bolted underneath. */}
+                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#0b1220] to-transparent pointer-events-none" />
+                </div>
+            )}
 
             <div className="p-6 flex flex-col h-full flex-grow">
                 {/* Meta Header */}

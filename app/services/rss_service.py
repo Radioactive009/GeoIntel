@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import concurrent.futures as futures
 import logging
+import re
 import threading
 import time
 from datetime import datetime
@@ -94,9 +95,71 @@ def _clean_summary(entry) -> str:
     raw = entry.get("summary") or entry.get("description") or ""
     if not raw:
         return ""
-    import re
     text = re.sub(r"<[^>]+>", " ", raw)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _widest(candidates: list[dict]) -> str | None:
+    """Pick the largest declared variant; feeds often list several sizes."""
+    best, best_width = None, -1
+    for item in candidates:
+        url = (item.get("url") or "").strip()
+        if not url:
+            continue
+        try:
+            width = int(item.get("width") or 0)
+        except (TypeError, ValueError):
+            width = 0
+        if width > best_width:
+            best, best_width = url, width
+    return best
+
+
+def _upscale(url: str) -> str:
+    """
+    Ask known CDNs for a larger rendition.
+
+    BBC advertises a 240px-wide thumbnail, which is visibly soft in a card
+    roughly 400px across. The width is a path segment on ichef, so a bigger
+    one can simply be requested; anything unrecognised is returned untouched,
+    and a bad guess degrades to the card's placeholder rather than breaking.
+    """
+    return re.sub(r"(ichef\.bbci\.co\.uk/[^ ]*?/)(?:2\d{2}|1\d{2})(/)", r"\g<1>800\g<2>", url)
+
+
+def _extract_image(entry) -> str | None:
+    """
+    Best available image for an entry, or None.
+
+    Feeds disagree about where this lives — media:content, media:thumbnail, an
+    enclosure, a typed link, or an <img> inside the summary HTML — so each is
+    tried in turn. Google News carries none of them, which is why the card has
+    to render without one.
+    """
+    for key in ("media_content", "media_thumbnail"):
+        value = entry.get(key)
+        if isinstance(value, list):
+            url = _widest(value)
+            if url:
+                return _upscale(url)
+
+    for link in list(entry.get("links") or []) + list(entry.get("enclosures") or []):
+        if str(link.get("type", "")).startswith("image"):
+            url = (link.get("href") or link.get("url") or "").strip()
+            if url:
+                return _upscale(url)
+
+    html = entry.get("summary") or entry.get("description") or ""
+    if not html and isinstance(entry.get("content"), list) and entry["content"]:
+        html = entry["content"][0].get("value") or ""
+    match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html)
+    if match:
+        url = match.group(1).strip()
+        # Skip the 1x1 beacons some feeds embed alongside real artwork.
+        if url and not re.search(r"[?&](?:w|width)=1(?:&|$)", url):
+            return _upscale(url)
+
+    return None
 
 
 def _publisher_name(entry, fallback: str) -> str:
@@ -149,6 +212,7 @@ def _entries_to_articles(feed, feed_name: str, is_google: bool) -> list[dict]:
             "publishedAt": _parse_date(entry),
             "source": {"name": publisher},
             "provider": "rss",
+            "image": _extract_image(entry),
         })
     return articles
 

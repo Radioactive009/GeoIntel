@@ -31,6 +31,7 @@ ARTICLE_COLUMNS = {
     "category": "VARCHAR",
     "country_id": "INTEGER",
     "provider": "VARCHAR",
+    "image_url": "VARCHAR",
 }
 
 INDEXES = {

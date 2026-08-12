@@ -75,6 +75,7 @@ def fetch_gnews(query: str, country_code: str | None = None, max_results: int = 
             "publishedAt": item.get("publishedAt"),
             "source": {"name": (item.get("source") or {}).get("name") or "Unknown"},
             "provider": "gnews",
+            "image": item.get("image"),
         }
         for item in raw_articles
     ]
