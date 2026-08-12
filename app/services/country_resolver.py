@@ -96,6 +96,17 @@ FOLLOWER_STOPWORDS = {
     "october", "november", "december",
 }
 
+# The mirror case: the term used as a *surname* ("Michael Jordan"). Only an
+# explicit given-name list is safe here — a generic "preceded by a capitalised
+# word" rule would veto every title-case headline ("Trump Visits Jordan").
+GIVEN_NAME_PREFIXES = {
+    "air", "michael", "eddie", "kevin", "katie", "brian", "vernon", "montell",
+    "james", "john", "david", "robert", "william", "richard", "joseph",
+    "thomas", "george", "daniel", "paul", "mark", "steven", "andrew", "joshua",
+    "kenneth", "kyle", "ryan", "jason", "justin", "brandon", "tyler", "sarah",
+    "jessica", "ashley", "emily", "megan", "rachel", "lauren",
+}
+
 # Whole-text vetoes for homonyms that no adjacency rule can catch: the US
 # state of Georgia, and the bird. Matching any of these drops that country
 # from consideration for the article entirely.
@@ -272,7 +283,51 @@ def _build_gazetteer() -> tuple[re.Pattern, dict[str, str]]:
 _PATTERN, _TERM_TO_CODE = _build_gazetteer()
 
 
-def _accumulate(text: str, weight: int, scores: dict[str, int], first_seen: dict[str, int]) -> None:
+# No leading "^": Pattern.match(text, pos) already anchors at pos, whereas "^"
+# would additionally demand the real start of the string and so never fire.
+# No leading "^": Pattern.match(text, pos) already anchors at pos, whereas "^"
+# would additionally demand the real start of the string and so never fire.
+_FOLLOWING_WORD = re.compile(r" ([A-Z][a-zA-Z'\-]+)")
+_PRECEDING_WORD = re.compile(r"([A-Za-z'\-]+) $")
+
+
+def _looks_like_person_name(text: str, match: re.Match) -> bool:
+    """
+    Is this match part of a person's name rather than a country?
+
+    Given name: the term is followed by exactly one space and a capitalised
+    word that is neither a routine headline word nor a place in the gazetteer
+    — "Jordan Peterson", "Chad Johnson", but not "Jordan Says", "Jordan and
+    Israel", or "Turkey's Erdogan" (the apostrophe stops the match).
+
+    Surname: the term is directly preceded by a known given name — "Michael
+    Jordan", "Air Jordan".
+    """
+    preceding = _PRECEDING_WORD.search(text, 0, match.start())
+    if preceding and preceding.group(1).lower() in GIVEN_NAME_PREFIXES:
+        return True
+
+    follower = _FOLLOWING_WORD.match(text, match.end())
+    if not follower:
+        return False
+    word = follower.group(1).lower()
+    if word in FOLLOWER_STOPWORDS:
+        return False
+    return word not in _TERM_TO_CODE
+
+
+def _vetoed_codes(text: str) -> set[str]:
+    """Codes disqualified by a homonym cue somewhere in the article."""
+    return {code for code, pattern in CONTEXT_VETO.items() if pattern.search(text)}
+
+
+def _accumulate(
+    text: str,
+    weight: int,
+    scores: dict[str, int],
+    first_seen: dict[str, int],
+    vetoed: set[str],
+) -> None:
     if not text:
         return
     for match in _PATTERN.finditer(text):
@@ -281,8 +336,10 @@ def _accumulate(text: str, weight: int, scores: dict[str, int], first_seen: dict
         if key in CASE_SENSITIVE_TERMS and not matched[0].isupper():
             continue  # "us" the pronoun, "turkey" the bird
         code = _TERM_TO_CODE.get(key)
-        if not code:
+        if not code or code in vetoed:
             continue
+        if key in PERSON_NAME_AMBIGUOUS and _looks_like_person_name(text, match):
+            continue  # "Jordan Peterson", not Jordan
         scores[code] = scores.get(code, 0) + weight
         first_seen.setdefault(code, match.start())
 
@@ -297,8 +354,12 @@ def resolve_countries(title: str | None, description: str | None) -> list[str]:
     scores: dict[str, int] = {}
     first_seen: dict[str, int] = {}
 
-    _accumulate(title or "", TITLE_WEIGHT, scores, first_seen)
-    _accumulate(description or "", BODY_WEIGHT, scores, first_seen)
+    # Homonym vetoes are judged over the whole article: a US-state cue in the
+    # body should disqualify "Georgia" in the headline too.
+    vetoed = _vetoed_codes(f"{title or ''} {description or ''}")
+
+    _accumulate(title or "", TITLE_WEIGHT, scores, first_seen, vetoed)
+    _accumulate(description or "", BODY_WEIGHT, scores, first_seen, vetoed)
 
     if not scores:
         return []

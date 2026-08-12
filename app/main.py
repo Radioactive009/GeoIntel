@@ -17,9 +17,10 @@ from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from . import models, schemas
@@ -43,6 +44,12 @@ INGEST_INTERVAL_MINUTES = max(5, int(os.getenv("INGEST_INTERVAL_MINUTES", "30"))
 ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() not in ("0", "false", "no")
 STARTUP_INGEST_DELAY = max(0, int(os.getenv("STARTUP_INGEST_DELAY", "10")))
 
+# Shared secret for the endpoints that write, ingest or spend third-party
+# quota. Unset leaves them open, which keeps local development frictionless
+# but is logged loudly at startup — with ALLOWED_ORIGINS=* an open
+# /ingest-all can be used to drain the GNews and YouTube allowances.
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") or ""
+
 
 # =========================================================
 # DB SETUP + MIGRATIONS
@@ -58,29 +65,67 @@ scheduler = BackgroundScheduler(timezone="UTC")
 _startup_lock = threading.Lock()
 _startup_done = False
 
+# Only one ingest cycle may run at a time. The scheduler and a manual
+# /ingest-batch used to be able to run concurrently over the same feeds, which
+# raced on the UNIQUE articles.url constraint and shared ingest cursor.
+_ingest_lock = threading.Lock()
+_ingest_state: dict = {
+    "running": False,
+    "started_at": None,
+    "finished_at": None,
+    "last_summary": None,
+    "last_error": None,
+}
+
+
+def run_ingest(batch_size: int | None = None) -> dict:
+    """
+    Run one full cycle: articles, then live-channel liveness.
+
+    Returns immediately with ``{"skipped": True}`` if a cycle is already in
+    flight, rather than queueing a second one behind it.
+    """
+    if not _ingest_lock.acquire(blocking=False):
+        logger.info("[SKIP] Ingest already running - not starting another")
+        return {"skipped": True, "reason": "already_running"}
+
+    _ingest_state.update(
+        running=True, started_at=datetime.utcnow(), finished_at=None, last_error=None
+    )
+    summary: dict = {}
+    try:
+        db = SessionLocal()
+        try:
+            logger.info("[TIMER] Ingestion starting...")
+            summary = ingest.run_ingest_cycle(db, batch_size=batch_size)
+            logger.info("[TIMER] Ingestion complete: %s saved", summary["total_saved"])
+            _ingest_state["last_summary"] = summary
+        except Exception as e:
+            logger.exception("[ERR] Ingestion failed: %s", e)
+            _ingest_state["last_error"] = str(e)
+        finally:
+            db.close()
+
+        # Live-stream liveness is independent of article ingestion; a failure
+        # here must never mark the ingest cycle as failed.
+        db = SessionLocal()
+        try:
+            channels.seed_channels(db)
+            channels.refresh_channels(db)
+        except Exception as e:
+            logger.warning("[ERR] Channel refresh failed: %s", e)
+        finally:
+            db.close()
+    finally:
+        _ingest_state.update(running=False, finished_at=datetime.utcnow())
+        _ingest_lock.release()
+
+    return summary
+
 
 def scheduled_ingest() -> None:
-    """Scheduled job: refresh global feeds and a rotating country batch."""
-    db = SessionLocal()
-    try:
-        logger.info("[TIMER] Scheduled ingestion starting...")
-        summary = ingest.run_ingest_cycle(db)
-        logger.info("[TIMER] Scheduled ingestion complete: %s saved", summary["total_saved"])
-    except Exception as e:
-        logger.exception("[ERR] Scheduled ingestion failed: %s", e)
-    finally:
-        db.close()
-
-    # Live-stream liveness is independent of article ingestion; a failure here
-    # must never mark the ingest cycle as failed.
-    db = SessionLocal()
-    try:
-        channels.seed_channels(db)
-        channels.refresh_channels(db)
-    except Exception as e:
-        logger.warning("[ERR] Channel refresh failed: %s", e)
-    finally:
-        db.close()
+    """Scheduled job entry point."""
+    run_ingest()
 
 
 def _bootstrap() -> None:
@@ -171,6 +216,30 @@ def get_db():
         db.close()
 
 
+def require_admin(x_api_key: str | None = Header(default=None)) -> None:
+    """Guard for endpoints that write, ingest, or spend third-party quota."""
+    if not ADMIN_API_KEY:
+        return  # open by choice; the startup warning says so
+    if x_api_key != ADMIN_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+
+def _like_escape(term: str) -> str:
+    """
+    Escape LIKE wildcards in user input.
+
+    Unescaped, `?q=100%` searched for "100" followed by anything and returned
+    articles containing neither — the search silently reported matches it had
+    not made.
+    """
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _conflict(db: Session, detail: str) -> HTTPException:
+    db.rollback()
+    return HTTPException(status_code=409, detail=detail)
+
+
 # =========================================================
 # ROOT / HEALTH
 # =========================================================
@@ -211,11 +280,14 @@ def health(db: Session = Depends(get_db)):
 # =========================================================
 # COUNTRY ROUTES
 # =========================================================
-@app.post("/countries", response_model=schemas.CountryResponse)
+@app.post("/countries", response_model=schemas.CountryResponse, dependencies=[Depends(require_admin)])
 def create_country(country: schemas.CountryCreate, db: Session = Depends(get_db)):
     db_country = models.Country(**country.model_dump())
     db.add(db_country)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as e:
+        raise _conflict(db, "A country with that name or ISO code already exists") from e
     db.refresh(db_country)
     return db_country
 
@@ -234,11 +306,14 @@ def get_country_catalog():
 # =========================================================
 # SOURCE ROUTES
 # =========================================================
-@app.post("/sources", response_model=schemas.SourceResponse)
+@app.post("/sources", response_model=schemas.SourceResponse, dependencies=[Depends(require_admin)])
 def create_source(source: schemas.SourceCreate, db: Session = Depends(get_db)):
     db_source = models.Source(**source.model_dump())
     db.add(db_source)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as e:
+        raise _conflict(db, "A source with that name already exists") from e
     db.refresh(db_source)
     return db_source
 
@@ -251,11 +326,24 @@ def get_sources(db: Session = Depends(get_db)):
 # =========================================================
 # ARTICLE ROUTES
 # =========================================================
-@app.post("/articles", response_model=schemas.ArticleResponse)
+@app.post("/articles", response_model=schemas.ArticleResponse, dependencies=[Depends(require_admin)])
 def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)):
-    db_article = models.Article(**article.model_dump())
+    payload = article.model_dump()
+
+    # Checked here as well as by the database: SQLite only enforces foreign
+    # keys when asked, so an unknown source_id used to be accepted locally and
+    # rejected in production.
+    if not db.get(models.Source, payload["source_id"]):
+        raise HTTPException(status_code=400, detail=f"No source with id {payload['source_id']}")
+    if payload.get("country_id") is not None and not db.get(models.Country, payload["country_id"]):
+        raise HTTPException(status_code=400, detail=f"No country with id {payload['country_id']}")
+
+    db_article = models.Article(**payload)
     db.add(db_article)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as e:
+        raise _conflict(db, "An article with that URL already exists") from e
     db.refresh(db_article)
     return db_article
 
@@ -285,25 +373,28 @@ def get_articles(
         )
     )
 
-    if country or region:
+    country_term = (country or "").strip()
+    region_term = (region or "").strip()
+
+    if country_term or region_term:
         query = query.join(models.Article.country_rel)
-        if country:
-            term = country.strip()
+        if country_term:
             query = query.filter(
-                (models.Country.iso_code == term.upper())
-                | (models.Country.name.ilike(term))
+                (models.Country.iso_code == country_term.upper())
+                | (models.Country.name.ilike(_like_escape(country_term), escape="\\"))
             )
-        if region:
-            query = query.filter(models.Country.region == region.strip())
+        if region_term:
+            query = query.filter(models.Country.region == region_term)
 
     if level:
         query = query.filter(models.Article.geo_risk_level == level)
 
-    if q:
-        pattern = f"%{q.strip()}%"
+    q_term = (q or "").strip()
+    if q_term:
+        pattern = f"%{_like_escape(q_term)}%"
         query = query.filter(
-            models.Article.title.ilike(pattern)
-            | models.Article.description.ilike(pattern)
+            models.Article.title.ilike(pattern, escape="\\")
+            | models.Article.description.ilike(pattern, escape="\\")
         )
 
     if days:
@@ -325,28 +416,51 @@ def get_articles(
 # =========================================================
 # INGEST ENDPOINTS
 # =========================================================
-@app.post("/ingest-news")
+@app.post("/ingest-news", dependencies=[Depends(require_admin)])
 def ingest_news(country_iso: str, db: Session = Depends(get_db)):
     ingest.ensure_country_catalog_in_db(db)
     saved = ingest.ingest_news_for_country(country_iso, db)
     return {"message": "News ingestion completed", "articles_saved": saved}
 
 
-@app.post("/ingest-batch")
-def ingest_country_batch(
-    size: int = Query(default=15, ge=1, le=100),
-    db: Session = Depends(get_db),
-):
-    """Run one ingest cycle: global feeds plus the next slice of countries."""
-    summary = ingest.run_ingest_cycle(db, batch_size=size)
+@app.post("/ingest-batch", status_code=202, dependencies=[Depends(require_admin)])
+def ingest_country_batch(size: int = Query(default=15, ge=1, le=100)):
+    """
+    Start one ingest cycle: global feeds plus the next slice of countries.
+
+    Runs in the background and returns straight away. Held open, a cycle makes
+    dozens of upstream requests per country and routinely outlasts the 30-60s
+    gateway timeout on a typical PaaS, so the caller saw a failure even when
+    ingestion had succeeded. Poll /ingest-status for completion.
+    """
+    if _ingest_state["running"]:
+        return {
+            "message": "Ingestion already running",
+            "started": False,
+            **ingest_status(),
+        }
+
+    threading.Thread(target=run_ingest, kwargs={"batch_size": size}, daemon=True).start()
     return {
-        "message": "Batch ingestion completed",
+        "message": "Batch ingestion started",
+        "started": True,
         "catalog_total": len(COUNTRIES),
-        **summary,
     }
 
 
-@app.post("/ingest-all")
+@app.get("/ingest-status")
+def ingest_status():
+    """Progress of the background ingest cycle started by /ingest-batch."""
+    return {
+        "running": _ingest_state["running"],
+        "started_at": _ingest_state["started_at"],
+        "finished_at": _ingest_state["finished_at"],
+        "last_summary": _ingest_state["last_summary"],
+        "last_error": _ingest_state["last_error"],
+    }
+
+
+@app.post("/ingest-all", dependencies=[Depends(require_admin)])
 def ingest_all_countries(
     limit: int = Query(default=50, ge=1, le=249),
     db: Session = Depends(get_db),
@@ -378,11 +492,16 @@ def ingest_all_countries(
 @app.get("/alert-analysis", response_model=list[schemas.AlertResponse])
 def alert_analysis(
     active_only: bool = Query(default=False, description="Only countries with articles"),
+    hours: int | None = Query(
+        default=None, ge=1, le=24 * 365,
+        description="Score only articles from the last N hours (default: whole retention window)",
+    ),
     db: Session = Depends(get_db),
 ):
     """Backend-wide intelligence scan producing per-country alert statuses."""
+    since = datetime.utcnow() - timedelta(hours=hours) if hours else None
     try:
-        results = alerts.compute_alert_status(db)
+        results = alerts.compute_alert_status(db, since=since)
     except Exception as e:
         logger.exception("[ERR] Intelligence scan failed: %s", e)
         raise HTTPException(status_code=500, detail="Intelligence scan failed") from e
@@ -428,7 +547,7 @@ def movers(
     return result
 
 
-@app.post("/snapshot")
+@app.post("/snapshot", dependencies=[Depends(require_admin)])
 def capture_snapshot(db: Session = Depends(get_db)):
     """Force a risk-history capture (normally runs at the end of each cycle)."""
     written = alerts.capture_snapshot(db)
@@ -459,7 +578,7 @@ def get_channels(
     }
 
 
-@app.post("/channels/refresh")
+@app.post("/channels/refresh", dependencies=[Depends(require_admin)])
 def refresh_channels(
     force: bool = Query(default=True),
     db: Session = Depends(get_db),
