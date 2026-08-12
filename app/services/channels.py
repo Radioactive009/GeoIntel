@@ -784,11 +784,15 @@ def list_channels(db: Session, country: str | None = None, live_only: bool = Fal
     """Channels for the UI, live ones first."""
     query = db.query(models.Channel).filter(models.Channel.is_enabled.is_(True))
 
-    if country:
-        term = country.strip()
+    term = (country or "").strip()
+    if term:
+        # LIKE wildcards in the term are escaped: "%" would otherwise match
+        # every country rather than the one asked for.
+        escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.outerjoin(models.Country, models.Channel.country_id == models.Country.id)
         query = query.filter(
-            (models.Country.iso_code == term.upper()) | (models.Country.name.ilike(term))
+            (models.Country.iso_code == term.upper())
+            | (models.Country.name.ilike(escaped, escape="\\"))
         )
     if live_only:
         query = query.filter(models.Channel.is_live.is_(True))

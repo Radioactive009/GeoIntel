@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldTopoJson from 'world-atlas/countries-110m.json';
 import {
@@ -6,6 +6,7 @@ import {
     geoToAlpha2,
     getGeoName,
     getAlertColorByLevel,
+    matchesCountry,
 } from '../utils/country';
 
 const geoUrl = worldTopoJson;
@@ -13,6 +14,8 @@ const geoUrl = worldTopoJson;
 const MapChart = ({
     alertData,
     selectedCountry,
+    // Human-readable form of selectedCountry, which may itself be an ISO code.
+    selectedLabel,
     onCountrySelect,
     // Adjustable so the map can align with whatever sits beside it.
     heightClass = 'h-[360px] md:h-[520px] lg:h-[640px]',
@@ -22,6 +25,14 @@ const MapChart = ({
     const lastHoveredCountryRef = useRef('');
     const lastToneAtRef = useRef(0);
     const mapContainerRef = useRef(null);
+
+    // An AudioContext is a real audio-device handle; leaving one open per
+    // mounted map keeps the output device awake for the life of the tab.
+    useEffect(() => () => {
+        const ctx = audioContextRef.current;
+        audioContextRef.current = null;
+        if (ctx && ctx.state !== 'closed') ctx.close().catch(() => {});
+    }, []);
 
     const playHoverTone = (countryName, alertLevel) => {
         const now = Date.now();
@@ -77,7 +88,6 @@ const MapChart = ({
         return { byName, byIso };
     }, [alertData]);
 
-    const selectedNormalized = normalizeCountry(selectedCountry);
     const TOOLTIP_WIDTH = 200;
     const TOOLTIP_HEIGHT = 78;
     const TOOLTIP_GAP = 12;
@@ -131,15 +141,23 @@ const MapChart = ({
 
                                     const alertLevel = alertRecord?.alert_level;
                                     const displayName = alertRecord?.country || geoName;
-                                    const isSelected =
-                                        selectedNormalized &&
-                                        selectedNormalized === normalizeCountry(displayName);
+                                    const isSelected = matchesCountry(selectedCountry, {
+                                        name: displayName,
+                                        iso: isoCode || alertRecord?.iso_code,
+                                    });
+
+                                    // Emit the ISO code when we have one. The TopoJSON label
+                                    // ("Dem. Rep. Congo", "Bosnia and Herz.") is not a name the
+                                    // backend can match, so clicking such a country used to
+                                    // filter the feed to nothing and leave the live player
+                                    // unable to find its broadcaster.
+                                    const selectionValue = isoCode || displayName;
 
                                     return (
                                         <Geography
                                             key={geo.rsmKey}
                                             geography={geo}
-                                            onClick={() => onCountrySelect(isSelected ? '' : displayName)}
+                                            onClick={() => onCountrySelect(isSelected ? '' : selectionValue)}
                                             onMouseEnter={(event) => {
                                                 const pos = getTooltipPosition(event.clientX, event.clientY);
                                                 setTooltip({
@@ -215,7 +233,7 @@ const MapChart = ({
                     <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ELEVATED</span>
                     <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f43f5e]" /> CRITICAL</span>
                     <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1f2937]" /> NO DATA</span>
-                    <span className="text-slate-400">Node Selected: {selectedCountry || 'None'}</span>
+                    <span className="text-slate-400">Node Selected: {selectedLabel || selectedCountry || 'None'}</span>
                 </div>
             </div>
         </div>

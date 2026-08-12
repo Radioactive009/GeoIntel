@@ -179,19 +179,31 @@ def _collect(feed_configs: list[dict]) -> list[dict]:
 # PUBLIC API
 # ─────────────────────────────────────────────────────────
 def fetch_global_rss() -> list[dict]:
-    """Wire feeds from major international outlets, cached for 5 minutes."""
+    """
+    Wire feeds from major international outlets, cached for 5 minutes.
+
+    The lock guards the cache dict only — it is deliberately released across
+    the network fetch. Holding it through ``_collect`` serialised every caller
+    behind a full round of feed timeouts, so a manual refresh could sit idle
+    for the length of a scheduled one. The cost is that two callers arriving
+    on a cold cache may both fetch; that is cheaper than blocking, and the
+    second one's result simply replaces the first.
+    """
     now = time.time()
     with _global_lock:
         if now - _global_cache["fetched_at"] <= GLOBAL_CACHE_TTL and _global_cache["articles"]:
             logger.debug("[CACHE] Global RSS cache hit")
             return list(_global_cache["articles"])
 
-        logger.info("[NET] Refreshing global RSS feeds...")
-        articles = _collect(RSS_FEEDS)
+    logger.info("[NET] Refreshing global RSS feeds...")
+    articles = _collect(RSS_FEEDS)
+    logger.info("[RSS] Global total: %s articles", len(articles))
+
+    with _global_lock:
         if articles:
             _global_cache["articles"] = articles
             _global_cache["fetched_at"] = now
-        logger.info("[RSS] Global total: %s articles", len(articles))
+        # Every feed failing (offline host) falls back to the last good set.
         return list(articles or _global_cache["articles"])
 
 

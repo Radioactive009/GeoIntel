@@ -267,7 +267,9 @@ def trend_series(
     grouped: dict[str, list[dict]] = defaultdict(list)
     for iso, _name, captured_at, score, articles in _load_window(db, hours, iso_code):
         grouped[iso].append({
-            "t": captured_at.isoformat(),
+            # A datetime, not a pre-formatted string: TrendPoint declares one,
+            # and FastAPI serialises it to the same ISO text on the way out.
+            "t": captured_at,
             "score": round(float(score or 0.0), 2),
             "articles": int(articles or 0),
         })

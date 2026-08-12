@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import ArticleCard from '../components/ArticleCard';
@@ -8,7 +8,7 @@ import EscalationPanel from '../components/EscalationPanel';
 import LiveBroadcast from '../components/LiveBroadcast';
 import {
     getArticles, getAlertAnalysis, getStats, getTrends, getMovers, getChannels,
-    triggerIngestion,
+    runIngestion,
 } from '../services/api';
 import {
     ChevronLeft, ChevronRight, Loader2, AlertCircle, Shield,
@@ -16,7 +16,7 @@ import {
     Zap, Target, AlertTriangle, Search, Mail, Phone, Github
 } from 'lucide-react';
 import developerImg from '../assets/developer.jpg';
-import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL } from '../utils/country';
+import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL, matchesCountry } from '../utils/country';
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -72,9 +72,27 @@ const Dashboard = () => {
     const [channels, setChannels] = useState([]);
     const [channelsLoading, setChannelsLoading] = useState(true);
 
+    // Reset paging when the filters change — during render, not in an effect.
+    // As an effect it ran *after* the fetch effect, so changing a filter while
+    // on page 3 fired one request at the old offset and a second at offset 0.
+    // Adjusting state here makes React re-render before committing, so only
+    // the page-1 request is ever issued.
+    const filterKey = `${selectedCountry}|${selectedRegion}|${selectedLevel}`;
+    const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+    if (filterKey !== lastFilterKey) {
+        setLastFilterKey(filterKey);
+        setCurrentPage(1);
+    }
+
+    // Guards against out-of-order responses: only the newest request may write
+    // to state, so a slow early request can no longer overwrite a fast later
+    // one and leave the grid showing a page the controls disagree with.
+    const requestSeq = useRef(0);
+
     // Articles are paginated and filtered by the backend; the dashboard used
     // to download every article and slice it in the browser.
     const fetchArticles = useCallback(async () => {
+        const seq = ++requestSeq.current;
         setLoading(true);
         setError(null);
         try {
@@ -85,9 +103,11 @@ const Dashboard = () => {
                 limit: ARTICLES_PER_PAGE,
                 offset: (currentPage - 1) * ARTICLES_PER_PAGE,
             });
+            if (seq !== requestSeq.current) return;
             setArticles(res.data?.items || []);
             setTotalArticles(res.data?.total || 0);
         } catch (err) {
+            if (seq !== requestSeq.current) return;
             console.error(err);
             setArticles([]);
             setTotalArticles(0);
@@ -96,7 +116,7 @@ const Dashboard = () => {
                 'Confirm the API is running and VITE_API_URL points at it.'
             );
         } finally {
-            setLoading(false);
+            if (seq === requestSeq.current) setLoading(false);
         }
     }, [selectedCountry, selectedRegion, selectedLevel, currentPage]);
 
@@ -151,18 +171,18 @@ const Dashboard = () => {
     useEffect(() => { fetchTrends(); }, [fetchTrends]);
     useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
-    // Reset to the first page whenever the filters change.
-    useEffect(() => { setCurrentPage(1); }, [selectedCountry, selectedRegion, selectedLevel]);
-
     const handleManualRefresh = async () => {
         setRefreshing(true);
         setError(null);
         try {
-            await triggerIngestion(10);
-            await Promise.all([fetchArticles(), fetchOverview(), fetchTrends()]);
+            // Ingestion now runs in the background on the server and this
+            // polls for completion, instead of holding one request open for
+            // minutes past the gateway timeout.
+            await runIngestion(10);
+            await Promise.all([fetchArticles(), fetchOverview(), fetchTrends(), fetchChannels()]);
         } catch (err) {
             console.error(err);
-            setError('Intelligence sync failed. The ingestion cycle timed out or the backend is unreachable.');
+            setError('Intelligence sync failed. The ingestion cycle errored or the backend is unreachable.');
         } finally {
             setRefreshing(false);
         }

@@ -180,6 +180,12 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[SKIP] Scheduler disabled via ENABLE_SCHEDULER")
 
+    if not ADMIN_API_KEY:
+        logger.warning(
+            "[WARN] ADMIN_API_KEY is not set - /ingest-*, /snapshot and the channel "
+            "write endpoints are unauthenticated. Set it before exposing this host."
+        )
+
     yield
 
     if scheduler.running:
@@ -512,7 +518,7 @@ def alert_analysis(
     return results
 
 
-@app.get("/trends")
+@app.get("/trends", response_model=schemas.TrendsResponse)
 def trends(
     hours: int = Query(default=168, ge=1, le=24 * 90),
     points: int = Query(default=24, ge=2, le=200),
@@ -530,7 +536,7 @@ def trends(
     }
 
 
-@app.get("/movers")
+@app.get("/movers", response_model=schemas.MoversResponse)
 def movers(
     hours: int = Query(default=168, ge=2, le=24 * 90),
     limit: int = Query(default=8, ge=1, le=50),
@@ -600,7 +606,7 @@ def channel_diagnostics(db: Session = Depends(get_db)):
     return channels.diagnostics(db)
 
 
-@app.post("/channels/repair")
+@app.post("/channels/repair", dependencies=[Depends(require_admin)])
 def repair_channels(db: Session = Depends(get_db)):
     """Re-resolve stored channel ids that point at the wrong channel."""
     return channels.repair_channel_ids(db)
@@ -617,7 +623,7 @@ def preview_channel(handle: str = Query(..., description="YouTube handle, with o
     return channels.preview_handle(handle)
 
 
-@app.post("/channels")
+@app.post("/channels", dependencies=[Depends(require_admin)])
 def create_channel(
     handle: str = Query(..., description="YouTube handle, with or without @"),
     name: str | None = Query(default=None, description="Display name; defaults to the handle"),
@@ -632,7 +638,7 @@ def create_channel(
     return result
 
 
-@app.patch("/channels/{channel_id}")
+@app.patch("/channels/{channel_id}", dependencies=[Depends(require_admin)])
 def toggle_channel(channel_id: int, enabled: bool, db: Session = Depends(get_db)):
     """Enable or hide a channel without deleting it."""
     if not channels.set_channel_enabled(db, channel_id, enabled):
@@ -640,7 +646,7 @@ def toggle_channel(channel_id: int, enabled: bool, db: Session = Depends(get_db)
     return {"id": channel_id, "is_enabled": enabled}
 
 
-@app.delete("/channels/{channel_id}")
+@app.delete("/channels/{channel_id}", dependencies=[Depends(require_admin)])
 def remove_channel(channel_id: int, db: Session = Depends(get_db)):
     if not channels.delete_channel(db, channel_id):
         raise HTTPException(status_code=404, detail="Channel not found")

@@ -80,6 +80,21 @@ export const geoToAlpha2 = (geo) => {
 export const getGeoName = (geoProperties) =>
     geoProperties?.name || geoProperties?.NAME || geoProperties?.ADMIN || 'Unknown';
 
+/**
+ * Does `selected` refer to this country?
+ *
+ * The selection may be an ISO alpha-2 code (map clicks, which have an exact
+ * numeric id to work from) or a display name (the sidebar's <select>). Both
+ * are accepted so the map, the feed filter and the live player agree on what
+ * is selected without every caller having to know which form it holds.
+ */
+export const matchesCountry = (selected, { name, iso } = {}) => {
+    const value = (selected || '').toString().trim();
+    if (!value) return false;
+    if (iso && value.length === 2 && value.toUpperCase() === iso.toUpperCase()) return true;
+    return Boolean(name) && normalizeCountry(value) === normalizeCountry(name);
+};
+
 export const getFlagEmoji = (countryCode) => {
     if (!countryCode || typeof countryCode !== 'string' || countryCode === 'Global') return '🌐';
     const code = countryCode.trim().toUpperCase();

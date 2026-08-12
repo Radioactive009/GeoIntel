@@ -105,6 +105,11 @@ class TrendPoint(BaseModel):
     articles: int
 
 
+class TrendsResponse(BaseModel):
+    window_hours: int
+    series: dict[str, list[TrendPoint]]
+
+
 class MoverResponse(BaseModel):
     iso_code: str
     country: str
@@ -116,3 +121,13 @@ class MoverResponse(BaseModel):
     article_count: int
     observations: int
     direction: str
+
+
+class MoversResponse(BaseModel):
+    window_hours: int
+    tracked_countries: int
+    eligible_countries: int
+    rising: list[MoverResponse]
+    falling: list[MoverResponse]
+    # How much history exists — used by the UI to explain an empty board.
+    history: dict = {}

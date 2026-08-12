@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Radio, Play, Volume2, VolumeX, ExternalLink, Tv } from 'lucide-react';
-import { normalizeCountry } from '../utils/country';
+import { matchesCountry } from '../utils/country';
 import ChannelSelect from './ChannelSelect';
 
 /**
@@ -15,28 +15,38 @@ import ChannelSelect from './ChannelSelect';
  * form failed for most broadcasters and resolved at least one to an unrelated
  * stream, while embedding a resolved video id worked nearly everywhere.
  */
-const LiveBroadcast = ({ channels = [], selectedCountry, loading }) => {
+const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading }) => {
     const [activeId, setActiveId] = useState(null);
     const [muted, setMuted] = useState(true);
     const [started, setStarted] = useState(false);
+    const [playerReady, setPlayerReady] = useState(false);
     const userPicked = useRef(false);
+    const lastCountry = useRef(selectedCountry);
+    const iframeRef = useRef(null);
 
     const live = useMemo(() => channels.filter((c) => c.is_live && c.live_video_id), [channels]);
     const offline = useMemo(() => channels.filter((c) => !c.is_live || !c.live_video_id), [channels]);
 
-    // Follow the map/sidebar selection unless the viewer has picked a channel.
+    // Matched on ISO code as well as name, because the map now emits a code.
     const countryMatch = useMemo(() => {
         if (!selectedCountry) return null;
-        const target = normalizeCountry(selectedCountry);
-        return live.find((c) => c.country && normalizeCountry(c.country) === target) || null;
+        return live.find((c) =>
+            matchesCountry(selectedCountry, { name: c.country, iso: c.country_iso_code })
+        ) || null;
     }, [live, selectedCountry]);
 
+    // Follow the map/sidebar selection unless the viewer has picked a channel.
+    // userPicked used to be written and never read, so a periodic channel
+    // refetch would yank the viewer off the stream they had chosen. It is
+    // cleared only when the country selection itself changes, which is an
+    // explicit new intent.
     useEffect(() => {
-        if (countryMatch) {
-            setActiveId(countryMatch.id);
+        if (lastCountry.current !== selectedCountry) {
+            lastCountry.current = selectedCountry;
             userPicked.current = false;
         }
-    }, [countryMatch]);
+        if (countryMatch && !userPicked.current) setActiveId(countryMatch.id);
+    }, [countryMatch, selectedCountry]);
 
     useEffect(() => {
         if (!activeId && live.length) setActiveId(live[0].id);
@@ -44,10 +54,24 @@ const LiveBroadcast = ({ channels = [], selectedCountry, loading }) => {
 
     const active = live.find((c) => c.id === activeId) || live[0] || null;
 
+    // `mute` is pinned to 1 and never interpolated from state: putting it in
+    // the URL made every mute toggle a new src, which reloads the iframe and
+    // restarts the stream. Autoplay requires a muted start anyway; unmuting
+    // afterwards goes through the iframe API below.
     const src = active
         ? `https://www.youtube.com/embed/${active.live_video_id}` +
-          `?autoplay=1&mute=${muted ? 1 : 0}&playsinline=1&rel=0&modestbranding=1`
+          '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1'
         : null;
+
+    useEffect(() => { setPlayerReady(false); }, [active?.id]);
+
+    useEffect(() => {
+        if (!started || !playerReady) return;
+        iframeRef.current?.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func: muted ? 'mute' : 'unMute', args: [] }),
+            'https://www.youtube.com'
+        );
+    }, [muted, playerReady, started]);
 
     const pick = (channel) => {
         userPicked.current = true;
@@ -118,14 +142,15 @@ const LiveBroadcast = ({ channels = [], selectedCountry, loading }) => {
                             doesn't pull a video stream on every load. */}
                         {started ? (
                             <iframe
-                                key={`${active.id}-${muted}`}
+                                key={active.id}
+                                ref={iframeRef}
                                 src={src}
                                 title={active.live_title || active.name}
                                 className="absolute inset-0 w-full h-full"
                                 allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
                                 allowFullScreen
                                 referrerPolicy="strict-origin-when-cross-origin"
-                                loading="lazy"
+                                onLoad={() => setPlayerReady(true)}
                             />
                         ) : (
                             <button
@@ -161,7 +186,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, loading }) => {
 
                     {selectedCountry && !countryMatch && (
                         <p className="text-[10px] text-slate-600 font-medium px-1">
-                            No live broadcaster for {selectedCountry} — showing {active.name}.
+                            No live broadcaster for {selectedLabel || selectedCountry} — showing {active.name}.
                         </p>
                     )}
                 </div>
