@@ -1,8 +1,9 @@
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import SiteHeader from './components/SiteHeader';
 import SiteFooter from './components/SiteFooter';
 import ErrorBoundary from './components/ErrorBoundary';
+import WakingBanner from './components/WakingBanner';
 import { StoryGridSkeleton } from './components/Skeleton';
 import { Analytics } from '@vercel/analytics/react';
 
@@ -26,12 +27,7 @@ const RouteFallback = () => (
 );
 
 function App() {
-    // Lifted so the masthead's update button can drive the front page without
-    // the two needing to know about each other.
-    const [refreshToken, setRefreshToken] = useState(0);
-    const [refreshing, setRefreshing] = useState(false);
     const location = useLocation();
-    const onHome = location.pathname === '/';
 
     return (
         <div className="min-h-screen flex flex-col bg-background">
@@ -44,10 +40,9 @@ function App() {
                 Skip to content
             </a>
 
-            <SiteHeader
-                onRefresh={onHome ? () => setRefreshToken((t) => t + 1) : undefined}
-                isRefreshing={refreshing}
-            />
+            <SiteHeader />
+
+            <WakingBanner />
 
             <main id="main" className="flex-grow">
                 <ErrorBoundary key={location.pathname}>
@@ -55,7 +50,7 @@ function App() {
                         <Routes>
                             <Route
                                 path="/"
-                                element={<Home refreshToken={refreshToken} onRefreshingChange={setRefreshing} />}
+                                element={<Home />}
                             />
                             <Route path="/story/:id" element={<StoryPage />} />
                             <Route path="/country/:iso" element={<CountryPage />} />

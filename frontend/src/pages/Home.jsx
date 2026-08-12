@@ -17,7 +17,7 @@ import TimeScrubber from '../components/TimeScrubber';
 import useWatchlist from '../hooks/useWatchlist';
 import {
     getArticles, getAlertAnalysis, getStats, getTrends, getMovers, getChannels,
-    getRelations, getHistoryFrames, runIngestion,
+    getRelations, getHistoryFrames,
 } from '../services/api';
 import {
     ChevronLeft, ChevronRight, AlertCircle, BarChart3, Globe, Activity,
@@ -28,13 +28,12 @@ import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL, matchesCountry } from 
 
 const ARTICLES_PER_PAGE = 9;
 
-const Home = ({ refreshToken = 0, onRefreshingChange }) => {
+const Home = () => {
     const [articles, setArticles] = useState([]);
     const [totalArticles, setTotalArticles] = useState(0);
     const [alertData, setAlertData] = useState([]);
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState(null);
     const [selectedCountry, setSelectedCountry] = useState('');
     const [selectedRegion, setSelectedRegion] = useState('');
@@ -195,34 +194,8 @@ const Home = ({ refreshToken = 0, onRefreshingChange }) => {
     useEffect(() => { fetchTrends(); }, [fetchTrends]);
     useEffect(() => { fetchChannels(); }, [fetchChannels]);
 
-    // Token from the masthead's update button; skip the initial value so a
-    // page load does not immediately trigger an ingest cycle.
-    const firstToken = useRef(true);
-    useEffect(() => {
-        if (firstToken.current) { firstToken.current = false; return; }
-        handleManualRefresh();
-    }, [refreshToken]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-    // The masthead owns the update button now, so its progress has to travel
-    // back up for the spinner to be honest.
-    useEffect(() => { onRefreshingChange?.(refreshing); }, [refreshing, onRefreshingChange]);
 
-    const handleManualRefresh = useCallback(async () => {
-        setRefreshing(true);
-        setError(null);
-        try {
-            // Ingestion now runs in the background on the server and this
-            // polls for completion, instead of holding one request open for
-            // minutes past the gateway timeout.
-            await runIngestion(10);
-            await Promise.all([fetchArticles(), fetchOverview(), fetchTrends(), fetchChannels()]);
-        } catch (err) {
-            console.error(err);
-            setError('Update failed. The backend is unreachable or the fetch errored.');
-        } finally {
-            setRefreshing(false);
-        }
-    }, [fetchArticles, fetchOverview, fetchTrends, fetchChannels]);
 
     const activeAlertData = useMemo(
         () => alertData.filter((r) => r.total_articles > 0),

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { RefreshCw, Menu, X, Search } from 'lucide-react';
+import { Menu, X, Search } from 'lucide-react';
 import Logo from './Logo';
+import FreshnessBadge from './FreshnessBadge';
 
 /**
  * Masthead.
@@ -23,7 +24,7 @@ const linkClass = ({ isActive }) =>
         isActive ? 'text-cyan-400' : 'text-slate-400 hover:text-white'
     }`;
 
-const SiteHeader = ({ onRefresh, isRefreshing }) => {
+const SiteHeader = () => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [query, setQuery] = useState('');
     const navigate = useNavigate();
@@ -55,6 +56,8 @@ const SiteHeader = ({ onRefresh, isRefreshing }) => {
                     </nav>
 
                     <div className="flex items-center gap-3">
+                        <FreshnessBadge />
+
                         <form onSubmit={submit} className="hidden md:block relative">
                             <label htmlFor="site-search" className="sr-only">Search stories</label>
                             <input
@@ -68,16 +71,6 @@ const SiteHeader = ({ onRefresh, isRefreshing }) => {
                             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                         </form>
 
-                        {onRefresh && (
-                            <button
-                                onClick={onRefresh}
-                                disabled={isRefreshing}
-                                className="hidden sm:flex btn-primary items-center gap-2 !py-1.5 !px-3.5"
-                            >
-                                <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-                                <span className="text-xs">{isRefreshing ? 'Updating' : 'Update'}</span>
-                            </button>
-                        )}
 
                         <button
                             className="lg:hidden p-2 text-slate-400 hover:text-white transition-colors"

@@ -19,6 +19,62 @@ const api = axios.create({
     headers: { 'Content-Type': 'application/json' },
 });
 
+// ── Cold-start handling ──────────────────────────────────
+// Free-tier hosts (Render, Fly, Railway) stop the container after ~15 minutes
+// of no traffic and boot a fresh one on the next request, which takes 30-60s.
+// A single 30s timeout turns that into an error message for a request that
+// would have succeeded — the reader sees a failure, reloads, and it works
+// because the server is now awake.
+//
+// Reads are therefore retried with backoff. Writes are not: they are not
+// idempotent, and retrying an ingest trigger could start a second cycle.
+const RETRY_DELAYS_MS = [2000, 5000, 12000];
+
+const wakeListeners = new Set();
+
+/**
+ * Subscribe to "the backend is asleep and we are waiting for it".
+ * Returns an unsubscribe function.
+ */
+export const onBackendWaking = (listener) => {
+    wakeListeners.add(listener);
+    return () => wakeListeners.delete(listener);
+};
+
+const emitWaking = (waking) => wakeListeners.forEach((listener) => listener(waking));
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+api.interceptors.response.use(
+    (response) => {
+        emitWaking(false);
+        return response;
+    },
+    async (error) => {
+        const config = error.config;
+        // No response at all, or the request was aborted, means the host is
+        // unreachable or still booting — not a 4xx/5xx the server answered.
+        const looksLikeColdStart = !error.response || error.code === 'ECONNABORTED';
+        const isRead = config?.method === 'get';
+
+        if (!config || !isRead || !looksLikeColdStart) {
+            emitWaking(false);
+            return Promise.reject(error);
+        }
+
+        config._retryCount = config._retryCount ?? 0;
+        if (config._retryCount >= RETRY_DELAYS_MS.length) {
+            emitWaking(false);
+            return Promise.reject(error);
+        }
+
+        emitWaking(true);
+        await wait(RETRY_DELAYS_MS[config._retryCount]);
+        config._retryCount += 1;
+        return api(config);
+    }
+);
+
 /**
  * Paginated article feed.
  * The backend returns { items, total, limit, offset }.
@@ -98,7 +154,6 @@ export const getIngestStatus = () => api.get('/ingest-status');
 export const triggerIngestion = (size = 10) =>
     api.post('/ingest-batch', null, { params: { size } });
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Start an ingest cycle and resolve once it finishes.
