@@ -52,6 +52,11 @@ STARTUP_INGEST_DELAY = max(0, int(os.getenv("STARTUP_INGEST_DELAY", "10")))
 # /ingest-all can be used to drain the GNews and YouTube allowances.
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") or ""
 
+# How long the feed may go unrefreshed before /health reports it stale. Set a
+# little above INGEST_INTERVAL_MINUTES so a normally-running cycle never trips
+# it, but a container that was stopped overnight does.
+STALE_AFTER_MINUTES = max(5, int(os.getenv("STALE_AFTER_MINUTES", "45")))
+
 
 # =========================================================
 # DB SETUP + MIGRATIONS
@@ -258,7 +263,15 @@ def root():
 
 @app.get("/health")
 def health(db: Session = Depends(get_db)):
-    """Surfaces whether the pipeline is actually producing data."""
+    """
+    Whether the pipeline is actually producing data, and how recently.
+
+    The freshness fields exist so an external scheduler can decide for itself
+    whether to trigger a cycle. That matters on a host that stops the
+    container when idle: the in-process scheduler stops with it, so nothing
+    runs between visits, and a cron that fires blindly would either
+    over-ingest or miss.
+    """
     total = ingest.article_count(db)
     latest = (
         db.query(func.max(models.Article.published_at)).scalar()
@@ -269,11 +282,27 @@ def health(db: Session = Depends(get_db)):
         .filter(models.Article.country_id.isnot(None))
         .scalar()
     )
+
+    # Time since the last completed *cycle*, not since the newest article.
+    # An article's timestamp is the publisher's, so a quiet news hour would
+    # otherwise look identical to a pipeline that has stopped running.
+    checked_at = ingest.last_ingest_at(db)
+    age_minutes = (
+        round((datetime.utcnow() - checked_at).total_seconds() / 60, 1)
+        if checked_at else None
+    )
+
     return {
         "status": "ok",
         "articles": total,
         "attributed_articles": attributed,
         "latest_article": latest,
+        "last_ingest_at": checked_at,
+        "minutes_since_ingest": age_minutes,
+        # Never ingested, or overdue. An external scheduler acts on this.
+        "stale": age_minutes is None or age_minutes > STALE_AFTER_MINUTES,
+        "stale_after_minutes": STALE_AFTER_MINUTES,
+        "ingest_running": bool(_ingest_state["running"]),
         "countries": db.query(func.count(models.Country.id)).scalar(),
         "sources": db.query(func.count(models.Source.id)).scalar(),
         "scheduler_running": scheduler.running,

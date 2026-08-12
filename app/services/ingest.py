@@ -113,6 +113,45 @@ def save_cursor(db: Session, cursor: int) -> None:
     db.commit()
 
 
+_LAST_INGEST_KEY = "last_ingest_at"
+
+
+def record_ingest_time(db: Session, moment: datetime | None = None) -> None:
+    """
+    Remember when a cycle last completed.
+
+    Persisted rather than kept in memory because the point of the record is to
+    survive a restart: on a host that stops the container when idle, the
+    in-process value is gone exactly when something needs to ask how long the
+    feed has been unattended.
+    """
+    stamp = (moment or datetime.utcnow()).isoformat()
+    row = (
+        db.query(models.SystemState)
+        .filter(models.SystemState.key == _LAST_INGEST_KEY)
+        .first()
+    )
+    if row:
+        row.value = stamp
+    else:
+        db.add(models.SystemState(key=_LAST_INGEST_KEY, value=stamp))
+    db.commit()
+
+
+def last_ingest_at(db: Session) -> datetime | None:
+    row = (
+        db.query(models.SystemState)
+        .filter(models.SystemState.key == _LAST_INGEST_KEY)
+        .first()
+    )
+    if not row or not row.value:
+        return None
+    try:
+        return datetime.fromisoformat(row.value)
+    except ValueError:
+        return None
+
+
 def get_country_batch(db: Session, size: int) -> tuple[list[dict], int]:
     """
     Next slice of the rotating catalog.
@@ -563,6 +602,8 @@ def run_ingest_cycle(db: Session, batch_size: int | None = None) -> dict:
     except Exception as e:
         db.rollback()
         logger.warning("[ERR] Risk snapshot failed: %s", e)
+
+    record_ingest_time(db)
 
     total = global_saved + sum(results.values())
     logger.info(

@@ -105,6 +105,68 @@ class TestWriteEndpoints:
         assert client.get("/ingest-status").status_code == 200
 
 
+class TestFreshness:
+    """
+    /health drives the external scheduler that keeps the container awake, so
+    its staleness signal has to be right in all three states.
+    """
+
+    def test_never_ingested_reads_as_stale(self, client, countries):
+        payload = client.get("/health").json()
+        assert payload["stale"] is True
+        assert payload["minutes_since_ingest"] is None
+        assert payload["last_ingest_at"] is None
+
+    def test_recent_cycle_reads_as_current(self, client, db, countries):
+        from app.services import ingest
+        ingest.record_ingest_time(db)
+
+        payload = client.get("/health").json()
+        assert payload["stale"] is False
+        assert payload["minutes_since_ingest"] < 1
+
+    def test_old_cycle_reads_as_stale(self, client, db, countries):
+        from app.services import ingest
+        ingest.record_ingest_time(db, datetime.utcnow() - timedelta(hours=6))
+
+        payload = client.get("/health").json()
+        assert payload["stale"] is True
+        assert payload["minutes_since_ingest"] > 300
+
+    def test_freshness_tracks_the_cycle_not_the_newest_article(self, client, db, countries):
+        """
+        A quiet news hour must not read as a broken pipeline. If freshness were
+        derived from max(published_at), an ingest that found nothing new would
+        look identical to one that never ran.
+        """
+        from app import models
+        from app.services import ingest
+
+        source = models.Source(name="Wire")
+        db.add(source)
+        db.commit()
+        db.add(models.Article(url="stale-story", title="Published days ago",
+                              country_id=countries["IN"], source_id=source.id,
+                              published_at=datetime.utcnow() - timedelta(days=3)))
+        db.commit()
+        ingest.record_ingest_time(db)   # we just checked; there was nothing new
+
+        payload = client.get("/health").json()
+        assert payload["stale"] is False, "a quiet hour is not a stopped pipeline"
+
+    def test_cycle_records_its_own_completion(self, db, countries, monkeypatch):
+        from app.services import ingest
+
+        # The providers are stubbed out: a test that reaches the live wire
+        # feeds is slow, and fails whenever a publisher is having a bad day.
+        for provider in ("fetch_global_rss", "fetch_country_rss", "fetch_gnews", "_fetch_newsapi"):
+            monkeypatch.setattr(ingest, provider, lambda *args, **kwargs: [])
+
+        assert ingest.last_ingest_at(db) is None
+        ingest.run_ingest_cycle(db, batch_size=1)
+        assert ingest.last_ingest_at(db) is not None
+
+
 class TestStoryPage:
     def test_detail_returns_cluster_siblings(self, client, feed):
         """The story page's "also reported by" comes from the cluster key,

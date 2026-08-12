@@ -200,6 +200,11 @@ def _fix_channel_booleans(conn) -> None:
         current = columns.get(name)
         if not current or "BOOL" in current:
             continue
+        # Postgres refuses a type change when an existing default cannot be
+        # cast to the new type ("default for column ... cannot be cast
+        # automatically to type boolean"). Dropping it first is a no-op when
+        # there is none, and the model supplies the default in Python anyway.
+        conn.execute(text(f"ALTER TABLE channels ALTER COLUMN {name} DROP DEFAULT"))
         conn.execute(text(
             f"ALTER TABLE channels ALTER COLUMN {name} "
             f"TYPE BOOLEAN USING ({name} <> 0)"
