@@ -69,7 +69,12 @@ jobs:
           age=$(echo "$health"     | jq -r '.minutes_since_ingest // "never"')
           count=$(echo "$health"   | jq -r '.articles // 0')
 
-          echo "awake · $count stories · last refresh: ${age} min ago · stale=$stale"
+          # `age` is absent on a backend that predates the freshness fields,
+          # and null before the first recorded cycle.
+          case "$age" in
+            never|null|"") echo "awake · $count stories · no completed cycle recorded" ;;
+            *)             echo "awake · $count stories · last refresh ${age} min ago · stale=$stale" ;;
+          esac
 
           if [ "$stale" != "true" ]; then
             echo "Feed is current — no refresh needed."
