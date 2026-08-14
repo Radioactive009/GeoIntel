@@ -182,6 +182,56 @@ class EventsResponse(BaseModel):
     events: list[EventSummary]
 
 
+# ---------- DAILY BRIEF ----------
+class BriefEvent(BaseModel):
+    event_key: str
+    title: Optional[str] = None
+    reports: int
+    outlets: int
+    outlet_names: list[str] = []
+    countries: list[str] = []
+    topic: Optional[str] = None
+    risk: float = 0.0
+    # Highest figure seen for each kind, e.g. {"deaths": 200}.
+    figures: dict[str, int] = {}
+    image_url: Optional[str] = None
+
+
+class BriefMover(BaseModel):
+    country: str
+    iso_code: Optional[str] = None
+    baseline: float
+    current: float
+    # Movement against the country's own spread, not a raw delta.
+    sigma: float
+
+
+class BriefContested(BaseModel):
+    event_key: str
+    title: Optional[str] = None
+    outlets: int
+    spread: float
+    consensus: float
+
+
+class BriefCoverage(BaseModel):
+    articles: int
+    outlets: int
+    countries: int
+    tone: dict[str, int] = {}
+
+
+class BriefResponse(BaseModel):
+    generated_at: datetime
+    window_hours: int
+    # Composed from counted figures only — never a model's prose.
+    summary: str
+    coverage: BriefCoverage
+    events: list[BriefEvent] = []
+    escalating: list[BriefMover] = []
+    contested: list[BriefContested] = []
+
+
 # ---------- AGENT ----------
 class AgentTurn(BaseModel):
     role: str

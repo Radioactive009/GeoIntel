@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Send, Sparkles, Loader2, AlertCircle, Newspaper, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { askAgent, getAgentStatus } from '../services/api';

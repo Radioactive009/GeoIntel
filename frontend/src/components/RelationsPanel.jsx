@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link2, ArrowLeftRight } from 'lucide-react';
 import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL } from '../utils/country';
 

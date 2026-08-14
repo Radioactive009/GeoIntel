@@ -1,4 +1,3 @@
-import React from 'react';
 import { Sun, Newspaper, Scale } from 'lucide-react';
 
 /**

@@ -243,6 +243,9 @@ export const speakText = async (text, voice) => {
     return data;
 };
 
+/** The daily brief: what to know, composed server-side from counted figures. */
+export const getBrief = (hours = 24) => api.get('/brief', { params: { hours } });
+
 export const getHealth = () => api.get('/health');
 
 export const getIngestStatus = () => api.get('/ingest-status');

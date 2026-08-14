@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Country marker rendered as an ISO-code tile rather than a flag emoji.

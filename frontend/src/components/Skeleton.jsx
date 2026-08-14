@@ -1,4 +1,3 @@
-import React from 'react';
 
 /**
  * Loading placeholders shaped like the content they stand in for.

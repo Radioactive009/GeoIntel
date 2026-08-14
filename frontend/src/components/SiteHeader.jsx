@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Search } from 'lucide-react';
 import Logo from './Logo';
@@ -12,6 +12,7 @@ import FreshnessBadge from './FreshnessBadge';
  */
 const SECTIONS = [
     { to: '/', label: 'Home', end: true },
+    { to: '/brief', label: 'Brief' },
     { to: '/events', label: 'Events' },
     { to: '/ask', label: 'Ask' },
     { to: '/topic/conflict', label: 'Conflict' },

@@ -1,4 +1,3 @@
-import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL } from '../utils/country';
 

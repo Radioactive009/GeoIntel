@@ -1,7 +1,6 @@
-import React from 'react';
 import { Shield } from 'lucide-react';
 
-const Logo = ({ className = '', showText = true, layoutId }) => {
+const Logo = ({ className = '', showText = true }) => {
     return (
         <div className={`flex items-center gap-3 ${className}`}>
             <div className="relative">

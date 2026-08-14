@@ -8,6 +8,7 @@ app/countries.py.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import threading
@@ -32,7 +33,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import agent, alerts, channels, events, framing, ingest, speech
+from .services import agent, alerts, brief, channels, events, framing, ingest, speech
 
 # =========================================================
 # LOGGING / ENV
@@ -65,6 +66,48 @@ ADMIN_API_KEY = os.getenv("ADMIN_API_KEY") or ""
 # little above INGEST_INTERVAL_MINUTES so a normally-running cycle never trips
 # it, but a container that was stopped overnight does.
 STALE_AFTER_MINUTES = max(5, int(os.getenv("STALE_AFTER_MINUTES", "45")))
+
+
+# =========================================================
+# HTTP CACHING
+# =========================================================
+# The archive changes when a cycle finishes, not when someone opens a page,
+# so most reads here are the same bytes served repeatedly. Nothing said so:
+# every navigation re-fetched in full from a host that may have been asleep,
+# and a reader moving between pages paid for it each time.
+#
+# An allowlist rather than a blanket rule. Whether a response may be reused
+# is a property of the endpoint, and defaulting to cacheable is how a private
+# or fast-moving one quietly gets stored somewhere it should not be.
+CACHEABLE: dict[str, int] = {
+    "/brief": 300,          # recomposed only when the archive moves
+    "/events": 180,
+    "/contested": 300,
+    "/relations": 300,
+    "/trends": 300,
+    "/history-frames": 600,
+    "/alert-analysis": 120,
+    "/articles": 60,        # the feed a reader watches most closely
+    "/countries": 3600,     # the catalog, which effectively never changes
+    "/sources": 1800,
+    "/feed.xml": 600,
+    "/sitemap.xml": 3600,
+}
+
+# Serve the stale copy while revalidating behind it. On a free tier that
+# sleeps, this is the difference between a reader waiting out a cold start
+# and not noticing one happened.
+STALE_WHILE_REVALIDATE = 600
+
+
+def _cache_seconds(path: str) -> int | None:
+    """Longest matching prefix, so /events/{key} inherits /events."""
+    best = None
+    for prefix, seconds in CACHEABLE.items():
+        if path == prefix or path.startswith(prefix + "/"):
+            if best is None or len(prefix) > len(best[0]):
+                best = (prefix, seconds)
+    return best[1] if best else None
 
 
 # =========================================================
@@ -238,6 +281,44 @@ app = FastAPI(
 
 # Comma-separated origin list; "*" keeps local development frictionless.
 _origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+@app.middleware("http")
+async def cache_reads(request: Request, call_next):
+    """Attach validators and freshness to cacheable reads.
+
+    An ETag lets a repeat visit answer with 304 and no body at all, which
+    matters more than the max-age here: the archive is mostly unchanged
+    between visits, and a conditional request costs a header exchange rather
+    than a payload.
+    """
+    response = await call_next(request)
+    seconds = _cache_seconds(request.url.path)
+    if request.method != "GET" or response.status_code != 200 or seconds is None:
+        return response
+
+    body = b"".join([chunk async for chunk in response.body_iterator])
+    etag = '"' + hashlib.md5(body).hexdigest() + '"'
+
+    headers = {
+        k: v for k, v in response.headers.items()
+        # Recomputed by the response below; a stale one truncates the body.
+        if k.lower() not in ("content-length", "etag", "cache-control")
+    }
+    headers["ETag"] = etag
+    headers["Cache-Control"] = (
+        f"public, max-age={seconds}, stale-while-revalidate={STALE_WHILE_REVALIDATE}"
+    )
+
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+
+    return Response(
+        content=body,
+        status_code=200,
+        headers=headers,
+        media_type=response.media_type,
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
@@ -656,6 +737,7 @@ def sitemap(db: Session = Depends(get_db)):
     site = os.getenv("SITE_URL", "https://geointel.app").rstrip("/")
     urls: list[tuple[str, str | None]] = [
         (f"{site}/", None),
+        (f"{site}/brief", None),
         (f"{site}/about", None),
         (f"{site}/methodology", None),
         (f"{site}/sources", None),
@@ -908,6 +990,22 @@ def agent_status(db: Session = Depends(get_db)):
         "speech_available": speech.is_available(),
         "speech_voice": speech.TTS_VOICE,
     }
+
+
+@app.get("/brief", response_model=schemas.BriefResponse)
+def daily_brief(
+    hours: int = Query(default=24, ge=1, le=24 * 14),
+    db: Session = Depends(get_db),
+):
+    """
+    What to know, in the site's own voice.
+
+    Composed from counts the pipeline already produced rather than by a model:
+    a brief is the one page here that does not quote an outlet, and an invented
+    figure in it would be indistinguishable from a real one. It also costs
+    nothing and needs no key, so it works on any deployment.
+    """
+    return brief.build_brief(db, hours=hours)
 
 
 @app.get("/contested", response_model=schemas.ContestedResponse)

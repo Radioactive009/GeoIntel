@@ -260,6 +260,40 @@ FIGURE_KINDS = {
 }
 
 
+# The pattern above requires the count before the word — "200 killed". English
+# headlines put it after at least as often — "Earthquake kills 132 in Colombia"
+# — and on this corpus that word order accounted for more missed death tolls
+# than the original pattern caught: 28 against 27. Since a toll is the number
+# an event is tracked by, half of them were invisible to event timelines, the
+# brief and anything the assistant said about casualties.
+#
+# Narrower than the first pattern on purpose: only verbs that state a death
+# toll directly, so it reads a count rather than any number near a violent
+# word. "wounds 30" is left to the pattern above, which handles it as
+# "30 wounded" would be.
+_FIGURE_VERB_FIRST = re.compile(
+    r"\b(?:kill(?:s|ed|ing)|claim(?:s|ed|ing))\s+"
+    r"(?:(?:at least|more than|over|nearly|around|about|some|up to)\s+)?"
+    r"(?P<num>\d{1,3}(?:,\d{3})+|\d+)\b",
+    re.I,
+)
+
+
+def _value_of(raw: str) -> int | None:
+    try:
+        value = int(raw.replace(",", ""))
+    except ValueError:
+        return None
+    if value > 10_000_000:              # an id or a timestamp, not a body count
+        return None
+    # No year filter, deliberately. "in 2024 killed" does parse as 2024 dead,
+    # and screening out 1900-2099 looks like the obvious guard — but every
+    # figure in that range on the live corpus was a real toll (2,000 dead from
+    # Ebola in the DRC, reported three ways). The filter would corrupt real
+    # data to fix a case that does not occur.
+    return value
+
+
 def extract_figures(text: str | None) -> dict[str, int]:
     """
     Reported counts by kind, e.g. {"deaths": 132}.
@@ -271,18 +305,20 @@ def extract_figures(text: str | None) -> dict[str, int]:
     if not text:
         return {}
     found: dict[str, int] = {}
+
     for match in _FIGURE.finditer(text):
-        raw = match.group("num").replace(",", "")
-        try:
-            value = int(raw)
-        except ValueError:
+        value = _value_of(match.group("num"))
+        if value is None:
             continue
-        if value > 10_000_000:          # a year or an id, not a body count
-            continue
-        kind = FIGURE_KINDS.get(match.group("unit").lower().rstrip("s"))
-        if not kind:
-            kind = FIGURE_KINDS.get(match.group("unit").lower())
+        unit = match.group("unit").lower()
+        kind = FIGURE_KINDS.get(unit.rstrip("s")) or FIGURE_KINDS.get(unit)
         if not kind:
             continue
         found[kind] = max(found.get(kind, 0), value)
+
+    for match in _FIGURE_VERB_FIRST.finditer(text):
+        value = _value_of(match.group("num"))
+        if value is not None:
+            found["deaths"] = max(found.get("deaths", 0), value)
+
     return found

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence, useAnimationFrame, useMotionValue, useTransform, animate } from 'framer-motion';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldTopoJson from 'world-atlas/countries-110m.json';

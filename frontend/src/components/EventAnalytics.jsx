@@ -1,4 +1,3 @@
-import React from 'react';
 import { Scale, Activity, Info } from 'lucide-react';
 
 /**

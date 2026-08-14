@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
 import { Rss, Github } from 'lucide-react';
 import { API_URL } from '../services/api';

@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import SiteHeader from './components/SiteHeader';
 import SiteFooter from './components/SiteFooter';
@@ -12,6 +12,7 @@ import { Analytics } from '@vercel/analytics/react';
 // application on first load.
 const Home = lazy(() => import('./pages/Home'));
 const StoryPage = lazy(() => import('./pages/StoryPage'));
+const BriefPage = lazy(() => import('./pages/BriefPage'));
 const EventsPage = lazy(() => import('./pages/EventsPage'));
 const AskPage = lazy(() => import('./pages/AskPage'));
 const EventPage = lazy(() => import('./pages/EventPage'));
@@ -56,6 +57,7 @@ function App() {
                                 element={<Home />}
                             />
                             <Route path="/story/:id" element={<StoryPage />} />
+                            <Route path="/brief" element={<BriefPage />} />
                             <Route path="/events" element={<EventsPage />} />
                             <Route path="/ask" element={<AskPage />} />
                             <Route path="/event/:key" element={<EventPage />} />

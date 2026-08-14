@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { AlertCircle, AlertTriangle, ShieldCheck, ExternalLink, Globe, Clock, Layers } from 'lucide-react';
 import { getFlagEmoji } from '../utils/country';
 import { timeAgo } from '../utils/time';

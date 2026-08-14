@@ -1,4 +1,4 @@
-import React, { useMemo, useId } from 'react';
+import { useMemo, useId } from 'react';
 
 /**
  * Minimal SVG sparkline.

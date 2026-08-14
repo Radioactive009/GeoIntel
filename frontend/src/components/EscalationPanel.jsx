@@ -1,4 +1,3 @@
-import React from 'react';
 import { TrendingUp, TrendingDown, Activity, Clock } from 'lucide-react';
 import { getFlagEmoji } from '../utils/country';
 import Sparkline from './Sparkline';

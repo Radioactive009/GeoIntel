@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Star } from 'lucide-react';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import worldTopoJson from 'world-atlas/countries-110m.json';

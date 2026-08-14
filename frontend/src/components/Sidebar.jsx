@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Filter, XCircle, Globe, MapPin, Cpu, AlertTriangle, Search, X, Calendar, Crosshair } from 'lucide-react';
 
 const RISK_LEVELS = [

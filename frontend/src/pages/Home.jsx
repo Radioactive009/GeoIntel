@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import Sidebar from '../components/Sidebar';
 import { LeadStory, SecondaryStory, StoryCard } from '../components/StoryCards';
 import { LeadStorySkeleton, StoryGridSkeleton } from '../components/Skeleton';
@@ -24,7 +24,7 @@ import {
     ChevronLeft, ChevronRight, AlertCircle, BarChart3, Globe, Activity,
     Newspaper, Zap, Target, AlertTriangle, Search, Star, Bell, BellOff,
 } from 'lucide-react';
-import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL, matchesCountry } from '../utils/country';
+import { getFlagEmoji, getAlertColor, matchesCountry } from '../utils/country';
 
 
 const ARTICLES_PER_PAGE = 9;

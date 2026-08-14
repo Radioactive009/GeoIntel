@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search, Radio, X } from 'lucide-react';
 import CountryBadge from './CountryBadge';
 

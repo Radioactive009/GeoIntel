@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Layers, Clock, AlertCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { getAlertColor } from '../utils/country';

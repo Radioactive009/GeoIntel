@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Radio, Play, Volume2, VolumeX, ExternalLink, Tv } from 'lucide-react';
 import { matchesCountry } from '../utils/country';
 import ChannelSelect from './ChannelSelect';

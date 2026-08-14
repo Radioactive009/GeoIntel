@@ -141,3 +141,42 @@ class TestFigures:
         ]
         assert tolls == sorted(tolls), "expected a rising toll"
         assert tolls[0] < tolls[-1]
+
+
+class TestVerbFirstFigures:
+    """
+    "Earthquake kills 132" is at least as common a headline form as
+    "132 killed", and the original pattern required the count first. On the
+    live corpus that word order accounted for more missed death tolls than
+    the pattern caught — 28 against 27 — so half of all reported tolls were
+    invisible to event timelines and to anything the assistant said about
+    casualties.
+    """
+
+    @pytest.mark.parametrize("headline,expected", [
+        ("Earthquake Kills 132 In Colombia", 132),
+        ("Russian barrage on Ukraine kills 9, wounds dozens", 9),
+        ("Ebola outbreak kills 1,707 as spread outpaces tracing", 1707),
+        ("Attack kills at least 25 people", 25),
+        ("Strike killing 40 civilians", 40),
+    ])
+    def test_the_count_may_follow_the_verb(self, headline, expected):
+        assert extract_figures(headline)["deaths"] == expected
+
+    @pytest.mark.parametrize("headline,expected", [
+        ("200 killed in earthquake", {"deaths": 200}),
+        ("At least 111 killed, 200 missing", {"deaths": 111, "missing": 200}),
+    ])
+    def test_the_original_order_still_works(self, headline, expected):
+        assert extract_figures(headline) == expected
+
+    def test_the_larger_claim_wins_across_both_orders(self):
+        """Tolls are revised upward within a single headline too."""
+        assert extract_figures("Quake kills 40; 111 killed overall")["deaths"] == 111
+
+    def test_wounded_counts_are_not_folded_into_the_toll(self):
+        """Only verbs that state a death toll directly are read this way."""
+        assert extract_figures("Attack kills 7, wounds 30") == {"deaths": 7}
+
+    def test_a_headline_with_no_figure_yields_nothing(self):
+        assert extract_figures("Talks resume after long delay") == {}

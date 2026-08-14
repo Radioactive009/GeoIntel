@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { KeyRound, Check, X } from 'lucide-react';
 import { getOwnerKey, setOwnerKey } from '../services/api';
 

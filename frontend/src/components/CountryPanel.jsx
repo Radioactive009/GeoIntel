@@ -1,4 +1,3 @@
-import React from 'react';
 import { X, Newspaper, ArrowDown, Loader2, Radio } from 'lucide-react';
 import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL } from '../utils/country';
 import { timeAgo } from '../utils/time';
