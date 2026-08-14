@@ -170,8 +170,43 @@ export const getChannels = ({ country = '', liveOnly = false } = {}) => {
  * Ask a question of the archive. Longer timeout than a normal read: the
  * agent may run several tool round-trips before it answers.
  */
-export const askAgent = (question, history = []) =>
-    api.post('/agent/ask', { question, history }, { timeout: 90000 });
+/**
+ * The site owner's admin key, kept in this browser only.
+ *
+ * Deliberately not a VITE_ variable. Vite inlines those into the bundle at
+ * build time, so an admin key configured that way is published to every
+ * visitor in readable JavaScript — it would authorise the whole internet to
+ * spend the site's provider quota rather than the owner.
+ *
+ * Typed in once per browser instead, and sent only on the assistant route
+ * that offers a privileged tool.
+ */
+const OWNER_KEY = 'geointel.ownerKey';
+
+export const getOwnerKey = () => {
+    try {
+        return localStorage.getItem(OWNER_KEY) || '';
+    } catch {
+        return '';                       // private mode, or storage disabled
+    }
+};
+
+export const setOwnerKey = (key) => {
+    try {
+        if (key) localStorage.setItem(OWNER_KEY, key);
+        else localStorage.removeItem(OWNER_KEY);
+    } catch { /* nothing to do; the key simply will not persist */ }
+};
+
+export const askAgent = (question, history = []) => {
+    const key = getOwnerKey();
+    return api.post('/agent/ask', { question, history }, {
+        timeout: 90000,
+        // Absent for ordinary readers, which is what makes refreshing the feed
+        // something only the owner can ask for.
+        headers: key ? { 'X-API-Key': key } : undefined,
+    });
+};
 
 export const getAgentStatus = () => api.get('/agent/status');
 

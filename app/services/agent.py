@@ -91,6 +91,15 @@ but say plainly that you are doing so and that it is not from the archive.
 and you should say so.
 - Be concise. Two or three short paragraphs at most. No preamble.
 - Write plain prose. Never emit citation markers, footnote symbols or source ids — the interface shows the articles beside your answer.
+
+You can also refresh the feed. When asked to update the site, fetch the latest \
+news, or check for new stories, call refresh_feed.
+- A refresh takes several minutes and runs in the background. Say it has \
+started, never that it has finished, and never describe articles it might \
+bring in. Offer that they can ask you how it is going.
+- If refresh_feed reports it is not permitted, say plainly that refreshing is \
+limited to the site owner. Do not retry it and do not suggest workarounds.
+- Use feed_status when asked whether a refresh is done or how the last one went.
 """
 
 # Models sometimes emit retrieval markers of their own ("【3†id=141】"), which
@@ -165,7 +174,108 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "refresh_feed",
+            "description": (
+                "Pull the latest news from the upstream providers into the site. Use "
+                "when asked to update the site, refresh, or fetch the newest stories. "
+                "Runs in the background and takes several minutes; it does not return "
+                "articles. Restricted to the site owner."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "countries": {
+                        "type": "integer",
+                        "description": "How many countries to cover this cycle, 1-100. Default 15.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "feed_status",
+            "description": (
+                "Whether a refresh is currently running, and how the last one went. "
+                "Use to answer 'is it done yet' after a refresh was started."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
+
+# ─────────────────────────────────────────────────────────
+# ACTIONS
+# ─────────────────────────────────────────────────────────
+# Ingestion lives in main, which owns the lock that stops two cycles racing on
+# the same feeds and the state the status endpoint reports. Importing it here
+# would be circular, so main hands these over at import time and this module
+# holds nothing but the handles.
+_ingest_trigger = None
+_ingest_reader = None
+
+
+def set_ingest_handlers(trigger, reader) -> None:
+    """Give the agent the means to start a refresh and to see how it is going."""
+    global _ingest_trigger, _ingest_reader
+    _ingest_trigger = trigger
+    _ingest_reader = reader
+
+
+def _feed_status() -> dict:
+    if _ingest_reader is None:
+        return {"error": "Feed status is unavailable on this server."}
+    state = _ingest_reader()
+    summary = state.get("last_summary") or {}
+    return {
+        "running": bool(state.get("running")),
+        "started_at": str(state.get("started_at") or ""),
+        "finished_at": str(state.get("finished_at") or ""),
+        "articles_saved_last_run": summary.get("total_saved"),
+        "last_error": state.get("last_error"),
+    }
+
+
+def _refresh_feed(allowed: bool, countries: int = 15) -> dict:
+    """Start an ingest cycle, if the caller is entitled to spend on one.
+
+    The check is here rather than only at the endpoint because this is reached
+    through a public, unauthenticated route. A cycle makes dozens of upstream
+    requests per country against metered provider allowances, so an open
+    version of this would let anyone drain the site's GNews and NewsAPI quota
+    by asking a chatbot to refresh in a loop.
+    """
+    if not allowed:
+        return {
+            "permitted": False,
+            "error": "Refreshing the feed is restricted to the site owner.",
+        }
+    if _ingest_trigger is None:
+        return {"error": "Refreshing is not available on this server."}
+
+    state = _ingest_reader() if _ingest_reader else {}
+    if state.get("running"):
+        # Not an error: the caller asked for a refresh and one is happening.
+        return {
+            "started": False,
+            "already_running": True,
+            "message": "A refresh is already in progress.",
+        }
+
+    countries = max(1, min(100, int(countries or 15)))
+    _ingest_trigger(countries)
+    return {
+        "started": True,
+        "countries": countries,
+        "message": (
+            "A refresh has started in the background and takes a few minutes. "
+            "It has not finished yet."
+        ),
+    }
 
 
 # ─────────────────────────────────────────────────────────
@@ -331,7 +441,7 @@ def _escalating(db: Session) -> dict:
     }
 
 
-def _dispatch(db: Session, name: str, args: dict) -> dict:
+def _dispatch(db: Session, name: str, args: dict, can_admin: bool = False) -> dict:
     try:
         if name == "search_news":
             return _search_news(
@@ -343,6 +453,10 @@ def _dispatch(db: Session, name: str, args: dict) -> dict:
             return _major_events(db, int(args.get("hours") or 168))
         if name == "escalating_countries":
             return _escalating(db)
+        if name == "refresh_feed":
+            return _refresh_feed(can_admin, args.get("countries") or 15)
+        if name == "feed_status":
+            return _feed_status()
     except Exception as e:                       # a broken tool must not break the answer
         logger.warning("[AGENT] tool %s failed: %s", name, e)
         return {"error": "That lookup failed."}
@@ -399,13 +513,23 @@ def transcribe(db: Session, audio: bytes, filename: str = "speech.webm") -> dict
 # ─────────────────────────────────────────────────────────
 # LOOP
 # ─────────────────────────────────────────────────────────
-def ask(db: Session, question: str, history: list[dict] | None = None) -> dict:
+def ask(
+    db: Session,
+    question: str,
+    history: list[dict] | None = None,
+    can_admin: bool = False,
+) -> dict:
     """
     Answer a question, using the archive.
 
     Returns {answer, sources, tools_used, error}. `sources` are the articles
     the tools actually returned, so the reader can check the answer rather
     than trust it.
+
+    `can_admin` decides whether the tools that spend money are allowed to do
+    anything. It defaults to False because this is reached through a public
+    route, and a default that has to be turned off is the wrong way round for
+    something that drains a metered quota.
     """
     key = api_key()
     if not key:
@@ -504,7 +628,7 @@ def ask(db: Session, question: str, history: list[dict] | None = None) -> dict:
             except ValueError:
                 args = {}
 
-            result = _dispatch(db, name, args)
+            result = _dispatch(db, name, args, can_admin=can_admin)
             tools_used.append(name)
             for article in result.get("articles", []) or result.get("latest", []) or []:
                 if article not in sources:

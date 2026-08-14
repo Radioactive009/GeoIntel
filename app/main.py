@@ -144,6 +144,22 @@ def scheduled_ingest() -> None:
     run_ingest()
 
 
+def _start_background_ingest(size: int) -> None:
+    """Kick off a cycle without waiting for it.
+
+    A cycle routinely runs for minutes; held open it would outlast both the
+    request and the gateway. The lock inside run_ingest is what stops two
+    cycles racing, so starting a second one here is safe and returns at once.
+    """
+    threading.Thread(target=run_ingest, kwargs={"batch_size": size}, daemon=True).start()
+
+
+# The assistant can refresh the feed on request. Ingestion owns its lock and
+# run state here rather than in the service, so the handles are passed in;
+# importing main from the agent would be circular.
+agent.set_ingest_handlers(_start_background_ingest, lambda: dict(_ingest_state))
+
+
 def _bootstrap() -> None:
     """
     Seed the catalog and, if the feed is empty, ingest immediately.
@@ -199,7 +215,8 @@ async def lifespan(app: FastAPI):
     if not ADMIN_API_KEY:
         logger.warning(
             "[WARN] ADMIN_API_KEY is not set - /ingest-*, /snapshot and the channel "
-            "write endpoints are unauthenticated. Set it before exposing this host."
+            "write endpoints are unauthenticated, and anyone can have the assistant "
+            "refresh the feed on demand. Set it before exposing this host."
         )
 
     yield
@@ -244,6 +261,19 @@ def require_admin(x_api_key: str | None = Header(default=None)) -> None:
         return  # open by choice; the startup warning says so
     if x_api_key != ADMIN_API_KEY:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+
+
+def is_admin(x_api_key: str | None) -> bool:
+    """Same rule as require_admin, as an answer rather than an exception.
+
+    The assistant is a public route that offers one privileged tool, so it
+    needs to know whether the caller is entitled rather than to refuse the
+    whole request. Deliberately the same rule, so there is one definition of
+    who may spend the site's provider quota.
+    """
+    if not ADMIN_API_KEY:
+        return True  # open by choice; the startup warning says so
+    return bool(x_api_key) and x_api_key == ADMIN_API_KEY
 
 
 def _like_escape(term: str) -> str:
@@ -781,6 +811,7 @@ def get_event(event_key: str, db: Session = Depends(get_db)):
 def agent_ask(
     payload: schemas.AgentQuestion,
     request: Request,
+    x_api_key: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
     """
@@ -802,6 +833,10 @@ def agent_ask(
         db,
         payload.question,
         [turn.model_dump() for turn in payload.history],
+        # One privileged tool is exposed here — refreshing the feed spends the
+        # site's metered provider quota, so a reader can ask for it and be told
+        # no, rather than the whole question being refused.
+        can_admin=is_admin(x_api_key),
     )
 
 

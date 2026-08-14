@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Send, Sparkles, Loader2, AlertCircle, Newspaper, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { askAgent, getAgentStatus } from '../services/api';
 import useVoice from '../hooks/useVoice';
+import OwnerKey from '../components/OwnerKey';
 import Seo from '../components/Seo';
 
 // three.js is ~150 kB and only this page uses it, so the character loads on
@@ -172,6 +173,8 @@ const AskPage = () => {
                     <Mic size={14} />
                     {voiceMode ? 'Voice mode on' : 'Talk to the assistant'}
                 </button>
+
+                <div><OwnerKey /></div>
             </header>
 
             {unavailable && (

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import pytest
 import requests
 
-from app import models
+from app import main, models
 from app.services import agent
 
 
@@ -159,6 +159,123 @@ class TestGrounding:
         result = agent.ask(db, "loop forever")
         assert result["answer"] is None
         assert "narrower" in result["error"]
+
+
+class TestRefreshingTheFeed:
+    """The one tool that acts rather than reads.
+
+    It is reached through a public, unauthenticated route and each cycle makes
+    dozens of upstream requests per country against metered allowances, so the
+    authorisation boundary matters more here than anywhere else in the agent.
+    """
+
+    @pytest.fixture
+    def wired(self, monkeypatch):
+        started = []
+        state = {"running": False, "started_at": None, "finished_at": None,
+                 "last_summary": {"total_saved": 42}, "last_error": None}
+        monkeypatch.setattr(agent, "_ingest_trigger", lambda size: started.append(size))
+        monkeypatch.setattr(agent, "_ingest_reader", lambda: state)
+        return started, state
+
+    def test_a_stranger_cannot_spend_the_quota(self, wired):
+        started, _ = wired
+        result = agent._refresh_feed(allowed=False)
+        assert result["permitted"] is False
+        assert started == [], "an unauthorised caller must not start a cycle"
+
+    def test_the_owner_can(self, wired):
+        started, _ = wired
+        assert agent._refresh_feed(allowed=True)["started"] is True
+        assert started == [15]
+
+    def test_it_does_not_claim_to_have_finished(self, wired):
+        """The cycle takes minutes; the answer must not imply fresh articles."""
+        message = agent._refresh_feed(allowed=True)["message"].lower()
+        assert "not finished" in message or "started" in message
+
+    def test_a_second_request_does_not_stack_cycles(self, wired):
+        started, state = wired
+        state["running"] = True
+        result = agent._refresh_feed(allowed=True)
+        assert result["already_running"] is True
+        assert started == [], "a cycle was already running"
+
+    def test_the_country_count_is_bounded(self, wired):
+        started, _ = wired
+        agent._refresh_feed(allowed=True, countries=9999)
+        agent._refresh_feed(allowed=True, countries=-4)
+        assert started == [100, 1]
+
+    def test_without_a_trigger_it_says_so_rather_than_raising(self, monkeypatch):
+        monkeypatch.setattr(agent, "_ingest_trigger", None)
+        assert "error" in agent._refresh_feed(allowed=True)
+
+    def test_status_reports_the_last_run(self, wired):
+        assert agent._feed_status()["articles_saved_last_run"] == 42
+
+    def test_dispatch_defaults_to_refusing(self, db, wired):
+        """The default has to be the safe one; this is a public route."""
+        started, _ = wired
+        assert agent._dispatch(db, "refresh_feed", {})["permitted"] is False
+        assert started == []
+
+    def test_dispatch_allows_it_when_told_to(self, db, wired):
+        started, _ = wired
+        assert agent._dispatch(db, "refresh_feed", {}, can_admin=True)["started"] is True
+        assert started == [15]
+
+
+class TestRefreshEndpointAuthorisation:
+    @pytest.fixture
+    def wired(self, monkeypatch):
+        started = []
+        monkeypatch.setattr(agent, "_ingest_trigger", lambda size: started.append(size))
+        monkeypatch.setattr(agent, "_ingest_reader",
+                            lambda: {"running": False, "last_summary": {}})
+        return started
+
+    def _ask_to_refresh(self, client, monkeypatch, headers=None):
+        replies = iter([
+            _tool_call("refresh_feed", {}),
+            _answer("A refresh has started; it takes a few minutes."),
+        ])
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: next(replies))
+        return client.post("/agent/ask", json={"question": "update the news"},
+                           headers=headers or {})
+
+    def test_without_the_key_the_feed_is_not_refreshed(
+        self, client, configured, wired, monkeypatch
+    ):
+        monkeypatch.setattr(main, "ADMIN_API_KEY", "s3cret")
+        response = self._ask_to_refresh(client, monkeypatch)
+        assert response.status_code == 200
+        assert wired == [], "an anonymous caller triggered ingestion"
+
+    def test_with_the_key_it_is(self, client, configured, wired, monkeypatch):
+        monkeypatch.setattr(main, "ADMIN_API_KEY", "s3cret")
+        self._ask_to_refresh(client, monkeypatch, {"X-API-Key": "s3cret"})
+        assert wired == [15]
+
+    def test_a_wrong_key_is_not_enough(self, client, configured, wired, monkeypatch):
+        monkeypatch.setattr(main, "ADMIN_API_KEY", "s3cret")
+        self._ask_to_refresh(client, monkeypatch, {"X-API-Key": "guess"})
+        assert wired == []
+
+    def test_an_unconfigured_site_stays_open_as_it_documents(
+        self, client, configured, wired, monkeypatch
+    ):
+        """Matches require_admin: no key set means open, and startup warns."""
+        monkeypatch.setattr(main, "ADMIN_API_KEY", "")
+        self._ask_to_refresh(client, monkeypatch)
+        assert wired == [15]
+
+    def test_is_admin_matches_require_admin(self, monkeypatch):
+        monkeypatch.setattr(main, "ADMIN_API_KEY", "s3cret")
+        assert main.is_admin("s3cret") is True
+        assert main.is_admin("wrong") is False
+        assert main.is_admin(None) is False
+        assert main.is_admin("") is False
 
 
 class TestAnswerCleaning:
