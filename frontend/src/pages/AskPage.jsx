@@ -4,6 +4,7 @@ import { Send, Sparkles, Loader2, AlertCircle, Newspaper, Mic, MicOff, Volume2, 
 import { askAgent, getAgentStatus } from '../services/api';
 import useVoice from '../hooks/useVoice';
 import OwnerKey from '../components/OwnerKey';
+import { isFarewell, SIGN_OFF, SILENT_TURNS_BEFORE_CLOSING } from '../lib/conversation';
 import Seo from '../components/Seo';
 
 // three.js is ~150 kB and only this page uses it, so the character loads on
@@ -66,17 +67,69 @@ const AskPage = () => {
     const [muted, setMuted] = useState(false);
     // A model that fails to load must not leave an empty box on the page.
     const [avatarFailed, setAvatarFailed] = useState(false);
+    // Hands-free: the microphone reopens itself after each answer, so a chain
+    // of questions costs one press instead of one press per question.
+    const [conversing, setConversing] = useState(false);
     const endRef = useRef(null);
     const sendRef = useRef(null);
+    // The speech and recognition callbacks run outside render and need the
+    // current hook, which is a fresh object each time. Declared here so the
+    // callbacks below are not closing over a binding defined after them.
+    const voiceRef = useRef(null);
+
+    // Held in a ref, not state: these are read inside speech and recognition
+    // callbacks that fire between renders, where a captured state value is
+    // stale exactly when the decision matters.
+    const talk = useRef({ active: false, closing: false, silent: 0 });
+
+    const startConversation = useCallback(() => {
+        talk.current = { active: true, closing: false, silent: 0 };
+        setConversing(true);
+        voiceRef.current?.startListening();
+    }, []);
+
+    const endConversation = useCallback(({ afterSignOff = false } = {}) => {
+        talk.current = { active: false, closing: false, silent: 0 };
+        setConversing(false);
+        voiceRef.current?.stopListening();
+        if (!afterSignOff) voiceRef.current?.stopSpeaking();
+    }, []);
 
     // A spoken question goes straight to the agent; waiting for the reader to
     // press send after speaking defeats the point of talking to it.
     const voice = useVoice({
-        onTranscript: (text) => sendRef.current?.(text),
+        onTranscript: (text) => {
+            // "No thanks" ends it; "no, what about Ukraine?" does not. The
+            // distinction is in lib/conversation.js.
+            if (talk.current.active && isFarewell(text)) {
+                talk.current.closing = true;
+                voiceRef.current?.speak(SIGN_OFF);
+                return;
+            }
+            talk.current.silent = 0;
+            sendRef.current?.(text);
+        },
+        onSpeechEnd: () => {
+            if (!talk.current.active) return;
+            if (talk.current.closing) { endConversation({ afterSignOff: true }); return; }
+            // The answer has finished playing, so the microphone can open
+            // without hearing the assistant's own voice.
+            voiceRef.current?.startListening();
+        },
+        onListenEnd: (heard) => {
+            const state = talk.current;
+            if (!state.active || state.closing) return;
+            if (heard) return;             // an answer is on its way; wait for it
+            state.silent += 1;
+            if (state.silent >= SILENT_TURNS_BEFORE_CLOSING) endConversation();
+            else voiceRef.current?.startListening();
+        },
         // Only attempt the server's voice when it says it has one, rather than
         // requesting and falling back on every single answer.
         serverSpeech: Boolean(status?.speech_available),
     });
+
+    useEffect(() => { voiceRef.current = voice; });
 
     useEffect(() => {
         getAgentStatus().then((r) => setStatus(r.data)).catch(() => setStatus(null));
@@ -140,9 +193,35 @@ const AskPage = () => {
         }
     }, [turns, voiceMode, muted, voice]);
 
-    useEffect(() => { if (!voiceMode) voice.stopSpeaking(); }, [voiceMode, voice]);
+    // Not every turn ends in speech: the request can fail, or replies can be
+    // muted. Both leave hands-free mode with nothing to chain from, so the
+    // microphone has to be reopened here instead.
+    const wasBusy = useRef(false);
+    useEffect(() => {
+        const justFinished = wasBusy.current && !busy;
+        wasBusy.current = busy;
+        if (!justFinished || !talk.current.active || talk.current.closing) return;
+
+        const last = turns[turns.length - 1];
+        const willSpeak = Boolean(last?.answer) && !muted && voiceMode;
+        if (!willSpeak) voiceRef.current?.startListening();
+    }, [busy, turns, muted, voiceMode]);
+
+    // Leaving voice mode ends the conversation with it; otherwise the
+    // microphone keeps reopening behind a panel that is no longer shown.
+    useEffect(() => {
+        if (voiceMode) return;
+        voice.stopSpeaking();
+        if (talk.current.active) endConversation();
+    }, [voiceMode, voice, endConversation]);
 
     const unavailable = status && !status.available;
+
+    // Hands-free needs the browser to tell us when the speaker stopped, which
+    // only SpeechRecognition does. The recording fallback used by Safari and
+    // Firefox runs until it is told to stop, so a conversation there would
+    // record silence indefinitely; those browsers keep press-to-record.
+    const handsFree = !voice.usesServerTranscription;
 
     return (
         <div className="max-w-3xl mx-auto px-6 py-8 lg:py-12 flex flex-col min-h-[70vh]">
@@ -219,21 +298,30 @@ const AskPage = () => {
                             || (busy && 'Checking the archive…')
                             || (voice.preparing && 'Finding the words…')
                             || (voice.speaking && 'Speaking…')
-                            || 'Press the microphone and ask'}
+                            || (conversing && 'One moment…')
+                            || (handsFree ? 'Press once, then just talk' : 'Press the microphone and ask')}
                     </p>
 
                     <div className="flex items-center gap-3 mt-4">
                         <button
-                            onClick={voice.listening ? voice.stopListening : voice.startListening}
-                            disabled={busy || unavailable}
-                            aria-label={voice.listening ? 'Stop listening' : 'Start listening'}
+                            onClick={
+                                handsFree
+                                    ? (conversing ? () => endConversation() : startConversation)
+                                    : (voice.listening ? voice.stopListening : voice.startListening)
+                            }
+                            disabled={unavailable || (!handsFree && busy)}
+                            aria-label={
+                                (handsFree ? conversing : voice.listening)
+                                    ? 'Stop' : 'Start talking'
+                            }
                             className={`p-4 rounded-full transition-all disabled:opacity-30 ${
-                                voice.listening
+                                (handsFree ? conversing : voice.listening)
                                     ? 'bg-rose-500 text-white scale-110 shadow-lg shadow-rose-500/30'
                                     : 'bg-cyan-500 text-white hover:bg-cyan-400'
                             }`}
                         >
-                            {voice.listening ? <MicOff size={20} /> : <Mic size={20} />}
+                            {(handsFree ? conversing : voice.listening)
+                                ? <MicOff size={20} /> : <Mic size={20} />}
                         </button>
                         <button
                             onClick={() => { setMuted((m) => !m); voice.stopSpeaking(); }}
@@ -247,12 +335,13 @@ const AskPage = () => {
                     {voice.error && (
                         <p className="mt-3 text-[12px] text-rose-300">{voice.error}</p>
                     )}
-                    {voice.usesServerTranscription && (
-                        <p className="mt-2 text-[11px] text-slate-600 text-center max-w-xs">
-                            This browser has no speech recognition, so recordings are transcribed
-                            on the server. Tap to record, tap again when finished.
-                        </p>
-                    )}
+                    <p className="mt-2 text-[11px] text-slate-600 text-center max-w-xs">
+                        {!handsFree
+                            ? 'This browser has no speech recognition, so recordings are transcribed on the server. Tap to record, tap again when finished.'
+                            : conversing
+                                ? 'It keeps listening between answers. Say “that’s all” or press the button to finish.'
+                                : 'Press once, then ask as many questions as you like.'}
+                    </p>
                 </div>
             )}
 

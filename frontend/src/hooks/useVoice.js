@@ -35,7 +35,16 @@ const Recognition =
         ? window.SpeechRecognition || window.webkitSpeechRecognition
         : null;
 
-export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
+export const useVoice = ({
+    onTranscript,
+    // Fired when speech finishes of its own accord, never when it is cut off.
+    // Hands-free mode chains the next turn on this, and chaining on a cancelled
+    // utterance would reopen the microphone the moment the reader silenced it.
+    onSpeechEnd,
+    // Fired when a listening session ends, with whether anything was heard.
+    onListenEnd,
+    serverSpeech = false,
+} = {}) => {
     const [listening, setListening] = useState(false);
     const [speaking, setSpeaking] = useState(false);
     // Server audio has to be fetched and decoded before any sound arrives.
@@ -54,9 +63,23 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
     const sourceRef = useRef(null);
     const frameRef = useRef(null);
     const voicesRef = useRef([]);
+    // True while a stop was requested, so the natural-completion handlers can
+    // tell "finished" from "was cut off" — speechSynthesis.cancel() and
+    // AudioBufferSourceNode.stop() both fire the same end events as success.
+    const cancelledRef = useRef(false);
+    const heardRef = useRef(false);
     const onTranscriptRef = useRef(onTranscript);
+    const onSpeechEndRef = useRef(onSpeechEnd);
+    const onListenEndRef = useRef(onListenEnd);
 
     useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
+    useEffect(() => { onSpeechEndRef.current = onSpeechEnd; }, [onSpeechEnd]);
+    useEffect(() => { onListenEndRef.current = onListenEnd; }, [onListenEnd]);
+
+    const finishedSpeaking = () => {
+        if (cancelledRef.current) return;
+        onSpeechEndRef.current?.();
+    };
 
     const supportsNative = Boolean(Recognition);
     const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
@@ -83,6 +106,7 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
     }, []);
 
     const stopSpeaking = useCallback(() => {
+        cancelledRef.current = true;
         if (canSpeak) window.speechSynthesis.cancel();
         stopAudio();
         clearInterval(decayRef.current);
@@ -106,6 +130,7 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
             clearInterval(decayRef.current);
             setSpeaking(false);
             setAmplitude(0);
+            finishedSpeaking();
         };
 
         sentences.forEach((sentence, index) => {
@@ -177,6 +202,7 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
             if (sourceRef.current === source) sourceRef.current = null;
             setSpeaking(false);
             setAmplitude(0);
+            finishedSpeaking();
         };
 
         sourceRef.current = source;
@@ -190,6 +216,9 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
     const speak = useCallback(async (text) => {
         if (!text) return;
         stopSpeaking();
+        // stopSpeaking above sets this to silence whatever was playing; this
+        // utterance is a fresh one and must be allowed to report completion.
+        cancelledRef.current = false;
 
         if (serverSpeech) {
             setPreparing(true);
@@ -215,6 +244,7 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
         recognition.interimResults = true;
         recognition.continuous = false;
 
+        recognition.onstart = () => { heardRef.current = false; };
         recognition.onresult = (event) => {
             let finalText = '';
             let pending = '';
@@ -226,11 +256,16 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
             setInterim(pending);
             setAmplitude(0.3 + Math.random() * 0.4);
             if (finalText.trim()) {
+                heardRef.current = true;
                 setInterim('');
                 onTranscriptRef.current?.(finalText.trim());
             }
         };
         recognition.onerror = (event) => {
+            // Hearing nothing is the ordinary outcome of an open microphone
+            // nobody spoke into. Reporting it as an error made hands-free mode
+            // accuse the reader of mumbling every time they paused to think.
+            if (event.error === 'no-speech' || event.error === 'aborted') return;
             setError(
                 event.error === 'not-allowed'
                     ? 'Microphone access was blocked.'
@@ -238,7 +273,12 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
             );
             setListening(false);
         };
-        recognition.onend = () => { setListening(false); setInterim(''); setAmplitude(0); };
+        recognition.onend = () => {
+            setListening(false);
+            setInterim('');
+            setAmplitude(0);
+            onListenEndRef.current?.(heardRef.current);
+        };
 
         recognitionRef.current = recognition;
         recognition.start();
@@ -256,14 +296,19 @@ export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
             stream.getTracks().forEach((track) => track.stop());
             const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
             setListening(false);
-            if (blob.size < 1200) return;         // a click, not a sentence
+            if (blob.size < 1200) {               // a click, not a sentence
+                onListenEndRef.current?.(false);
+                return;
+            }
 
             try {
                 const { data } = await transcribeAudio(blob);
-                if (data?.text?.trim()) onTranscriptRef.current?.(data.text.trim());
-                else setError(data?.error || 'Nothing was picked up.');
+                const heard = Boolean(data?.text?.trim());
+                if (heard) onTranscriptRef.current?.(data.text.trim());
+                onListenEndRef.current?.(heard);
             } catch {
                 setError('Could not transcribe that.');
+                onListenEndRef.current?.(false);
             }
         };
 
