@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Layers, Clock } from 'lucide-react';
-import { getAlertColor, ALERT_STATUS_LABEL } from '../utils/country';
+import { Layers, Clock, AlertCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { getAlertColor } from '../utils/country';
 import { timeAgo } from '../utils/time';
 
 /**
@@ -16,41 +16,37 @@ import { timeAgo } from '../utils/time';
  * the story.
  */
 
-const TONE_STYLE = {
-    uplifting: { label: 'Good news', color: '#34d399' },
-    serious: { label: 'Serious', color: '#fbbf24' },
+const RISK_STYLE = {
+    high: { icon: AlertCircle, label: 'CRITICAL' },
+    medium: { icon: AlertTriangle, label: 'ELEVATED' },
+    low: { icon: ShieldCheck, label: 'STABLE' },
 };
 
 /**
- * One label per card, not three.
+ * Risk badge — the level and its 0-100 score.
  *
- * Earlier cards carried a risk word, a numeric score, an event type and a
- * country all at the same weight, which reads as a dashboard readout rather
- * than a story. Tone is shown when it is decided, risk otherwise, and the
- * headline is left to carry the card.
+ * Tone is not shown here. It drives the mood switch on the front page, where
+ * the reader is choosing what to read; repeating it on every card competed
+ * with the risk reading for the same slot and said the same thing twice.
  */
-const Tag = ({ tone, level, className = '' }) => {
-    const toneStyle = TONE_STYLE[tone];
-    if (toneStyle) {
-        return (
-            <span
-                className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] ${className}`}
-                style={{ color: toneStyle.color }}
-            >
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: toneStyle.color }} />
-                {toneStyle.label}
-            </span>
-        );
-    }
-    if (!level) return null;
+const RiskTag = ({ level, score, className = '' }) => {
+    const style = RISK_STYLE[level];
+    if (!style) return null;
     const color = getAlertColor(level);
+    const Icon = style.icon;
+
     return (
         <span
-            className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] ${className}`}
-            style={{ color }}
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-bold tracking-wider ${className}`}
+            style={{ color, borderColor: `${color}40`, background: `${color}14` }}
         >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-            {ALERT_STATUS_LABEL[level] || 'Stable'}
+            <Icon size={11} />
+            {style.label}
+            {typeof score === 'number' && (
+                <span className="pl-1.5 ml-0.5 border-l border-current/30 opacity-80 tabular-nums">
+                    {score.toFixed(0)}
+                </span>
+            )}
         </span>
     );
 };
@@ -109,7 +105,7 @@ export const LeadStory = ({ article }) => (
 
             <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 lg:p-10">
                 <div className="flex items-center gap-3 mb-3">
-                    <Tag tone={article.tone} level={article.geo_risk_level} />
+                    <RiskTag level={article.geo_risk_level} score={article.geo_risk_score} />
                     {article.country && (
                         <span className="text-[11px] font-bold uppercase tracking-widest text-slate-300">
                             {article.country}
@@ -140,7 +136,7 @@ export const SecondaryStory = ({ article }) => (
                 </div>
             )}
             <div className="min-w-0 flex-grow">
-                <Tag tone={article.tone} level={article.geo_risk_level} className="mb-1.5" />
+                <RiskTag level={article.geo_risk_level} className="mb-1.5" />
                 <h3 className="font-serif text-base sm:text-lg font-semibold text-white leading-snug line-clamp-3 group-hover:text-cyan-300 transition-colors">
                     {article.title}
                 </h3>
@@ -164,7 +160,7 @@ export const StoryCard = ({ article }) => (
             )}
             <div className="p-5 flex flex-col flex-grow">
                 <div className="flex items-center gap-2.5 mb-2.5">
-                    <Tag tone={article.tone} level={article.geo_risk_level} />
+                    <RiskTag level={article.geo_risk_level} score={article.geo_risk_score} />
                     {article.country && (
                         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 truncate">
                             {article.country}
