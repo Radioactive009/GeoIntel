@@ -19,7 +19,7 @@ from html import escape
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -29,7 +29,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import alerts, channels, events, framing, ingest
+from .services import agent, alerts, channels, events, framing, ingest
 
 # =========================================================
 # LOGGING / ENV
@@ -766,6 +766,46 @@ def get_event(event_key: str, db: Session = Depends(get_db)):
     if not rows:
         raise HTTPException(status_code=404, detail="Event not found")
     return _summarise_event(rows)
+
+
+@app.post("/agent/ask", response_model=schemas.AgentAnswer)
+def agent_ask(
+    payload: schemas.AgentQuestion,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Answer a question using the archive.
+
+    Public and it spends third-party quota, so it is throttled per caller and
+    capped per day. Both limits return a plain message rather than an error,
+    because a reader who asked a reasonable question should not be shown a
+    stack trace for hitting someone else's budget.
+    """
+    caller = request.client.host if request.client else "unknown"
+    if agent.rate_limited(caller):
+        return {
+            "answer": None, "sources": [], "tools_used": [],
+            "error": "You have asked a lot in a short time. Give it a few minutes.",
+        }
+
+    return agent.ask(
+        db,
+        payload.question,
+        [turn.model_dump() for turn in payload.history],
+    )
+
+
+@app.get("/agent/status")
+def agent_status(db: Session = Depends(get_db)):
+    """Whether the assistant is configured, and what is left of today's budget."""
+    _, used = agent._budget_state(db)
+    return {
+        "available": agent.is_available(),
+        "model": agent.MODEL,
+        "used_today": used,
+        "daily_budget": agent.DAILY_BUDGET,
+    }
 
 
 @app.get("/contested", response_model=schemas.ContestedResponse)

@@ -166,6 +166,15 @@ export const getChannels = ({ country = '', liveOnly = false } = {}) => {
     return api.get('/channels', { params });
 };
 
+/**
+ * Ask a question of the archive. Longer timeout than a normal read: the
+ * agent may run several tool round-trips before it answers.
+ */
+export const askAgent = (question, history = []) =>
+    api.post('/agent/ask', { question, history }, { timeout: 90000 });
+
+export const getAgentStatus = () => api.get('/agent/status');
+
 export const getHealth = () => api.get('/health');
 
 export const getIngestStatus = () => api.get('/ingest-status');

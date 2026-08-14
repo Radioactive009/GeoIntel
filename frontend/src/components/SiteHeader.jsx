@@ -13,6 +13,7 @@ import FreshnessBadge from './FreshnessBadge';
 const SECTIONS = [
     { to: '/', label: 'Home', end: true },
     { to: '/events', label: 'Events' },
+    { to: '/ask', label: 'Ask' },
     { to: '/topic/conflict', label: 'Conflict' },
     { to: '/topic/security', label: 'Security' },
     { to: '/topic/diplomacy', label: 'Diplomacy' },

@@ -182,6 +182,39 @@ class EventsResponse(BaseModel):
     events: list[EventSummary]
 
 
+# ---------- AGENT ----------
+class AgentTurn(BaseModel):
+    role: str
+    content: str
+
+
+class AgentQuestion(BaseModel):
+    question: str
+    # Prior turns, so a follow-up ("and Ukraine?") has something to refer to.
+    history: list[AgentTurn] = []
+
+
+class AgentSource(BaseModel):
+    id: Optional[int] = None
+    title: Optional[str] = None
+    source: Optional[str] = None
+    country: Optional[str] = None
+    published: Optional[str] = None
+    risk: Optional[float] = None
+    topic: Optional[str] = None
+
+
+class AgentAnswer(BaseModel):
+    answer: Optional[str] = None
+    # The articles the tools actually returned, so the answer can be checked.
+    sources: list[AgentSource] = []
+    tools_used: list[str] = []
+    # False means the answer came from the model's own knowledge rather than
+    # this site's articles. Derived from whether a tool ran.
+    from_archive: bool = False
+    error: Optional[str] = None
+
+
 # ---------- RELATIONS ----------
 class RelationPair(BaseModel):
     iso_codes: list[str]
