@@ -4,7 +4,13 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-load_dotenv()
+# override=True: a .env file sitting in the project directory is a more
+# deliberate statement of intent than whatever is lingering in the shell or the
+# user's OS environment. Without it a stale GROQ_API_KEY set once as a Windows
+# user variable silently shadowed the working key in .env, and the only symptom
+# was a 401 surfacing as "the assistant could not answer that". Production sets
+# real environment variables and ships no .env, so this is a no-op there.
+load_dotenv(override=True)
 
 # -- Dynamic Database Selection ---------------------------
 # DATABASE_URL selects the backend (PostgreSQL in production); without it we

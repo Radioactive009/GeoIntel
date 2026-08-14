@@ -52,6 +52,9 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL = os.getenv("AGENT_MODEL", "openai/gpt-oss-120b")
 REQUEST_TIMEOUT = 45
 
+# Groq's free tier allows 8,000 tokens a minute. A three-round exchange with
+# generous tool payloads spent most of that on a single question, so one user
+# could rate-limit the next. These bounds keep a full question near ~3k.
 MAX_TOOL_ROUNDS = 3          # enough to search, then refine once
 MAX_QUESTION_CHARS = 500
 MAX_HISTORY_TURNS = 6
@@ -221,7 +224,7 @@ def _article_brief(article) -> dict:
     }
 
 
-def _search_news(db: Session, query: str, country: str = "", days: int = 14, limit: int = 8) -> dict:
+def _search_news(db: Session, query: str, country: str = "", days: int = 14, limit: int = 5) -> dict:
     rows = (
         db.query(models.Article)
         .options(joinedload(models.Article.source), joinedload(models.Article.country_rel))
@@ -262,7 +265,7 @@ def _country_briefing(db: Session, country: str) -> dict:
     standing = next(
         (r for r in alerts.compute_alert_status(db) if r["iso_code"] == row.iso_code), None
     )
-    latest = _search_news(db, "", row.iso_code, days=14, limit=6)
+    latest = _search_news(db, "", row.iso_code, days=14, limit=4)
     return {
         "country": row.name,
         "region": row.region,
@@ -305,7 +308,7 @@ def _major_events(db: Session, hours: int = 168) -> dict:
         })
 
     summaries.sort(key=lambda e: -e["reports"])
-    return {"events": summaries[:6]}
+    return {"events": summaries[:4]}
 
 
 def _escalating(db: Session) -> dict:
@@ -387,7 +390,7 @@ def ask(db: Session, question: str, history: list[dict] | None = None) -> dict:
                     "tools": TOOLS,
                     "tool_choice": "auto",
                     "temperature": 0.2,
-                    "max_tokens": 900,
+                    "max_tokens": 600,
                 },
                 timeout=REQUEST_TIMEOUT,
             )
@@ -398,7 +401,15 @@ def ask(db: Session, question: str, history: list[dict] | None = None) -> dict:
 
         if response.status_code == 429:
             return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
-                    "error": "The assistant is busy. Try again in a moment."}
+                    "error": "The assistant is busy right now. Try again in a moment."}
+        if response.status_code in (401, 403):
+            # A misconfigured key is an operator problem and needs saying so —
+            # reported as "could not answer that", it looks like the question
+            # was at fault and nobody goes looking at the key.
+            logger.error("[AGENT] upstream rejected the API key (%s). Check GROQ_API_KEY.",
+                         response.status_code)
+            return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
+                    "error": "The assistant's API key is missing or invalid on this server."}
         if response.status_code != 200:
             logger.warning("[AGENT] %s: %s", response.status_code, response.text[:200])
             return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
@@ -449,7 +460,7 @@ def ask(db: Session, question: str, history: list[dict] | None = None) -> dict:
                 "role": "tool",
                 "tool_call_id": call.get("id"),
                 "name": name,
-                "content": json.dumps(result)[:6000],
+                "content": json.dumps(result)[:2500],
             })
 
     _record_request(db)
