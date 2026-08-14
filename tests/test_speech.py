@@ -26,9 +26,31 @@ def _wav(frames: int = 800, rate: int = 24000) -> bytes:
     return buffer.getvalue()
 
 
+def _streaming_wav(frames: int = 800, rate: int = 24000) -> bytes:
+    """A WAV shaped the way Groq actually returns them.
+
+    Its responses are streamed, so the length is unknown when the header goes
+    out and both the RIFF and data chunk sizes are sent as 0xFFFFFFFF. The
+    audio is fine; every size field in it is a lie. Generated fixtures were
+    well-formed and hid a crash that only appeared against the real API.
+    """
+    body = _wav(frames, rate)
+    patched = bytearray(body)
+    patched[4:8] = (0xFFFFFFFF).to_bytes(4, "little")        # RIFF size
+    index = patched.find(b"data")
+    patched[index + 4:index + 8] = (0xFFFFFFFF).to_bytes(4, "little")
+    return bytes(patched)
+
+
 def _frames(payload: bytes) -> int:
+    """Real frame count, measured rather than taken from the header."""
     with wave.open(io.BytesIO(payload), "rb") as handle:
-        return handle.getnframes()
+        total = 0
+        while True:
+            block = handle.readframes(4096)
+            if not block:
+                return total
+            total += len(block) // (handle.getnchannels() * handle.getsampwidth())
 
 
 @pytest.fixture
@@ -98,16 +120,33 @@ class TestStitching:
         joined = speech._stitch([_wav(800), _wav(500), _wav(200)])
         assert _frames(joined) == 1500
 
-    def test_a_single_clip_is_returned_untouched(self):
-        clip = _wav(400)
-        assert speech._stitch([clip]) is clip
-
     def test_the_result_is_still_a_valid_wav(self):
         """Concatenating the bytes would bury a header mid-audio; this must not."""
         joined = speech._stitch([_wav(300), _wav(300)])
         with wave.open(io.BytesIO(joined), "rb") as handle:
             assert handle.getnchannels() == 1
             assert handle.getframerate() == 24000
+
+    def test_streaming_headers_do_not_crash_the_writer(self):
+        """The shape Groq actually returns.
+
+        Its declared frame count is 0x7FFFFFFF, and copying that into the
+        writer overflows the size field it derives from it. This raised
+        struct.error against the real API while every generated fixture
+        passed.
+        """
+        joined = speech._stitch([_streaming_wav(600), _streaming_wav(400)])
+        assert _frames(joined) == 1000
+
+    def test_a_streamed_clip_is_rewritten_with_an_honest_length(self):
+        """A browser decoding 0xFFFFFFFF is told a two-second clip is a day long."""
+        result = speech._stitch([_streaming_wav(500)])
+        with wave.open(io.BytesIO(result), "rb") as handle:
+            assert handle.getnframes() == 500
+
+    def test_unreadable_audio_raises_rather_than_returning_junk(self):
+        with pytest.raises(wave.Error):
+            speech._stitch([])
 
 
 class TestRefusesToSpend:
@@ -163,6 +202,21 @@ class TestFailsQuietly:
         assert result["audio"] is None
         assert "terms" in result["error"]
 
+    def test_being_rate_limited_says_so(self, db, enabled, monkeypatch):
+        """100 requests a day on the free tier, which a busy afternoon spends."""
+        monkeypatch.setattr(speech.requests, "post",
+                            lambda *a, **k: _Reply(status=429, text="rate limit reached"))
+        result = speech.synthesise(db, "Hello.")
+        assert result["audio"] is None
+        assert "rate limited" in result["error"]
+
+    def test_a_rate_limit_partway_keeps_what_was_spoken(self, db, enabled, monkeypatch):
+        replies = iter([_Reply(content=_wav(400)), _Reply(status=429, text="slow down")])
+        monkeypatch.setattr(speech.requests, "post", lambda *a, **k: next(replies))
+        long_text = "First part of the answer here. " + "Second part continues on. " * 30
+        result = speech.synthesise(db, long_text)
+        assert result["audio"] is not None and result["error"] is None
+
     def test_a_rejected_key_says_so(self, db, enabled, monkeypatch):
         monkeypatch.setattr(speech.requests, "post",
                             lambda *a, **k: _Reply(status=401, text="nope"))
@@ -211,9 +265,12 @@ class TestSpeaks:
             return _Reply(content=_wav(100))
 
         monkeypatch.setattr(speech.requests, "post", capture)
-        speech.synthesise(db, "A bombing killed dozens. " * 12)
+        # Long enough to span chunks whatever the chunk size is tuned to.
+        sentence = "A bombing killed dozens. "
+        monkeypatch.setattr(speech, "MAX_TEXT_CHARS", speech.MAX_CHUNK_CHARS * 3)
+        speech.synthesise(db, sentence * (speech.MAX_CHUNK_CHARS * 3 // len(sentence) + 1))
 
-        assert len(sent) > 1
+        assert len(sent) > 1, "the text should have spanned more than one request"
         assert all(s.startswith(speech.DIRECTIONS[tone_service.SERIOUS]) for s in sent)
 
     def test_the_configured_voice_is_used_unless_overridden(self, db, enabled, monkeypatch):

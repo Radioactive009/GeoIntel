@@ -48,8 +48,16 @@ TTS_VOICE = os.getenv("TTS_VOICE", "troy")
 # public site is a bill rather than a feature.
 TTS_ENABLED = os.getenv("TTS_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 
-# Groq documents roughly 200 characters per request for this model.
-MAX_CHUNK_CHARS = 200
+# Groq documents roughly 200 characters per request. Measured against the real
+# endpoint, 400 synthesises correctly and in full — 200 characters returned
+# 7.5 seconds of audio and 400 returned 15.5, which is proportional rather than
+# truncated.
+#
+# The higher figure is the default because requests, not characters, are the
+# scarce resource: the free tier allows 100 TTS requests a day, so halving the
+# requests per answer doubles how many answers can be spoken. Lower it to 200
+# if a longer input is ever seen to cut off.
+MAX_CHUNK_CHARS = max(50, int(os.getenv("TTS_CHUNK_CHARS", "400")))
 
 # Bounds both cost and latency: chunks are synthesised in order, so a long
 # answer would otherwise be several sequential round trips before the first
@@ -148,33 +156,53 @@ def _synthesise_one(text: str, voice: str) -> bytes:
 
 
 def _stitch(clips: list[bytes]) -> bytes:
-    """Join WAV clips into one.
+    """Join WAV clips into one well-formed file.
 
     Concatenating the bytes directly would embed a 44-byte header in the
     middle of the audio, which plays as a click and leaves the total duration
     wrong in the leading header. The frames have to be unpacked and rewritten.
-    """
-    if len(clips) == 1:
-        return clips[0]
 
+    A single clip is rewritten too, rather than passed through. Groq streams
+    these responses and declares 0xFFFFFFFF for both the RIFF and data chunk
+    sizes, since it does not know the length when the header goes out. Two
+    consequences, both found only against the real API:
+
+      * getparams() reports 2,147,483,647 frames. Handing that to the writer
+        overflows the 32-bit size field it computes from it and raises, so the
+        format is copied field by field and the length left to the writer.
+      * A browser decoding that header is being told the clip is a day long.
+        Normalising every response is a byte-for-byte cost of nothing and
+        removes a whole class of playback problem.
+    """
     frames: list[bytes] = []
-    params = None
+    fmt: tuple[int, int, int] | None = None
+
     for clip in clips:
         with wave.open(io.BytesIO(clip), "rb") as source:
-            if params is None:
-                params = source.getparams()
-            elif (source.getnchannels(), source.getsampwidth(), source.getframerate()) != (
-                params.nchannels, params.sampwidth, params.framerate
-            ):
+            here = (source.getnchannels(), source.getsampwidth(), source.getframerate())
+            if fmt is None:
+                fmt = here
+            elif here != fmt:
                 # Same model and voice throughout, so this should not happen;
-                # returning the first clip beats emitting garbled audio.
+                # keeping what was decoded beats emitting garbled audio.
                 logger.warning("speech: clip format changed mid-answer, truncating")
                 break
-            frames.append(source.readframes(source.getnframes()))
+            # Read to exhaustion rather than trusting the declared frame count,
+            # which is the placeholder described above.
+            while True:
+                block = source.readframes(4096)
+                if not block:
+                    break
+                frames.append(block)
+
+    if fmt is None:
+        raise wave.Error("no readable audio")
 
     out = io.BytesIO()
     with wave.open(out, "wb") as sink:
-        sink.setparams(params)
+        sink.setnchannels(fmt[0])
+        sink.setsampwidth(fmt[1])
+        sink.setframerate(fmt[2])
         for frame in frames:
             sink.writeframes(frame)
     return out.getvalue()
@@ -227,6 +255,18 @@ def synthesise(db: Session, text: str, voice: str | None = None) -> dict:
                 }
             if message.startswith("401"):
                 return {"audio": None, "error": "The speech API key was rejected."}
+            if message.startswith("429"):
+                # The free tier allows 100 requests a day, which a busy
+                # afternoon can exhaust. Say so rather than reporting a
+                # generic failure the reader cannot act on — and keep any
+                # audio already synthesised.
+                logger.info("speech: rate limited by the provider")
+                if not clips:
+                    return {
+                        "audio": None,
+                        "error": "The voice service is rate limited. Try again later.",
+                    }
+                break
             logger.warning("speech: %s", message)
             break
         _record_request(db)
@@ -236,6 +276,9 @@ def synthesise(db: Session, text: str, voice: str | None = None) -> dict:
 
     try:
         return {"audio": _stitch(clips), "error": None}
-    except (wave.Error, EOFError) as exc:
+    except Exception as exc:
+        # Deliberately broad. Malformed audio has already produced a struct
+        # error here from a header field the wave module never validates, and
+        # an unplayable answer is worth a plainer voice, never a 500.
         logger.warning("speech: could not stitch clips: %s", exc)
         return {"audio": clips[0], "error": None}
