@@ -9,6 +9,7 @@ one definition of "what a country is".
 from __future__ import annotations
 
 import logging
+import re
 
 import pycountry
 import pycountry_convert as pc
@@ -47,6 +48,67 @@ def resolve_region(alpha2: str) -> str:
         return "Global"
 
 
+# Names a newsroom would print, where the ISO register differs.
+#
+# pycountry returns the ISO 3166 register entry, which is a legal designation
+# rather than a display name: "Iran, Islamic Republic of", "Russian
+# Federation", "Taiwan, Province of China". Printed on a flashpoints board
+# that reads as a database dump, and "Taiwan, Province of China" additionally
+# asserts a political claim the site has no business making.
+#
+# pycountry supplies `common_name` for some of these (Iran, Taiwan, Bolivia,
+# the Koreas). The rest — Russia and Syria among them — have none, so they are
+# listed here.
+DISPLAY_NAMES = {
+    "RU": "Russia",
+    "SY": "Syria",
+    "TR": "Turkey",
+    "PS": "Palestine",
+    "CD": "DR Congo",
+    "CG": "Republic of the Congo",
+    "VA": "Vatican City",
+    "BN": "Brunei",
+    "CV": "Cape Verde",
+    "FK": "Falkland Islands",
+    "VG": "British Virgin Islands",
+    "VI": "US Virgin Islands",
+    "FM": "Micronesia",
+    "BQ": "Caribbean Netherlands",
+    "MF": "Saint Martin",
+    "SX": "Sint Maarten",
+    "SH": "Saint Helena",
+    "GS": "South Georgia",
+    "UM": "US Minor Outlying Islands",
+    "IO": "British Indian Ocean Territory",
+    "CC": "Cocos Islands",
+    "HM": "Heard and McDonald Islands",
+    "TF": "French Southern Territories",
+}
+
+# "Bolivia, Plurinational State of" -> "Bolivia" for anything not listed above.
+_QUALIFIER = re.compile(r",\s*(?:the\s+)?(?:\w+\s+){0,3}(?:of|Republic|State)(?:\s+of)?(?:\s+the)?$", re.I)
+
+
+def display_name(country) -> str:
+    """The name to print for a country, in preference order."""
+    code = getattr(country, "alpha_2", "")
+    if code in DISPLAY_NAMES:
+        return DISPLAY_NAMES[code]
+
+    # pycountry's own short form, where it has one.
+    common = getattr(country, "common_name", None)
+    if common:
+        return common
+
+    name = country.name
+    trimmed = _QUALIFIER.sub("", name).strip()
+    # Only accept the trim if it left something meaningful: "Bonaire, Sint
+    # Eustatius and Saba" must not become "Bonaire".
+    if trimmed and trimmed != name and len(trimmed) >= 4 and "," not in trimmed:
+        return trimmed
+    return name
+
+
 def build_country_catalog() -> list[dict]:
     countries = []
     for c in pycountry.countries:
@@ -55,7 +117,7 @@ def build_country_catalog() -> list[dict]:
             continue
 
         # Canonical short name keeps UI/map labels aligned with the backend.
-        name = c.name
+        name = display_name(c)
         query_terms = [f'"{name}"']
         if getattr(c, "official_name", None):
             query_terms.append(f'"{c.official_name}"')
