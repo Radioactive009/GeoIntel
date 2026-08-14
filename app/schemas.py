@@ -194,6 +194,13 @@ class AgentQuestion(BaseModel):
     history: list[AgentTurn] = []
 
 
+class SpeechRequest(BaseModel):
+    text: str
+    # Overriding the persona per request is useful for trying voices without a
+    # redeploy; the server still bounds length and cost regardless.
+    voice: Optional[str] = None
+
+
 class AgentSource(BaseModel):
     id: Optional[int] = None
     title: Optional[str] = None

@@ -23,6 +23,7 @@ from fastapi import (
     Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -31,7 +32,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import agent, alerts, channels, events, framing, ingest
+from .services import agent, alerts, channels, events, framing, ingest, speech
 
 # =========================================================
 # LOGGING / ENV
@@ -824,6 +825,40 @@ async def agent_transcribe(
     return agent.transcribe(db, payload, audio.filename or "speech.webm")
 
 
+@app.post("/agent/speak")
+def agent_speak(
+    payload: schemas.SpeechRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Read an answer aloud in a human voice.
+
+    Optional throughout. The interface speaks with the browser's own synthesis
+    unless this returns audio, so every failure path here returns a plain JSON
+    error and costs the reader a plainer voice rather than silence.
+
+    Throttled like the other agent routes, and additionally because this one
+    is billed per character — the only paid call in the project.
+    """
+    caller = request.client.host if request.client else "unknown"
+    if agent.rate_limited(caller):
+        return JSONResponse(
+            {"error": "You have asked a lot in a short time. Give it a few minutes."},
+            status_code=200,
+        )
+
+    result = speech.synthesise(db, payload.text, payload.voice)
+    if not result["audio"]:
+        return JSONResponse({"error": result["error"]}, status_code=200)
+
+    return Response(
+        content=result["audio"],
+        media_type="audio/wav",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/agent/status")
 def agent_status(db: Session = Depends(get_db)):
     """Whether the assistant is configured, and what is left of today's budget."""
@@ -833,6 +868,10 @@ def agent_status(db: Session = Depends(get_db)):
         "model": agent.MODEL,
         "used_today": used,
         "daily_budget": agent.DAILY_BUDGET,
+        # The interface needs to know before it speaks whether to expect audio
+        # or to use the browser's synthesis, rather than requesting and failing.
+        "speech_available": speech.is_available(),
+        "speech_voice": speech.TTS_VOICE,
     }
 
 

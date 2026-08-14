@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { transcribeAudio } from '../services/api';
+import { speakText, transcribeAudio } from '../services/api';
+import { moodOf, pickVoice, prosodyFor, splitSentences } from '../lib/voices';
 
 /**
  * Speech in and out.
@@ -12,15 +13,21 @@ import { transcribeAudio } from '../services/api';
  *   * Recording audio and sending it to Whisper otherwise (Safari, Firefox).
  *     A round trip and a second of latency, but it works.
  *
- * Speaking uses the browser's own synthesis. Groq offers no text-to-speech on
- * this account — its one speech model requires accepting terms in the console
- * first — and browser synthesis is free, offline and universal, if plainer.
+ * Two paths for speaking, for a different reason:
  *
- * `amplitude` exists so the character's mouth has something to follow. Speech
- * synthesis exposes no audio stream to analyse, so it is derived from word
- * boundary events: a spike as each word starts, decaying between them. It is
- * not phonetic and does not pretend to be — it reads as talking, which is the
- * job.
+ *   * The server, where Orpheus is configured. It sounds like a person and
+ *     takes direction on delivery. It is also the only billed call in the
+ *     project, so it is off unless deliberately switched on.
+ *   * The browser's own synthesis otherwise. Free, offline and universal, and
+ *     plainer — though much less plain once it is given a decent voice and
+ *     allowed to vary between sentences. See lib/voices.js.
+ *
+ * `amplitude` drives the character's mouth, and the two paths derive it very
+ * differently. Real audio is measured: an analyser node reads the waveform and
+ * the mouth follows what is actually being said. Browser synthesis exposes no
+ * audio stream at all, so there it is inferred from word boundary events — a
+ * spike per word, decaying between. That is not phonetic and does not pretend
+ * to be; it reads as talking, which is the job.
  */
 
 const Recognition =
@@ -28,9 +35,13 @@ const Recognition =
         ? window.SpeechRecognition || window.webkitSpeechRecognition
         : null;
 
-export const useVoice = ({ onTranscript } = {}) => {
+export const useVoice = ({ onTranscript, serverSpeech = false } = {}) => {
     const [listening, setListening] = useState(false);
     const [speaking, setSpeaking] = useState(false);
+    // Server audio has to be fetched and decoded before any sound arrives.
+    // Without this the interface sits silent and looks broken for a second or
+    // two, which reads worse than the wait actually is.
+    const [preparing, setPreparing] = useState(false);
     const [interim, setInterim] = useState('');
     const [amplitude, setAmplitude] = useState(0);
     const [error, setError] = useState(null);
@@ -39,6 +50,10 @@ export const useVoice = ({ onTranscript } = {}) => {
     const recorderRef = useRef(null);
     const chunksRef = useRef([]);
     const decayRef = useRef(null);
+    const contextRef = useRef(null);
+    const sourceRef = useRef(null);
+    const frameRef = useRef(null);
+    const voicesRef = useRef([]);
     const onTranscriptRef = useRef(onTranscript);
 
     useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
@@ -46,49 +61,152 @@ export const useVoice = ({ onTranscript } = {}) => {
     const supportsNative = Boolean(Recognition);
     const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
-    // ── Speaking ─────────────────────────────────────────
-    const stopSpeaking = useCallback(() => {
-        if (canSpeak) window.speechSynthesis.cancel();
-        clearInterval(decayRef.current);
-        setSpeaking(false);
-        setAmplitude(0);
+    // getVoices() is empty on the first call in Chrome and fills in later, so
+    // reading it once at speak time picks the browser default and none of the
+    // ranking ever runs.
+    useEffect(() => {
+        if (!canSpeak) return undefined;
+        const load = () => { voicesRef.current = window.speechSynthesis.getVoices() || []; };
+        load();
+        window.speechSynthesis.addEventListener?.('voiceschanged', load);
+        return () => window.speechSynthesis.removeEventListener?.('voiceschanged', load);
     }, [canSpeak]);
 
-    const speak = useCallback((text) => {
-        if (!canSpeak || !text) return;
+    // ── Speaking ─────────────────────────────────────────
+    const stopAudio = useCallback(() => {
+        cancelAnimationFrame(frameRef.current);
+        if (sourceRef.current) {
+            try { sourceRef.current.stop(); } catch { /* already ended */ }
+            sourceRef.current.disconnect();
+            sourceRef.current = null;
+        }
+    }, []);
+
+    const stopSpeaking = useCallback(() => {
+        if (canSpeak) window.speechSynthesis.cancel();
+        stopAudio();
+        clearInterval(decayRef.current);
+        setSpeaking(false);
+        setPreparing(false);
+        setAmplitude(0);
+    }, [canSpeak, stopAudio]);
+
+    /** Browser synthesis, one utterance per sentence so delivery can vary. */
+    const speakLocally = useCallback((text) => {
+        if (!canSpeak) return;
         window.speechSynthesis.cancel();
 
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.02;
-        utterance.pitch = 1.05;
+        const sentences = splitSentences(text);
+        if (!sentences.length) return;
 
-        // Prefer a natural-sounding English voice where the platform has one;
-        // the default is often the most robotic option installed.
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find((v) =>
-            /en-(GB|US)/i.test(v.lang) && /natural|google|samantha|daniel|aria/i.test(v.name)
-        ) || voices.find((v) => /^en/i.test(v.lang));
-        if (preferred) utterance.voice = preferred;
+        const voice = pickVoice(voicesRef.current);
+        const mood = moodOf(text);
 
-        utterance.onstart = () => {
-            setSpeaking(true);
-            // Between word boundaries the mouth would otherwise hold open.
-            clearInterval(decayRef.current);
-            decayRef.current = setInterval(() => {
-                setAmplitude((current) => Math.max(0, current - 0.12));
-            }, 55);
-        };
-        utterance.onboundary = () => setAmplitude(0.55 + Math.random() * 0.45);
         const finish = () => {
             clearInterval(decayRef.current);
             setSpeaking(false);
             setAmplitude(0);
         };
-        utterance.onend = finish;
-        utterance.onerror = finish;
 
-        window.speechSynthesis.speak(utterance);
+        sentences.forEach((sentence, index) => {
+            const utterance = new SpeechSynthesisUtterance(sentence);
+            const { rate, pitch } = prosodyFor(sentence, { mood, index });
+            utterance.rate = rate;
+            utterance.pitch = pitch;
+            if (voice) utterance.voice = voice;
+
+            if (index === 0) {
+                utterance.onstart = () => {
+                    setSpeaking(true);
+                    setPreparing(false);
+                    // Between word boundaries the mouth would otherwise hold open.
+                    clearInterval(decayRef.current);
+                    decayRef.current = setInterval(() => {
+                        setAmplitude((current) => Math.max(0, current - 0.12));
+                    }, 55);
+                };
+            }
+            utterance.onboundary = () => setAmplitude(0.55 + Math.random() * 0.45);
+            if (index === sentences.length - 1) utterance.onend = finish;
+            utterance.onerror = finish;
+
+            // The queue is the browser's; consecutive utterances play in order
+            // with a natural gap between them, which is the pause this wants.
+            window.speechSynthesis.speak(utterance);
+        });
     }, [canSpeak]);
+
+    /** Play server audio, with the mouth following the actual waveform. */
+    const playAudio = useCallback(async (blob) => {
+        const Context = window.AudioContext || window.webkitAudioContext;
+        if (!Context) return false;
+
+        if (!contextRef.current) contextRef.current = new Context();
+        const context = contextRef.current;
+        // Autoplay policy suspends contexts created before a gesture.
+        if (context.state === 'suspended') await context.resume();
+
+        const buffer = await context.decodeAudioData(await blob.arrayBuffer());
+        stopAudio();
+
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        analyser.connect(context.destination);
+
+        const samples = new Uint8Array(analyser.fftSize);
+        const follow = () => {
+            analyser.getByteTimeDomainData(samples);
+            let sum = 0;
+            for (let i = 0; i < samples.length; i += 1) {
+                const deviation = (samples[i] - 128) / 128;
+                sum += deviation * deviation;
+            }
+            // Speech sits well below full scale, so the RMS is scaled up to
+            // reach the top of the mouth's range on a loud syllable.
+            setAmplitude(Math.min(1, Math.sqrt(sum / samples.length) * 3.2));
+            frameRef.current = requestAnimationFrame(follow);
+        };
+
+        source.onended = () => {
+            cancelAnimationFrame(frameRef.current);
+            analyser.disconnect();
+            source.disconnect();
+            if (sourceRef.current === source) sourceRef.current = null;
+            setSpeaking(false);
+            setAmplitude(0);
+        };
+
+        sourceRef.current = source;
+        source.start();
+        setSpeaking(true);
+        setPreparing(false);
+        follow();
+        return true;
+    }, [stopAudio]);
+
+    const speak = useCallback(async (text) => {
+        if (!text) return;
+        stopSpeaking();
+
+        if (serverSpeech) {
+            setPreparing(true);
+            try {
+                const blob = await speakText(text);
+                // null means the server declined — disabled, out of budget, or
+                // terms unaccepted. All of them mean use the plainer voice.
+                if (blob && await playAudio(blob)) return;
+            } catch {
+                // Network or decode failure. Same answer: fall back rather than
+                // leave the reader with an answer nobody reads out.
+            }
+            setPreparing(false);
+        }
+
+        speakLocally(text);
+    }, [serverSpeech, playAudio, speakLocally, stopSpeaking]);
 
     // ── Listening ────────────────────────────────────────
     const startNative = useCallback(() => {
@@ -175,13 +293,19 @@ export const useVoice = ({ onTranscript } = {}) => {
     useEffect(() => () => {
         recognitionRef.current?.abort?.();
         clearInterval(decayRef.current);
+        cancelAnimationFrame(frameRef.current);
+        try { sourceRef.current?.stop(); } catch { /* already ended */ }
+        // One context per mount, closed on unmount. Creating one per playback
+        // exhausts the browser's limit after a few dozen answers.
+        contextRef.current?.close?.();
+        contextRef.current = null;
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
             window.speechSynthesis.cancel();
         }
     }, []);
 
     return {
-        listening, speaking, interim, amplitude, error,
+        listening, speaking, preparing, interim, amplitude, error,
         startListening, stopListening, speak, stopSpeaking,
         canSpeak, usesServerTranscription: !supportsNative,
     };

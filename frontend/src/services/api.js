@@ -190,6 +190,24 @@ export const transcribeAudio = (blob) => {
     });
 };
 
+/**
+ * Fetch an answer as spoken audio.
+ *
+ * Returns a Blob, or null when the server declines — speech is optional and
+ * billed, so it answers with a JSON reason rather than an error status, and
+ * the caller falls back to the browser's own synthesis.
+ */
+export const speakText = async (text, voice) => {
+    const { data } = await api.post(
+        '/agent/speak',
+        { text, voice },
+        { responseType: 'blob', timeout: 90000 },
+    );
+    // A JSON body here means a refusal, not audio.
+    if (data.type && data.type.includes('application/json')) return null;
+    return data;
+};
+
 export const getHealth = () => api.get('/health');
 
 export const getIngestStatus = () => api.get('/ingest-status');

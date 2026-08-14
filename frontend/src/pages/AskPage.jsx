@@ -70,7 +70,12 @@ const AskPage = () => {
 
     // A spoken question goes straight to the agent; waiting for the reader to
     // press send after speaking defeats the point of talking to it.
-    const voice = useVoice({ onTranscript: (text) => sendRef.current?.(text) });
+    const voice = useVoice({
+        onTranscript: (text) => sendRef.current?.(text),
+        // Only attempt the server's voice when it says it has one, rather than
+        // requesting and falling back on every single answer.
+        serverSpeech: Boolean(status?.speech_available),
+    });
 
     useEffect(() => {
         getAgentStatus().then((r) => setStatus(r.data)).catch(() => setStatus(null));
@@ -209,6 +214,7 @@ const AskPage = () => {
                         {voice.interim
                             || (voice.listening && 'Listening…')
                             || (busy && 'Checking the archive…')
+                            || (voice.preparing && 'Finding the words…')
                             || (voice.speaking && 'Speaking…')
                             || 'Press the microphone and ask'}
                     </p>
