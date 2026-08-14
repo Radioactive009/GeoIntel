@@ -5,10 +5,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 /**
  * A real avatar, if one is configured.
  *
- * Takes a GLB URL — a Ready Player Me avatar built from a selfie, or any
- * other model exporting ARKit-style blendshapes. Those give proper visemes
- * and eyelids, so the mouth forms shapes instead of a capsule opening and
- * shutting.
+ * Takes any GLB URL. Models exporting ARKit-style blendshapes give proper
+ * visemes and eyelids, so the mouth forms shapes instead of a capsule opening
+ * and shutting; models without them still animate, just more simply.
+ *
+ * Source-agnostic on purpose. This was written against Ready Player Me, which
+ * shut down weeks later and took every avatar hosted on it — so the loader
+ * knows nothing about where a model comes from.
  *
  * Falls back to the procedural character whenever the model is absent, slow
  * or broken. A head that cannot load is worse than a simple head that always
@@ -16,8 +19,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  * not control.
  */
 
-// ARKit names as Ready Player Me exports them. Every one is optional: models
-// vary in what they rig, and a missing shape is skipped rather than assumed.
+// Standard ARKit blendshape names. Every one is optional: models rig
+// different subsets, and a missing shape is skipped rather than assumed.
 const VISEMES = ['viseme_aa', 'viseme_O', 'viseme_E', 'viseme_I', 'viseme_U'];
 const JAW = ['jawOpen', 'mouthOpen'];
 const BLINK = ['eyeBlinkLeft', 'eyeBlinkRight', 'eyesClosed'];
@@ -92,8 +95,8 @@ const AvatarAnchor = ({
                     if (node.isMesh && node.morphTargetDictionary && node.morphTargetInfluences) {
                         morphs.push({ mesh: node, dictionary: node.morphTargetDictionary });
                     }
-                    // RPM names the neck joint "Head"; framing on it keeps the
-                    // shot on the face regardless of the model's own height.
+                    // Most rigs name the neck joint "Head"; framing on it keeps
+                    // the shot on the face whatever the model's own height.
                     if (node.isBone && /head/i.test(node.name) && !head) head = node;
                 });
 
