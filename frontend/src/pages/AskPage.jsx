@@ -181,7 +181,7 @@ const AskPage = () => {
 
             {voiceMode && (
                 <div className="mb-8 flex flex-col items-center">
-                    <div className="w-full max-w-[300px] aspect-square">
+                    <div className="w-full max-w-[180px] aspect-square">
                         <Suspense fallback={
                             <div className="w-full h-full rounded-full bg-white/[0.03] animate-pulse" />
                         }>
