@@ -52,9 +52,29 @@ DAILY_REQUEST_BUDGET = max(0, int(os.getenv("LLM_DAILY_BUDGET", "400")))
 _BUDGET_KEY = "llm_classify_budget"
 
 # off    — never call out; keyword classifier only
-# review — only stories the keyword classifier was unsure about (cheapest)
-# all    — every story, which is the most accurate
-MODE = os.getenv("LLM_CLASSIFY", "review").strip().lower()
+# review — only stories the keyword classifier was unsure about
+# all    — every story
+#
+# Defaults to off, on evidence rather than principle. Measured against
+# tests/data/gold_headlines.json with the keyword classifier at 88%:
+#
+#     openai/gpt-oss-120b      all     81%
+#     openai/gpt-oss-120b      review  87%
+#     llama-3.3-70b-versatile  all     84%
+#     llama-3.3-70b-versatile  review  87%
+#
+# No configuration beat the keyword classifier. In `all` mode both models
+# were clearly worse; in `review` mode they were a wash. The models are not
+# stupid — most of their disagreements are defensible readings of genuinely
+# ambiguous stories ("Earthquake response strains Colombia's new government"
+# is arguably politics) — but a labelled taxonomy is a set of conventions,
+# and a classifier tuned to those conventions follows them more closely than
+# a model inferring them from a prompt.
+#
+# The layer is kept because it is written, tested and cheap to switch on: a
+# larger gold set, a different taxonomy, or a better prompt could change the
+# answer, and this makes that a one-variable experiment rather than a rebuild.
+MODE = os.getenv("LLM_CLASSIFY", "off").strip().lower()
 
 VALID = set(CATEGORIES) | {NOISE}
 
@@ -170,7 +190,13 @@ def _call_groq(headlines: list[str], key: str) -> dict[int, str]:
                 ],
                 "temperature": 0,               # labelling should be repeatable
                 "response_format": {"type": "json_object"},
-                "max_tokens": 60 + 20 * len(headlines),
+                # Generous on purpose. Too tight and the reply is cut off
+                # mid-object, which Groq rejects server-side as invalid JSON
+                # ("Failed to validate JSON") — the whole batch then falls
+                # back to keywords for a reason that looks like a model
+                # failure but is really a budget that was set too low. Some
+                # models also emit reasoning tokens from the same allowance.
+                "max_tokens": 400 + 60 * len(headlines),
             },
             timeout=REQUEST_TIMEOUT,
         )
