@@ -6,6 +6,7 @@ import { getAlertColor } from '../utils/country';
 import { timeAgo } from '../utils/time';
 import { StoryRow } from '../components/StoryCards';
 import Seo from '../components/Seo';
+import { FramingPanel, CoveragePanel } from '../components/EventAnalytics';
 
 const FIGURE_LABELS = {
     deaths: 'Deaths reported', injured: 'Injured', missing: 'Missing',
@@ -194,6 +195,9 @@ const EventPage = () => {
                 .map(([kind, points]) => (
                     <FigureTimeline key={kind} kind={kind} points={points} />
                 ))}
+
+            <CoveragePanel coverage={event.coverage} />
+            <FramingPanel framing={event.framing} />
 
             <section className="mb-10">
                 <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-3">

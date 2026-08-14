@@ -136,6 +136,10 @@ export const getEvents = ({ hours = 168, limit = 20, minArticles = 3, country = 
     return api.get('/events', { params });
 };
 
+/** Events outlets disagreed about, ranked by spread across all of them. */
+export const getContested = ({ hours = 168, limit = 8 } = {}) =>
+    api.get('/contested', { params: { hours, limit } });
+
 /** One happening: its articles, outlets, and how reported figures moved. */
 export const getEvent = (key) => api.get(`/events/${key}`);
 

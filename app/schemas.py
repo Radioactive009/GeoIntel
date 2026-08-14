@@ -112,11 +112,69 @@ class EventSummary(BaseModel):
     figures: dict[str, int] = {}
 
 
+class OutletFraming(BaseModel):
+    source: str
+    score: float
+    divergence: float          # against the consensus of all outlets
+    reports: int
+    spread: float              # the outlet's own variance, so noise is visible
+
+
+class FramingReport(BaseModel):
+    available: bool = False
+    reason: Optional[str] = None
+    consensus: float = 0.0
+    spread: float = 0.0
+    contested: bool = False
+    highest: Optional[OutletFraming] = None
+    lowest: Optional[OutletFraming] = None
+    outlets: list[OutletFraming] = []
+
+
+class CoveragePoint(BaseModel):
+    hour: float
+    count: int
+
+
+class CoverageCurve(BaseModel):
+    available: bool = False
+    points: list[CoveragePoint] = []
+    span_hours: float = 0.0
+    # When half of everything ever written about it had been written.
+    half_life_hours: float = 0.0
+    peak_hour: float = 0.0
+    shape: str = "single report"
+
+
+class ContestedEvent(BaseModel):
+    event_key: str
+    title: str
+    article_count: int
+    outlet_count: int
+    consensus: float
+    # Spread across every outlet — what the ranking uses.
+    spread: float = 0.0
+    # Highest minus lowest, shown for illustration only.
+    gap: float
+    highest: OutletFraming
+    lowest: OutletFraming
+    first_seen: Optional[datetime] = None
+
+
+class ContestedResponse(BaseModel):
+    window_hours: int
+    events: list[ContestedEvent]
+
+
 class EventDetail(EventSummary):
     articles: list[ArticleResponse] = []
     outlets: list[str] = []
     # How a reported figure moved as the event developed.
     timeline: dict[str, list[FigurePoint]] = {}
+    # How outlets differed on how serious it was.
+    framing: FramingReport = FramingReport()
+    # When coverage arrived and how quickly it stopped.
+    coverage: CoverageCurve = CoverageCurve()
 
 
 class EventsResponse(BaseModel):

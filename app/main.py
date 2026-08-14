@@ -29,7 +29,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import alerts, channels, events, ingest
+from .services import alerts, channels, events, framing, ingest
 
 # =========================================================
 # LOGGING / ENV
@@ -696,6 +696,8 @@ def _summarise_event(rows: list[models.Article]) -> dict:
     scores = [a.geo_risk_score for a in ordered if a.geo_risk_score is not None]
 
     return {
+        "framing": framing.outlet_framing(ordered),
+        "coverage": framing.coverage_curve(ordered),
         "event_key": lead.event_key,
         "title": lead.title or "Untitled",
         "article_count": len(ordered),
@@ -764,6 +766,39 @@ def get_event(event_key: str, db: Session = Depends(get_db)):
     if not rows:
         raise HTTPException(status_code=404, detail="Event not found")
     return _summarise_event(rows)
+
+
+@app.get("/contested", response_model=schemas.ContestedResponse)
+def contested(
+    hours: int = Query(default=168, ge=1, le=24 * 90),
+    limit: int = Query(default=12, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """
+    Events outlets disagreed about.
+
+    Only possible because articles are grouped: comparing how two outlets
+    framed a story requires knowing they covered the same one.
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+    rows = (
+        db.query(models.Article)
+        .options(joinedload(models.Article.source))
+        .filter(
+            models.Article.event_key.isnot(None),
+            models.Article.published_at >= since,
+            models.Article.geo_risk_score.isnot(None),
+        )
+        .all()
+    )
+    grouped: dict[str, list[models.Article]] = {}
+    for article in rows:
+        grouped.setdefault(article.event_key, []).append(article)
+
+    return {
+        "window_hours": hours,
+        "events": framing.contested_events(grouped, limit=limit),
+    }
 
 
 @app.get("/relations", response_model=schemas.RelationsResponse)

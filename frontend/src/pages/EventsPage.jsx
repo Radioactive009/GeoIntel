@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Newspaper, Clock, Radio } from 'lucide-react';
-import { getEvents } from '../services/api';
+import { Newspaper, Clock, Radio, Scale } from 'lucide-react';
+import { getEvents, getContested } from '../services/api';
 import { getAlertColor } from '../utils/country';
 import { timeAgo } from '../utils/time';
 import Seo from '../components/Seo';
@@ -28,14 +28,22 @@ const FIGURE_LABELS = {
  */
 const EventsPage = () => {
     const [events, setEvents] = useState([]);
+    const [contested, setContested] = useState([]);
     const [hours, setHours] = useState(168);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
-        getEvents({ hours, limit: 30, minArticles: 3 })
-            .then((res) => { if (!cancelled) setEvents(res.data?.events || []); })
+        Promise.all([
+            getEvents({ hours, limit: 30, minArticles: 3 }),
+            getContested({ hours, limit: 5 }).catch(() => null),
+        ])
+            .then(([eventRes, contestedRes]) => {
+                if (cancelled) return;
+                setEvents(eventRes.data?.events || []);
+                setContested(contestedRes?.data?.events || []);
+            })
             .catch((err) => { if (!cancelled) { console.error(err); setEvents([]); } })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
@@ -77,6 +85,43 @@ const EventsPage = () => {
                     ))}
                 </div>
             </header>
+
+            {/* Disagreement is its own kind of story, and only visible once
+                articles are grouped by the happening they describe. */}
+            {contested.length > 0 && !loading && (
+                <section className="mb-10 p-5 rounded-2xl border border-white/10 bg-slate-900/30">
+                    <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">
+                        <Scale size={13} /> Outlets disagreed most on
+                    </h2>
+                    <p className="text-[12px] text-slate-600 mb-4">
+                        Ranked by how widely severity readings varied across every outlet that
+                        covered the story.
+                    </p>
+                    <ul className="space-y-2">
+                        {contested.map((e) => (
+                            <li key={e.event_key}>
+                                <Link
+                                    to={`/event/${e.event_key}`}
+                                    className="group flex items-center gap-4 py-2"
+                                >
+                                    <span className="font-display text-base font-black tabular-nums text-amber-400 w-10 shrink-0">
+                                        {e.spread.toFixed(0)}
+                                    </span>
+                                    <span className="min-w-0 flex-grow">
+                                        <span className="block text-[13px] font-semibold text-slate-200 truncate group-hover:text-cyan-300 transition-colors">
+                                            {e.title}
+                                        </span>
+                                        <span className="block text-[11px] text-slate-600 truncate">
+                                            {e.highest.source} {e.highest.score} · {e.lowest.source} {e.lowest.score}
+                                            <span className="text-slate-700"> · {e.outlet_count} outlets</span>
+                                        </span>
+                                    </span>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
 
             {loading ? (
                 <div className="space-y-3">
