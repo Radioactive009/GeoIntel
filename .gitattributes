@@ -1,0 +1,12 @@
+# core.autocrlf is on for this repo, and Git decides text-versus-binary by
+# heuristic when nothing here says otherwise. It currently guesses these
+# correctly, but a decoder or model corrupted by line-ending translation
+# fails at runtime in the browser with nothing pointing back at the commit
+# that broke it. State it instead of relying on the guess.
+*.wasm binary
+*.glb  binary
+*.gltf binary
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.db   binary
