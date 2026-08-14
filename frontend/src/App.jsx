@@ -12,6 +12,8 @@ import { Analytics } from '@vercel/analytics/react';
 // application on first load.
 const Home = lazy(() => import('./pages/Home'));
 const StoryPage = lazy(() => import('./pages/StoryPage'));
+const EventsPage = lazy(() => import('./pages/EventsPage'));
+const EventPage = lazy(() => import('./pages/EventPage'));
 const CountryPage = lazy(() => import('./pages/CountryPage'));
 const TopicPage = lazy(() => import('./pages/TopicPage'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
@@ -53,6 +55,8 @@ function App() {
                                 element={<Home />}
                             />
                             <Route path="/story/:id" element={<StoryPage />} />
+                            <Route path="/events" element={<EventsPage />} />
+                            <Route path="/event/:key" element={<EventPage />} />
                             <Route path="/country/:iso" element={<CountryPage />} />
                             <Route path="/topic/:topic" element={<TopicPage />} />
                             <Route path="/search" element={<SearchPage />} />

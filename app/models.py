@@ -69,6 +69,11 @@ class Article(Base):
 
     # Identity of the underlying event, shared by every outlet reporting it.
     story_key = Column(String, index=True)
+    # Groups articles describing one *happening* rather than one wording.
+    # story_key only catches a reworded wire copy, which left 96% of clusters
+    # holding a single article and split 70 reports of one earthquake across
+    # 68 keys. See services/events.py.
+    event_key = Column(String, index=True)
     # True for the non-canonical copies of a story already in the feed. The
     # rows are kept rather than dropped so the card can say how many outlets
     # carried it.

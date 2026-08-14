@@ -85,6 +85,42 @@ class ArticleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ---------- EVENTS ----------
+class FigurePoint(BaseModel):
+    """A reported count at a moment, e.g. a death toll as it was then."""
+    t: datetime
+    value: int
+    source: Optional[str] = None
+    title: Optional[str] = None
+
+
+class EventSummary(BaseModel):
+    event_key: str
+    title: str                       # representative headline
+    article_count: int
+    outlet_count: int
+    countries: list[str] = []
+    topic: Optional[str] = None
+    risk: float = 0.0
+    first_seen: datetime
+    last_seen: datetime
+    image_url: Optional[str] = None
+    # Latest reported counts by kind, e.g. {"deaths": 200}.
+    figures: dict[str, int] = {}
+
+
+class EventDetail(EventSummary):
+    articles: list[ArticleResponse] = []
+    outlets: list[str] = []
+    # How a reported figure moved as the event developed.
+    timeline: dict[str, list[FigurePoint]] = {}
+
+
+class EventsResponse(BaseModel):
+    window_hours: int
+    events: list[EventSummary]
+
+
 # ---------- RELATIONS ----------
 class RelationPair(BaseModel):
     iso_codes: list[str]

@@ -228,6 +228,62 @@ class TestRssFeed:
         assert len(root.findall("./channel/item")) == 1
 
 
+class TestEventEndpoints:
+    @pytest.fixture
+    def quake(self, db, countries):
+        """One happening reported by several outlets, with a rising toll."""
+        outlets = [models.Source(name=n) for n in ("BBC World", "NDTV", "France 24")]
+        db.add_all(outlets)
+        db.commit()
+
+        base = datetime.utcnow() - timedelta(hours=6)
+        rows = [
+            models.Article(url="q1", title="Deadly 7.4-magnitude earthquake strikes western Colombia",
+                           source_id=outlets[0].id, country_id=countries["IN"], event_type="disaster",
+                           geo_risk_score=80.0, event_key="ev_quake", published_at=base),
+            models.Article(url="q2", title="At least 111 killed in Colombia earthquake",
+                           source_id=outlets[1].id, country_id=countries["IN"], event_type="disaster",
+                           geo_risk_score=88.0, event_key="ev_quake", published_at=base + timedelta(hours=2)),
+            models.Article(url="q3", title="More than 200 dead in Colombia earthquake",
+                           source_id=outlets[2].id, country_id=countries["IN"], event_type="disaster",
+                           geo_risk_score=91.0, event_key="ev_quake", published_at=base + timedelta(hours=4)),
+        ]
+        db.add_all(rows)
+        db.commit()
+        return rows
+
+    def test_lists_events_not_articles(self, client, quake):
+        payload = client.get("/events", params={"hours": 48, "min_articles": 3}).json()
+        assert len(payload["events"]) == 1, "three articles are one happening"
+        event = payload["events"][0]
+        assert event["article_count"] == 3
+        assert event["outlet_count"] == 3
+
+    def test_representative_title_is_the_earliest(self, client, quake):
+        """A later headline ("Death toll rises") is meaningless out of context."""
+        event = client.get("/events", params={"hours": 48, "min_articles": 3}).json()["events"][0]
+        assert event["title"].startswith("Deadly 7.4-magnitude")
+
+    def test_min_articles_filters_out_thin_groups(self, client, quake):
+        assert client.get("/events", params={"hours": 48, "min_articles": 5}).json()["events"] == []
+
+    def test_detail_returns_the_figure_progression(self, client, quake):
+        detail = client.get("/events/ev_quake").json()
+        assert detail["figures"]["deaths"] == 200, "latest reported toll"
+
+        progression = [p["value"] for p in detail["timeline"]["deaths"]]
+        assert progression == [111, 200], "the toll as it moved"
+        assert detail["timeline"]["deaths"][0]["source"] == "NDTV"
+
+    def test_detail_lists_every_outlet_and_article(self, client, quake):
+        detail = client.get("/events/ev_quake").json()
+        assert len(detail["articles"]) == 3
+        assert set(detail["outlets"]) == {"BBC World", "NDTV", "France 24"}
+
+    def test_missing_event_is_404(self, client):
+        assert client.get("/events/ev_nope").status_code == 404
+
+
 class TestNewEndpoints:
     def test_relations_pairs_countries(self, client, feed):
         pairs = client.get("/relations", params={"hours": 24 * 90}).json()["pairs"]

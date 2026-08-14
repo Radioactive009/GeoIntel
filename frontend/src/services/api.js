@@ -123,6 +123,20 @@ export const getTrends = ({ hours = 168, points = 24, country = '' } = {}) => {
 export const getMovers = ({ hours = 168, limit = 5 } = {}) =>
     api.get('/movers', { params: { hours, limit } });
 
+/**
+ * Happenings ranked by how widely they were covered. An event is many
+ * articles about one occurrence, which is a different unit from the article
+ * feed: one earthquake is a single entry here and 70 in /articles.
+ */
+export const getEvents = ({ hours = 168, limit = 20, minArticles = 3, country = '' } = {}) => {
+    const params = { hours, limit, min_articles: minArticles };
+    if (country) params.country = country;
+    return api.get('/events', { params });
+};
+
+/** One happening: its articles, outlets, and how reported figures moved. */
+export const getEvent = (key) => api.get(`/events/${key}`);
+
 /** Country pairs appearing in the same stories — the flashpoints board. */
 export const getRelations = ({ hours = 168, limit = 10 } = {}) =>
     api.get('/relations', { params: { hours, limit } });

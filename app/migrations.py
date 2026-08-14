@@ -11,6 +11,7 @@ from __future__ import annotations
 import collections
 import logging
 import re
+from datetime import datetime
 
 from sqlalchemy import bindparam, inspect, text
 from sqlalchemy.engine import Engine
@@ -27,6 +28,7 @@ _CLUSTER_BACKFILL_KEY = "migration_story_clusters"
 _SECONDARY_BACKFILL_KEY = "migration_secondary_countries"
 # Bumped when the taxonomy changes, so stored labels are recomputed.
 _RECLASSIFY_KEY = "migration_topics_v2"
+_EVENTS_BACKFILL_KEY = "migration_event_groups"
 
 ARTICLE_COLUMNS = {
     "sentiment_score": "FLOAT",
@@ -40,6 +42,7 @@ ARTICLE_COLUMNS = {
     "provider": "VARCHAR",
     "image_url": "VARCHAR",
     "story_key": "VARCHAR",
+    "event_key": "VARCHAR",
     "is_duplicate": "BOOLEAN DEFAULT 0",
     "topic_confidence": "FLOAT",
 }
@@ -366,6 +369,55 @@ def _reclassify_topics(conn) -> None:
     logger.info("[MIGRATE] Reclassified %s articles: %s", len(updates), dict(spread))
 
 
+def _backfill_event_groups(conn) -> None:
+    """
+    Group the stored archive into events.
+
+    Grouping is incremental during ingestion, so it only ever sees new
+    articles against recent ones. Existing rows therefore need one pass over
+    the whole archive in publication order to seed the same structure.
+    """
+    if _flag(conn, _EVENTS_BACKFILL_KEY):
+        return
+    if "event_key" not in _existing_columns(conn, "articles"):
+        return
+
+    from .services.events import group_articles
+
+    rows = conn.execute(text(
+        "SELECT id, title, description, country_id, event_type, published_at FROM articles"
+    )).fetchall()
+    if not rows:
+        _set_flag(conn, _EVENTS_BACKFILL_KEY)
+        return
+
+    def _moment(value):
+        if isinstance(value, datetime):
+            return value
+        try:
+            return datetime.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return None
+
+    prepared = [
+        (r[0], r[1], r[2], r[3], r[4], _moment(r[5])) for r in rows
+    ]
+    assignment = group_articles(prepared)
+
+    updates = [{"aid": aid, "key": key} for aid, key in assignment.items()]
+    statement = text("UPDATE articles SET event_key = :key WHERE id = :aid")
+    for start in range(0, len(updates), 500):
+        conn.execute(statement, updates[start:start + 500])
+
+    _set_flag(conn, _EVENTS_BACKFILL_KEY)
+    distinct = len(set(assignment.values()))
+    logger.info(
+        "[MIGRATE] Grouped %s articles into %s events (largest %s articles)",
+        len(updates), distinct,
+        max(collections.Counter(assignment.values()).values()) if assignment else 0,
+    )
+
+
 def _backfill_secondary_countries(conn) -> None:
     """Resolve the runner-up country for articles that have none recorded."""
     if _flag(conn, _SECONDARY_BACKFILL_KEY):
@@ -441,6 +493,7 @@ def run_migrations(engine: Engine) -> None:
         _backfill_story_clusters,
         _backfill_secondary_countries,
         _reclassify_topics,
+        _backfill_event_groups,
     ):
         try:
             with engine.begin() as conn:

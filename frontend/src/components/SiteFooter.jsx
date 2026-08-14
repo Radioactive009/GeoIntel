@@ -27,6 +27,7 @@ const SiteFooter = () => (
                     <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Sections</h2>
                     <ul className="space-y-2 text-[13px]">
                         {[
+                            ['/events', 'Major events'],
                             ['/topic/conflict', 'Conflict'],
                             ['/topic/security', 'Security'],
                             ['/topic/diplomacy', 'Diplomacy'],

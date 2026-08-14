@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..countries import COUNTRIES, build_query, find_country_config
 from . import alerts
+from . import events as event_grouping
 from . import llm_classifier
 from .country_resolver import resolve_countries
 from .gnews_service import fetch_gnews
@@ -295,6 +296,54 @@ def _known_story_keys(db: Session, keys: list[str]) -> set[str]:
     return found
 
 
+def _assign_events(
+    db: Session,
+    ordered: list[tuple],
+    topics: list,
+    country_iso_to_id: dict[str, int],
+    fallback_country_id: int | None,
+) -> dict[str, str]:
+    """
+    Give each incoming article an event key.
+
+    Recently stored articles are grouped alongside the new batch so a
+    follow-up ("Death toll rises to 200") joins the event it continues rather
+    than founding a new one. Only the trailing window is loaded — regrouping
+    the whole archive every cycle would be pointless work, and events older
+    than the window are closed to new members anyway.
+    """
+    if not ordered:
+        return {}
+
+    horizon = datetime.utcnow() - timedelta(days=event_grouping.WINDOW_DAYS * 2)
+    recent = (
+        db.query(
+            models.Article.id, models.Article.title, models.Article.description,
+            models.Article.country_id, models.Article.event_type,
+            models.Article.published_at, models.Article.event_key,
+        )
+        .filter(models.Article.published_at >= horizon)
+        .all()
+    )
+
+    # Existing articles are keyed by database id; incoming ones by their URL,
+    # which is unique and available before the row exists.
+    rows = [(r.id, r.title, r.description, r.country_id, r.event_type, r.published_at)
+            for r in recent]
+    existing_keys = {r.id: r.event_key for r in recent if r.event_key}
+
+    for (url, item), topic in zip(ordered, topics):
+        codes = resolve_countries(item.get("title"), item.get("description"))
+        country_id = (country_iso_to_id.get(codes[0]) if codes else None) or fallback_country_id
+        rows.append((
+            url, item.get("title"), item.get("description"),
+            country_id, topic.category, _parse_published(item.get("publishedAt")),
+        ))
+
+    assignment = event_grouping.group_articles(rows, known=existing_keys)
+    return {url: assignment[url] for url, _ in ordered if url in assignment}
+
+
 def _insert_articles(db: Session, prepared: list[dict]) -> int:
     """
     Persist prepared article rows, tolerating a racing duplicate URL.
@@ -433,6 +482,12 @@ def store_articles(
         db, [(item.get("title"), item.get("description")) for _url, item in ordered]
     )
 
+    # Event grouping runs against recent stored articles as well as the batch,
+    # so a follow-up joins the event it belongs to rather than starting a new
+    # one. Only the trailing window is loaded — grouping the whole archive on
+    # every cycle would be pointless work.
+    event_keys = _assign_events(db, ordered, topics, country_iso_to_id, fallback_country_id)
+
     prepared: list[dict] = []
     for (url, item), topic in zip(ordered, topics):
         title = item.get("title")
@@ -477,6 +532,7 @@ def store_articles(
             country_id=country_id,
             country_id_secondary=secondary_id,
             story_key=key,
+            event_key=event_keys.get(url),
             is_duplicate=duplicate,
             provider=item.get("provider", "rss"),
             published_at=_parse_published(item.get("publishedAt")),

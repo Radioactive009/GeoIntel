@@ -29,7 +29,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import alerts, channels, ingest
+from .services import alerts, channels, events, ingest
 
 # =========================================================
 # LOGGING / ENV
@@ -649,6 +649,114 @@ def sitemap(db: Session = Depends(get_db)):
         f"{body}</urlset>"
     )
     return Response(content=xml, media_type="application/xml")
+
+
+def _summarise_event(rows: list[models.Article]) -> dict:
+    """
+    Condense an event's articles into one description of the happening.
+
+    The representative headline is the earliest, not the most recent: the
+    first report names the event, while later ones describe developments
+    ("Death toll rises to 200") that read as nonsense out of context.
+    """
+    ordered = sorted(rows, key=lambda a: a.published_at or datetime.min)
+    lead = ordered[0]
+
+    countries, outlets = [], []
+    for article in ordered:
+        name = article.country
+        if name and name not in countries:
+            countries.append(name)
+        outlet = article.source.name if article.source else None
+        if outlet and outlet not in outlets:
+            outlets.append(outlet)
+
+    # Latest reported value of each kind, and how it moved.
+    timeline: dict[str, list[dict]] = {}
+    for article in ordered:
+        for kind, value in events.extract_figures(article.title).items():
+            points = timeline.setdefault(kind, [])
+            if points and points[-1]["value"] == value:
+                continue          # unchanged; not a development
+            points.append({
+                "t": article.published_at,
+                "value": value,
+                "source": article.source.name if article.source else None,
+                "title": article.title,
+            })
+
+    topics = [a.event_type for a in ordered if a.event_type]
+    scores = [a.geo_risk_score for a in ordered if a.geo_risk_score is not None]
+
+    return {
+        "event_key": lead.event_key,
+        "title": lead.title or "Untitled",
+        "article_count": len(ordered),
+        "outlet_count": len(outlets),
+        "countries": countries[:6],
+        "topic": max(set(topics), key=topics.count) if topics else None,
+        "risk": round(max(scores), 2) if scores else 0.0,
+        "first_seen": ordered[0].published_at,
+        "last_seen": ordered[-1].published_at,
+        "image_url": next((a.image_url for a in ordered if a.image_url), None),
+        "figures": {kind: points[-1]["value"] for kind, points in timeline.items()},
+        "outlets": outlets,
+        "timeline": timeline,
+        "articles": ordered,
+    }
+
+
+@app.get("/events", response_model=schemas.EventsResponse)
+def list_events(
+    hours: int = Query(default=168, ge=1, le=24 * 90),
+    limit: int = Query(default=20, ge=1, le=100),
+    min_articles: int = Query(default=3, ge=1, le=50),
+    country: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Happenings ranked by how widely they were covered.
+
+    An event is many articles about one occurrence, which is a different unit
+    from the article feed: the Colombian earthquake is one entry here and 70
+    entries there.
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+    query = (
+        db.query(models.Article)
+        .options(joinedload(models.Article.source), joinedload(models.Article.country_rel))
+        .filter(models.Article.event_key.isnot(None), models.Article.published_at >= since)
+    )
+    if country:
+        term = country.strip()
+        query = query.join(models.Article.country_rel).filter(
+            (models.Country.iso_code == term.upper())
+            | (models.Country.name.ilike(_like_escape(term), escape="\\"))
+        )
+
+    grouped: dict[str, list[models.Article]] = {}
+    for article in query.all():
+        grouped.setdefault(article.event_key, []).append(article)
+
+    summaries = [
+        _summarise_event(rows) for rows in grouped.values() if len(rows) >= min_articles
+    ]
+    summaries.sort(key=lambda e: (-e["article_count"], -e["risk"]))
+    return {"window_hours": hours, "events": summaries[:limit]}
+
+
+@app.get("/events/{event_key}", response_model=schemas.EventDetail)
+def get_event(event_key: str, db: Session = Depends(get_db)):
+    """One happening: every article about it, its outlets and its figures."""
+    rows = (
+        db.query(models.Article)
+        .options(joinedload(models.Article.source), joinedload(models.Article.country_rel))
+        .filter(models.Article.event_key == event_key)
+        .all()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return _summarise_event(rows)
 
 
 @app.get("/relations", response_model=schemas.RelationsResponse)
