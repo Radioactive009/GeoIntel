@@ -9,8 +9,9 @@ import { StoryRowSkeleton } from '../components/Skeleton';
 import Seo from '../components/Seo';
 
 const EVENT_LABELS = {
-    military: 'Conflict', diplomatic: 'Diplomacy', economic: 'Economy',
-    political: 'Politics', hazard: 'Hazards', other: 'Unclassified',
+    conflict: 'Conflict', security: 'Security', diplomacy: 'Diplomacy',
+    economy: 'Economy', politics: 'Politics', disaster: 'Disasters',
+    humanitarian: 'Humanitarian', other: 'Unclassified',
 };
 
 /**

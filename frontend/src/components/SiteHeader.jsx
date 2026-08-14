@@ -12,11 +12,13 @@ import FreshnessBadge from './FreshnessBadge';
  */
 const SECTIONS = [
     { to: '/', label: 'Home', end: true },
-    { to: '/topic/military', label: 'Conflict' },
-    { to: '/topic/diplomatic', label: 'Diplomacy' },
-    { to: '/topic/economic', label: 'Economy' },
-    { to: '/topic/political', label: 'Politics' },
-    { to: '/topic/hazard', label: 'Hazards' },
+    { to: '/topic/conflict', label: 'Conflict' },
+    { to: '/topic/security', label: 'Security' },
+    { to: '/topic/diplomacy', label: 'Diplomacy' },
+    { to: '/topic/economy', label: 'Economy' },
+    { to: '/topic/politics', label: 'Politics' },
+    { to: '/topic/disaster', label: 'Disasters' },
+    { to: '/topic/humanitarian', label: 'Humanitarian' },
 ];
 
 const linkClass = ({ isActive }) =>

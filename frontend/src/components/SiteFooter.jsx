@@ -27,10 +27,13 @@ const SiteFooter = () => (
                     <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Sections</h2>
                     <ul className="space-y-2 text-[13px]">
                         {[
-                            ['/topic/military', 'Conflict'],
-                            ['/topic/diplomatic', 'Diplomacy'],
-                            ['/topic/economic', 'Economy'],
-                            ['/topic/political', 'Politics'],
+                            ['/topic/conflict', 'Conflict'],
+                            ['/topic/security', 'Security'],
+                            ['/topic/diplomacy', 'Diplomacy'],
+                            ['/topic/economy', 'Economy'],
+                            ['/topic/politics', 'Politics'],
+                            ['/topic/disaster', 'Disasters'],
+                            ['/topic/humanitarian', 'Humanitarian'],
                         ].map(([to, label]) => (
                             <li key={to}>
                                 <Link to={to} className="text-slate-400 hover:text-cyan-400 transition-colors">{label}</Link>

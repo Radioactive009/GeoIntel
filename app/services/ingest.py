@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..countries import COUNTRIES, build_query, find_country_config
 from . import alerts
+from . import llm_classifier
 from .country_resolver import resolve_countries
 from .gnews_service import fetch_gnews
 from .reliability import reliability_for
@@ -424,8 +425,16 @@ def store_articles(
     keys_in_batch = {url: story_key(item.get("title")) for url, item in fresh.items()}
     seen_keys = _known_story_keys(db, sorted({k for k in keys_in_batch.values() if k}))
 
+    # Topic is decided for the whole batch at once. The LLM adjudication layer
+    # is batched, so classifying per article would turn one request into
+    # hundreds; doing it here keeps the cost proportional to cycles.
+    ordered = list(fresh.items())
+    topics = llm_classifier.classify_batch(
+        db, [(item.get("title"), item.get("description")) for _url, item in ordered]
+    )
+
     prepared: list[dict] = []
-    for url, item in fresh.items():
+    for (url, item), topic in zip(ordered, topics):
         title = item.get("title")
         description = item.get("description")
 
@@ -450,7 +459,7 @@ def store_articles(
             seen_keys.add(key)
 
         text = f"{title or ''} {description or ''}"
-        geo_risk_score, geo_risk_level, event_type, category = score_article(text)
+        geo_risk_score, geo_risk_level, _event_type, category = score_article(text)
 
         # Legacy sentiment fields kept as aliases for older clients.
         sentiment_score = (
@@ -475,7 +484,8 @@ def store_articles(
             sentiment_label=geo_risk_level,
             geo_risk_score=geo_risk_score,
             geo_risk_level=geo_risk_level,
-            event_type=event_type,
+            event_type=topic.category,
+            topic_confidence=topic.confidence,
             category=category,
         ))
 

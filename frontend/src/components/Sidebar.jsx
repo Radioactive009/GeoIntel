@@ -10,11 +10,13 @@ const RISK_LEVELS = [
 
 const EVENT_TYPES = [
     { id: '', label: 'All event types' },
-    { id: 'military', label: 'Military' },
-    { id: 'diplomatic', label: 'Diplomatic' },
-    { id: 'economic', label: 'Economic' },
-    { id: 'political', label: 'Political' },
-    { id: 'hazard', label: 'Hazard' },
+    { id: 'conflict', label: 'Conflict' },
+    { id: 'security', label: 'Security' },
+    { id: 'diplomacy', label: 'Diplomacy' },
+    { id: 'economy', label: 'Economy' },
+    { id: 'politics', label: 'Politics' },
+    { id: 'disaster', label: 'Disasters' },
+    { id: 'humanitarian', label: 'Humanitarian' },
     { id: 'other', label: 'Unclassified' },
 ];
 

@@ -85,6 +85,10 @@ class Article(Base):
     # [AI] SEMANTIC RISK ENGINE FIELDS
     geo_risk_score = Column(Float)   # 0-100
     geo_risk_level = Column(String)  # low | medium | high
+    # How clearly the topic was decided, 0-1. Recorded so a weak call can be
+    # revisited or hidden rather than presented with the same authority as a
+    # confident one.
+    topic_confidence = Column(Float)
     event_type = Column(String)      # military | diplomatic | economic | political | hazard
     category = Column(String)        # strategic_activity | conflict | news
 

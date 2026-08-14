@@ -8,6 +8,7 @@ the database before touching it.
 
 from __future__ import annotations
 
+import collections
 import logging
 import re
 
@@ -24,6 +25,8 @@ _HISTORY_RESET_KEY = "migration_risk_history_windowed"
 # One-shot backfills for columns added after articles were already stored.
 _CLUSTER_BACKFILL_KEY = "migration_story_clusters"
 _SECONDARY_BACKFILL_KEY = "migration_secondary_countries"
+# Bumped when the taxonomy changes, so stored labels are recomputed.
+_RECLASSIFY_KEY = "migration_topics_v2"
 
 ARTICLE_COLUMNS = {
     "sentiment_score": "FLOAT",
@@ -38,6 +41,7 @@ ARTICLE_COLUMNS = {
     "image_url": "VARCHAR",
     "story_key": "VARCHAR",
     "is_duplicate": "BOOLEAN DEFAULT 0",
+    "topic_confidence": "FLOAT",
 }
 
 SOURCE_COLUMNS = {
@@ -320,6 +324,48 @@ def _backfill_story_clusters(conn) -> None:
     )
 
 
+def _reclassify_topics(conn) -> None:
+    """
+    Re-label every stored article under the new taxonomy.
+
+    The old classifier had no category for disasters, epidemics or terrorism
+    and defaulted anything it could not read to "political", so a third of the
+    corpus sits under a label that was never really a decision. Leaving those
+    rows would mean the sections stay wrong for everything already ingested.
+
+    Keyword-only by design: this touches thousands of rows at startup, which
+    is not the place to make thousands of network calls. New articles get the
+    LLM pass during ingestion; these get the deterministic classifier.
+    """
+    if _flag(conn, _RECLASSIFY_KEY):
+        return
+    columns = _existing_columns(conn, "articles")
+    if "event_type" not in columns or "topic_confidence" not in columns:
+        return
+
+    from .services.classifier import classify
+
+    rows = conn.execute(text("SELECT id, title, description FROM articles")).fetchall()
+    if not rows:
+        _set_flag(conn, _RECLASSIFY_KEY)
+        return
+
+    updates = [
+        {"aid": article_id, "cat": result.category, "conf": result.confidence}
+        for article_id, title, description in rows
+        for result in (classify(title, description),)
+    ]
+    statement = text(
+        "UPDATE articles SET event_type = :cat, topic_confidence = :conf WHERE id = :aid"
+    )
+    for start in range(0, len(updates), 500):
+        conn.execute(statement, updates[start:start + 500])
+
+    _set_flag(conn, _RECLASSIFY_KEY)
+    spread = collections.Counter(u["cat"] for u in updates)
+    logger.info("[MIGRATE] Reclassified %s articles: %s", len(updates), dict(spread))
+
+
 def _backfill_secondary_countries(conn) -> None:
     """Resolve the runner-up country for articles that have none recorded."""
     if _flag(conn, _SECONDARY_BACKFILL_KEY):
@@ -394,6 +440,7 @@ def run_migrations(engine: Engine) -> None:
         _backfill_source_reliability,
         _backfill_story_clusters,
         _backfill_secondary_countries,
+        _reclassify_topics,
     ):
         try:
             with engine.begin() as conn:

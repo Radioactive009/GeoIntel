@@ -21,7 +21,7 @@ class TestMitigation:
             "Ceasefire collapses as Israel strikes Gaza, dozens killed"
         )
         assert level == "high", f"scored {score}"
-        assert event_type == "military"
+        assert event_type == "conflict"
 
     def test_genuine_de_escalation_still_scores_low(self):
         score, level, _, _ = score_article("Peace agreement signed, no casualties reported")
@@ -49,10 +49,15 @@ class TestClassification:
     def test_strike_vocabulary_reads_as_military(self, text):
         """'strike'/'shelling'/'drone' were missing from the military list."""
         _, _, event_type, _ = score_article(text)
-        assert event_type == "military"
+        assert event_type == "conflict"
+
+    def test_economic_story_is_recognised(self):
+        """The old lexicon had no signal for this and fell back to a default."""
+        _, _, event_type, _ = score_article("Central bank raises interest rates amid inflation")
+        assert event_type == "economy"
 
     def test_unmatched_text_is_not_asserted_as_political(self):
-        _, _, event_type, _ = score_article("Central bank raises interest rates")
+        _, _, event_type, _ = score_article("Local library extends its opening hours")
         assert event_type == UNCLASSIFIED_EVENT_TYPE
 
     def test_empty_text_is_safe(self):

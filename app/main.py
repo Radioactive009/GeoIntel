@@ -392,7 +392,7 @@ def get_articles(
     level: str | None = Query(default=None, pattern="^(low|medium|high)$"),
     event_type: str | None = Query(
         default=None,
-        pattern="^(military|diplomatic|economic|political|hazard|other)$",
+        pattern="^(conflict|security|diplomacy|economy|politics|disaster|humanitarian|other)$",
     ),
     q: str | None = None,
     days: int | None = Query(default=None, ge=1, le=365),

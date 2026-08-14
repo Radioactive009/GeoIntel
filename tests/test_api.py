@@ -16,15 +16,15 @@ def feed(db, countries):
     rows = [
         models.Article(url="a1", title="India talks resume", description="A 100% tariff was floated",
                        country_id=countries["IN"], source_id=source.id, geo_risk_level="low",
-                       event_type="diplomatic", story_key="k1", is_duplicate=False,
+                       event_type="diplomacy", story_key="k1", is_duplicate=False,
                        published_at=datetime.utcnow()),
         models.Article(url="a2", title="India talks resume (copy)", description="syndicated",
                        country_id=countries["IN"], source_id=source.id, geo_risk_level="low",
-                       event_type="diplomatic", story_key="k1", is_duplicate=True,
+                       event_type="diplomacy", story_key="k1", is_duplicate=True,
                        published_at=datetime.utcnow()),
         models.Article(url="a3", title="Strike hits Kyiv", description="military action",
                        country_id=countries["UA"], country_id_secondary=countries["US"],
-                       source_id=source.id, geo_risk_level="high", event_type="military",
+                       source_id=source.id, geo_risk_level="high", event_type="conflict",
                        story_key="k2", is_duplicate=False,
                        published_at=datetime.utcnow() - timedelta(days=40)),
     ]
@@ -44,8 +44,8 @@ class TestArticleFilters:
         assert canonical["duplicate_count"] == 1
 
     def test_event_type_filter(self, client, feed):
-        assert client.get("/articles", params={"event_type": "military"}).json()["total"] == 1
-        assert client.get("/articles", params={"event_type": "hazard"}).json()["total"] == 0
+        assert client.get("/articles", params={"event_type": "conflict"}).json()["total"] == 1
+        assert client.get("/articles", params={"event_type": "disaster"}).json()["total"] == 0
 
     def test_days_filter(self, client, feed):
         assert client.get("/articles", params={"days": 1}).json()["total"] == 1

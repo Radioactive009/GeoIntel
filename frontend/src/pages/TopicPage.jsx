@@ -9,29 +9,37 @@ import Seo from '../components/Seo';
  * label on a card.
  */
 export const TOPICS = {
-    military: {
+    conflict: {
         title: 'Conflict',
-        standfirst: 'Strikes, offensives, troop movements and armed incidents.',
+        standfirst: 'Armed violence between states and organised forces — strikes, offensives and battles.',
     },
-    diplomatic: {
+    security: {
+        title: 'Security',
+        standfirst: 'Terrorism, insurgency, organised crime, trafficking and cyber intrusions.',
+    },
+    diplomacy: {
         title: 'Diplomacy',
-        standfirst: 'Talks, treaties, summits and negotiated settlements.',
+        standfirst: 'Talks, treaties, summits, mediation and negotiated settlements.',
     },
-    economic: {
+    economy: {
         title: 'Economy',
-        standfirst: 'Sanctions, trade, energy and currency pressure.',
+        standfirst: 'Sanctions, tariffs, trade, energy and currency pressure.',
     },
-    political: {
+    politics: {
         title: 'Politics',
-        standfirst: 'Elections, governments, protest and constitutional change.',
+        standfirst: 'Elections, governments, courts, protest and constitutional change.',
     },
-    hazard: {
-        title: 'Hazards',
-        standfirst: 'Chemical, biological and environmental incidents.',
+    disaster: {
+        title: 'Disasters',
+        standfirst: 'Earthquakes, floods, wildfires, storms and industrial catastrophe.',
+    },
+    humanitarian: {
+        title: 'Humanitarian',
+        standfirst: 'Famine, displacement, refugees, epidemics and aid operations.',
     },
     other: {
         title: 'Unclassified',
-        standfirst: 'Stories the classifier found no clear event signal in.',
+        standfirst: 'Stories the classifier could not place with confidence.',
     },
 };
 

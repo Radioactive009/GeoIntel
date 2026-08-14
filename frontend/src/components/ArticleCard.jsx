@@ -31,11 +31,13 @@ const alertConfig = {
 };
 
 const EVENT_LABELS = {
-    military: 'Military',
-    diplomatic: 'Diplomatic',
-    economic: 'Economic',
-    political: 'Political',
-    hazard: 'Hazard',
+    conflict: 'Conflict',
+    security: 'Security',
+    diplomacy: 'Diplomacy',
+    economy: 'Economy',
+    politics: 'Politics',
+    disaster: 'Disasters',
+    humanitarian: 'Humanitarian',
     other: 'Unclassified',
 };
 
