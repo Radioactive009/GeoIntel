@@ -1,0 +1,12 @@
+# Test-only dependencies. Kept out of requirements.txt so the deployed image
+# does not carry a test client, but pinned for the same reason production is:
+# CI resolving a different version from the one the suite was written against
+# is how a green local run becomes a red pipeline.
+-r requirements.txt
+
+pytest==9.0.3
+# starlette.testclient is built on httpx and refuses to import without it.
+# Absent here, every test using the API client failed in CI while passing
+# locally, because a local environment had picked it up as somebody else's
+# transitive dependency.
+httpx==0.28.1

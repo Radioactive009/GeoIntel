@@ -1,4 +1,8 @@
 fastapi==0.135.1
+# Pinned even though FastAPI would pull it in: unpinned, CI resolved a
+# newer starlette whose test client wanted a different http library than
+# the one installed locally, so the suite passed here and failed there.
+starlette==0.52.1
 uvicorn==0.41.0
 pydantic==2.12.5
 SQLAlchemy==2.0.47
