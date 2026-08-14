@@ -45,6 +45,13 @@ from .events import extract_figures
 logger = logging.getLogger(__name__)
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+
+# Whisper turbo: accurate enough for a spoken question and fast enough that the
+# round trip is not the slow part. Used only where the browser has no speech
+# recognition of its own (Safari, Firefox); Chrome and Edge never reach here.
+TRANSCRIBE_MODEL = os.getenv("TRANSCRIBE_MODEL", "whisper-large-v3-turbo")
+MAX_AUDIO_BYTES = 4_000_000
 
 # llama-3.3-70b-versatile rejects these tool definitions with a 400
 # ("Failed to call a function"), so the default is a model verified to handle
@@ -340,6 +347,53 @@ def _dispatch(db: Session, name: str, args: dict) -> dict:
         logger.warning("[AGENT] tool %s failed: %s", name, e)
         return {"error": "That lookup failed."}
     return {"error": f"Unknown tool {name!r}."}
+
+
+def transcribe(db: Session, audio: bytes, filename: str = "speech.webm") -> dict:
+    """
+    Turn a spoken question into text.
+
+    Charged against the same daily budget as answering: a caller who can spend
+    transcription without limit can drain the account just as easily.
+    """
+    key = api_key()
+    if not key:
+        return {"text": None, "error": "Voice input is not configured on this server."}
+    if not audio:
+        return {"text": None, "error": "No audio received."}
+    if len(audio) > MAX_AUDIO_BYTES:
+        return {"text": None, "error": "That recording is too long. Keep it under a minute."}
+
+    _, used = _budget_state(db)
+    if used >= DAILY_BUDGET:
+        return {"text": None, "error": "The assistant has reached today's limit."}
+
+    try:
+        response = requests.post(
+            TRANSCRIBE_URL,
+            headers={"Authorization": f"Bearer {key}"},
+            files={"file": (filename, audio, "application/octet-stream")},
+            data={"model": TRANSCRIBE_MODEL, "response_format": "json", "language": "en"},
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        logger.warning("[AGENT] transcription failed: %s", e)
+        return {"text": None, "error": "Could not reach the transcription service."}
+
+    if response.status_code in (401, 403):
+        logger.error("[AGENT] transcription rejected the API key (%s).", response.status_code)
+        return {"text": None, "error": "The assistant's API key is missing or invalid on this server."}
+    if response.status_code != 200:
+        logger.warning("[AGENT] transcription %s: %s", response.status_code, response.text[:160])
+        return {"text": None, "error": "Could not transcribe that."}
+
+    try:
+        text = (response.json().get("text") or "").strip()
+    except ValueError:
+        return {"text": None, "error": "Could not transcribe that."}
+
+    _record_request(db)
+    return {"text": text or None, "error": None if text else "Nothing was picked up."}
 
 
 # ─────────────────────────────────────────────────────────

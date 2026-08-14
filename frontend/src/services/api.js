@@ -175,6 +175,21 @@ export const askAgent = (question, history = []) =>
 
 export const getAgentStatus = () => api.get('/agent/status');
 
+/**
+ * Transcribe recorded speech. Only used where the browser has no
+ * SpeechRecognition of its own — Chrome and Edge never call this.
+ */
+export const transcribeAudio = (blob) => {
+    const form = new FormData();
+    form.append('audio', blob, 'speech.webm');
+    return api.post('/agent/transcribe', form, {
+        timeout: 60000,
+        // Let the browser set the multipart boundary; the default JSON
+        // content-type on the axios instance would break the upload.
+        headers: { 'Content-Type': undefined },
+    });
+};
+
 export const getHealth = () => api.get('/health');
 
 export const getIngestStatus = () => api.get('/ingest-status');

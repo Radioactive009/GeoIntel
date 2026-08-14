@@ -1,8 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Send, Sparkles, Loader2, AlertCircle, Newspaper } from 'lucide-react';
+import { Send, Sparkles, Loader2, AlertCircle, Newspaper, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { askAgent, getAgentStatus } from '../services/api';
+import useVoice from '../hooks/useVoice';
 import Seo from '../components/Seo';
+
+// three.js is ~150 kB and only this page uses it, so the character loads on
+// its own rather than in the route bundle.
+const NewsAnchor = lazy(() => import('../components/NewsAnchor'));
 
 /**
  * Ask the archive.
@@ -50,7 +55,14 @@ const AskPage = () => {
     const [draft, setDraft] = useState('');
     const [busy, setBusy] = useState(false);
     const [status, setStatus] = useState(null);
+    const [voiceMode, setVoiceMode] = useState(false);
+    const [muted, setMuted] = useState(false);
     const endRef = useRef(null);
+    const sendRef = useRef(null);
+
+    // A spoken question goes straight to the agent; waiting for the reader to
+    // press send after speaking defeats the point of talking to it.
+    const voice = useVoice({ onTranscript: (text) => sendRef.current?.(text) });
 
     useEffect(() => {
         getAgentStatus().then((r) => setStatus(r.data)).catch(() => setStatus(null));
@@ -60,8 +72,8 @@ const AskPage = () => {
         endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, [turns, busy]);
 
-    const send = async (question) => {
-        const text = (question ?? draft).trim();
+    const send = useCallback(async (question) => {
+        const text = (typeof question === 'string' ? question : draft).trim();
         if (!text || busy) return;
 
         setDraft('');
@@ -99,7 +111,22 @@ const AskPage = () => {
         } finally {
             setBusy(false);
         }
-    };
+    }, [draft, busy, turns]);
+
+    useEffect(() => { sendRef.current = send; }, [send]);
+
+    // Read new answers aloud while in voice mode.
+    const spokenRef = useRef(0);
+    useEffect(() => {
+        if (!voiceMode || muted) return;
+        const answered = turns.filter((t) => t.answer);
+        if (answered.length > spokenRef.current) {
+            spokenRef.current = answered.length;
+            voice.speak(answered[answered.length - 1].answer);
+        }
+    }, [turns, voiceMode, muted, voice]);
+
+    useEffect(() => { if (!voiceMode) voice.stopSpeaking(); }, [voiceMode, voice]);
 
     const unavailable = status && !status.available;
 
@@ -121,6 +148,17 @@ const AskPage = () => {
                     are shown so you can check them. Background questions are answered from
                     general knowledge, and it will say so.
                 </p>
+                <button
+                    onClick={() => setVoiceMode((on) => !on)}
+                    className={`mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-all ${
+                        voiceMode
+                            ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
+                            : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+                    }`}
+                >
+                    <Mic size={14} />
+                    {voiceMode ? 'Voice mode on' : 'Talk to the assistant'}
+                </button>
             </header>
 
             {unavailable && (
@@ -130,6 +168,63 @@ const AskPage = () => {
                         The assistant is not configured on this server. Set <code>GROQ_API_KEY</code> to
                         enable it — everything else on the site works without it.
                     </p>
+                </div>
+            )}
+
+            {voiceMode && (
+                <div className="mb-8 flex flex-col items-center">
+                    <div className="w-full max-w-[280px] aspect-square">
+                        <Suspense fallback={
+                            <div className="w-full h-full rounded-full bg-white/[0.03] animate-pulse" />
+                        }>
+                            <NewsAnchor
+                                speaking={voice.speaking}
+                                listening={voice.listening}
+                                thinking={busy}
+                                amplitude={voice.amplitude}
+                            />
+                        </Suspense>
+                    </div>
+
+                    <p className="h-6 text-[13px] text-slate-400 text-center px-4">
+                        {voice.interim
+                            || (voice.listening && 'Listening…')
+                            || (busy && 'Checking the archive…')
+                            || (voice.speaking && 'Speaking…')
+                            || 'Press the microphone and ask'}
+                    </p>
+
+                    <div className="flex items-center gap-3 mt-4">
+                        <button
+                            onClick={voice.listening ? voice.stopListening : voice.startListening}
+                            disabled={busy || unavailable}
+                            aria-label={voice.listening ? 'Stop listening' : 'Start listening'}
+                            className={`p-4 rounded-full transition-all disabled:opacity-30 ${
+                                voice.listening
+                                    ? 'bg-rose-500 text-white scale-110 shadow-lg shadow-rose-500/30'
+                                    : 'bg-cyan-500 text-white hover:bg-cyan-400'
+                            }`}
+                        >
+                            {voice.listening ? <MicOff size={20} /> : <Mic size={20} />}
+                        </button>
+                        <button
+                            onClick={() => { setMuted((m) => !m); voice.stopSpeaking(); }}
+                            aria-label={muted ? 'Unmute replies' : 'Mute replies'}
+                            className="p-3 rounded-full border border-white/10 text-slate-400 hover:text-white transition-colors"
+                        >
+                            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                        </button>
+                    </div>
+
+                    {voice.error && (
+                        <p className="mt-3 text-[12px] text-rose-300">{voice.error}</p>
+                    )}
+                    {voice.usesServerTranscription && (
+                        <p className="mt-2 text-[11px] text-slate-600 text-center max-w-xs">
+                            This browser has no speech recognition, so recordings are transcribed
+                            on the server. Tap to record, tap again when finished.
+                        </p>
+                    )}
                 </div>
             )}
 

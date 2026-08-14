@@ -176,6 +176,77 @@ class TestAnswerCleaning:
         assert agent._clean_answer(None) is None
 
 
+class TestTranscription:
+    """Voice input. Only Safari and Firefox reach this — Chrome transcribes locally."""
+
+    def test_without_a_key_it_refuses(self, db, monkeypatch):
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        assert agent.transcribe(db, b"audio")["text"] is None
+
+    def test_empty_audio_never_reaches_the_service(self, db, configured, monkeypatch):
+        called = []
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: called.append(1))
+        assert agent.transcribe(db, b"")["error"] == "No audio received."
+        assert called == []
+
+    def test_oversized_audio_is_rejected_before_upload(self, db, configured, monkeypatch):
+        called = []
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: called.append(1))
+        result = agent.transcribe(db, b"x" * (agent.MAX_AUDIO_BYTES + 1))
+        assert "too long" in result["error"]
+        assert called == [], "a huge upload must not be forwarded"
+
+    def test_successful_transcription_returns_text(self, db, configured, monkeypatch):
+        class _Ok:
+            status_code = 200
+            text = ""
+            @staticmethod
+            def json(): return {"text": "  What happened in Colombia?  "}
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: _Ok())
+
+        assert agent.transcribe(db, b"audio")["text"] == "What happened in Colombia?"
+
+    def test_silence_is_reported_not_answered(self, db, configured, monkeypatch):
+        class _Empty:
+            status_code = 200
+            text = ""
+            @staticmethod
+            def json(): return {"text": "   "}
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: _Empty())
+
+        result = agent.transcribe(db, b"audio")
+        assert result["text"] is None and result["error"]
+
+    def test_bad_key_says_so(self, db, configured, monkeypatch):
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: _Reply(status=401, text="nope"))
+        assert "API key" in agent.transcribe(db, b"audio")["error"]
+
+    def test_transcription_is_charged_to_the_daily_budget(self, db, configured, monkeypatch):
+        """Otherwise the budget guards answering while voice drains the account."""
+        class _Ok:
+            status_code = 200
+            text = ""
+            @staticmethod
+            def json(): return {"text": "hello"}
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: _Ok())
+
+        agent.transcribe(db, b"audio")
+        _, used = agent._budget_state(db)
+        assert used == 1
+
+    def test_endpoint_accepts_an_upload(self, client, configured, monkeypatch):
+        class _Ok:
+            status_code = 200
+            text = ""
+            @staticmethod
+            def json(): return {"text": "spoken question"}
+        monkeypatch.setattr(agent.requests, "post", lambda *a, **k: _Ok())
+
+        response = client.post("/agent/transcribe", files={"audio": ("s.webm", b"fake audio bytes")})
+        assert response.status_code == 200
+        assert response.json()["text"] == "spoken question"
+
+
 class TestEndpoint:
     def test_returns_an_answer_shape(self, client, configured, archive, monkeypatch):
         monkeypatch.setattr(agent.requests, "post", lambda *a, **k: _answer("Here is what happened."))

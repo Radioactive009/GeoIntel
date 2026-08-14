@@ -19,7 +19,9 @@ from html import escape
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import (
+    Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -800,6 +802,26 @@ def agent_ask(
         payload.question,
         [turn.model_dump() for turn in payload.history],
     )
+
+
+@app.post("/agent/transcribe")
+async def agent_transcribe(
+    request: Request,
+    audio: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Speech to text, for browsers without their own recogniser.
+
+    Chrome and Edge transcribe locally and never call this; Safari and Firefox
+    have no SpeechRecognition, so their audio comes here.
+    """
+    caller = request.client.host if request.client else "unknown"
+    if agent.rate_limited(caller):
+        return {"text": None, "error": "You have asked a lot in a short time. Give it a few minutes."}
+
+    payload = await audio.read()
+    return agent.transcribe(db, payload, audio.filename or "speech.webm")
 
 
 @app.get("/agent/status")
