@@ -8,6 +8,12 @@ import Seo from '../components/Seo';
 // three.js is ~150 kB and only this page uses it, so the character loads on
 // its own rather than in the route bundle.
 const NewsAnchor = lazy(() => import('../components/NewsAnchor'));
+const AvatarAnchor = lazy(() => import('../components/AvatarAnchor'));
+
+// A GLB with ARKit blendshapes — a Ready Player Me avatar built from a selfie,
+// or anything else exporting the same shapes. Unset, the built-in character is
+// used, so the page never depends on a model being reachable.
+const AVATAR_URL = import.meta.env.VITE_AVATAR_URL || '';
 
 /**
  * Ask the archive.
@@ -57,6 +63,8 @@ const AskPage = () => {
     const [status, setStatus] = useState(null);
     const [voiceMode, setVoiceMode] = useState(false);
     const [muted, setMuted] = useState(false);
+    // A model that fails to load must not leave an empty box on the page.
+    const [avatarFailed, setAvatarFailed] = useState(false);
     const endRef = useRef(null);
     const sendRef = useRef(null);
 
@@ -173,16 +181,27 @@ const AskPage = () => {
 
             {voiceMode && (
                 <div className="mb-8 flex flex-col items-center">
-                    <div className="w-full max-w-[280px] aspect-square">
+                    <div className="w-full max-w-[300px] aspect-square">
                         <Suspense fallback={
                             <div className="w-full h-full rounded-full bg-white/[0.03] animate-pulse" />
                         }>
-                            <NewsAnchor
-                                speaking={voice.speaking}
-                                listening={voice.listening}
-                                thinking={busy}
-                                amplitude={voice.amplitude}
-                            />
+                            {AVATAR_URL && !avatarFailed ? (
+                                <AvatarAnchor
+                                    url={AVATAR_URL}
+                                    speaking={voice.speaking}
+                                    listening={voice.listening}
+                                    thinking={busy}
+                                    amplitude={voice.amplitude}
+                                    onFailed={() => setAvatarFailed(true)}
+                                />
+                            ) : (
+                                <NewsAnchor
+                                    speaking={voice.speaking}
+                                    listening={voice.listening}
+                                    thinking={busy}
+                                    amplitude={voice.amplitude}
+                                />
+                            )}
                         </Suspense>
                     </div>
 
