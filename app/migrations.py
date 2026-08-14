@@ -29,6 +29,7 @@ _SECONDARY_BACKFILL_KEY = "migration_secondary_countries"
 # Bumped when the taxonomy changes, so stored labels are recomputed.
 _RECLASSIFY_KEY = "migration_topics_v2"
 _EVENTS_BACKFILL_KEY = "migration_event_groups"
+_TONE_BACKFILL_KEY = "migration_tone_v1"
 
 ARTICLE_COLUMNS = {
     "sentiment_score": "FLOAT",
@@ -45,6 +46,8 @@ ARTICLE_COLUMNS = {
     "event_key": "VARCHAR",
     "is_duplicate": "BOOLEAN DEFAULT 0",
     "topic_confidence": "FLOAT",
+    "tone": "VARCHAR",
+    "tone_score": "FLOAT",
 }
 
 SOURCE_COLUMNS = {
@@ -418,6 +421,37 @@ def _backfill_event_groups(conn) -> None:
     )
 
 
+def _backfill_tone(conn) -> None:
+    """Give every stored article an emotional register."""
+    if _flag(conn, _TONE_BACKFILL_KEY):
+        return
+    if "tone" not in _existing_columns(conn, "articles"):
+        return
+
+    from .services.tone import classify_tone
+
+    rows = conn.execute(text(
+        "SELECT a.id, a.title, a.description, s.name "
+        "FROM articles a LEFT JOIN sources s ON s.id = a.source_id"
+    )).fetchall()
+    if not rows:
+        _set_flag(conn, _TONE_BACKFILL_KEY)
+        return
+
+    updates = []
+    for article_id, title, description, source_name in rows:
+        tone, score = classify_tone(title, description, source_name)
+        updates.append({"aid": article_id, "tone": tone, "score": score})
+
+    statement = text("UPDATE articles SET tone = :tone, tone_score = :score WHERE id = :aid")
+    for start in range(0, len(updates), 500):
+        conn.execute(statement, updates[start:start + 500])
+
+    _set_flag(conn, _TONE_BACKFILL_KEY)
+    logger.info("[MIGRATE] Scored tone for %s articles: %s",
+                len(updates), dict(collections.Counter(u["tone"] for u in updates)))
+
+
 def _backfill_secondary_countries(conn) -> None:
     """Resolve the runner-up country for articles that have none recorded."""
     if _flag(conn, _SECONDARY_BACKFILL_KEY):
@@ -494,6 +528,7 @@ def run_migrations(engine: Engine) -> None:
         _backfill_secondary_countries,
         _reclassify_topics,
         _backfill_event_groups,
+        _backfill_tone,
     ):
         try:
             with engine.begin() as conn:

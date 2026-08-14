@@ -32,8 +32,9 @@ from .country_resolver import resolve_countries
 from .gnews_service import fetch_gnews
 from .reliability import reliability_for
 from .risk_engine import score_article
-from .rss_service import fetch_country_rss, fetch_global_rss
+from .rss_service import fetch_country_rss, fetch_global_rss, fetch_uplifting_rss
 from .story import story_key
+from .tone import classify_tone
 
 logger = logging.getLogger(__name__)
 
@@ -513,6 +514,10 @@ def store_articles(
         if key:
             seen_keys.add(key)
 
+        tone, tone_score = classify_tone(
+            title, description, (item.get("source") or {}).get("name")
+        )
+
         text = f"{title or ''} {description or ''}"
         geo_risk_score, geo_risk_level, _event_type, category = score_article(text)
 
@@ -542,6 +547,8 @@ def store_articles(
             geo_risk_level=geo_risk_level,
             event_type=topic.category,
             topic_confidence=topic.confidence,
+            tone=tone,
+            tone_score=tone_score,
             category=category,
         ))
 
@@ -581,6 +588,22 @@ def ingest_news_for_country(country_iso: str, db: Session) -> int:
     fallback_id = iso_map.get(country_cfg["code"])
     saved = store_articles(db, items, iso_map, fallback_country_id=fallback_id)
     logger.info("[OK] %s: %s new articles (%s fetched)", country_cfg["name"], saved, len(items))
+    return saved
+
+
+def ingest_uplifting_feeds(db: Session) -> int:
+    """
+    Constructive-journalism feeds.
+
+    Ingested separately from the wire feeds because the uplifting section
+    cannot be filled from a geopolitics corpus — under 2% of it reads as
+    uplifting, and the highest-scoring of those were misreadings.
+    """
+    items = fetch_uplifting_rss()
+    if not items:
+        return 0
+    saved = store_articles(db, items, country_iso_to_id(db), fallback_country_id=None)
+    logger.info("[OK] Uplifting feeds: %s new articles (%s fetched)", saved, len(items))
     return saved
 
 
@@ -640,6 +663,7 @@ def run_ingest_cycle(db: Session, batch_size: int | None = None) -> dict:
     ensure_country_catalog_in_db(db)
 
     global_saved = ingest_global_feeds(db)
+    global_saved += ingest_uplifting_feeds(db)
 
     batch, start_idx = get_country_batch(db, batch_size or ingest_batch_size())
     results: dict[str, int] = {}

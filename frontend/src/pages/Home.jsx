@@ -3,6 +3,7 @@ import Sidebar from '../components/Sidebar';
 import { LeadStory, SecondaryStory, StoryCard } from '../components/StoryCards';
 import { LeadStorySkeleton, StoryGridSkeleton } from '../components/Skeleton';
 import Seo from '../components/Seo';
+import MoodSwitch from '../components/MoodSwitch';
 
 // Recharts is the largest single dependency and this section sits below the
 // fold, so it is fetched only once the reader gets there.
@@ -41,6 +42,7 @@ const Home = () => {
     const [selectedEventType, setSelectedEventType] = useState('');
     const [selectedDays, setSelectedDays] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
+    const [tone, setTone] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [chartFilter, setChartFilter] = useState('top');
     const [trendSeries, setTrendSeries] = useState({});
@@ -65,9 +67,9 @@ const Home = () => {
     // Adjusting state here makes React re-render before committing, so only
     // the page-1 request is ever issued.
     const filterKey = [
-        selectedCountry, selectedRegion, selectedLevel, selectedEventType, selectedDays, searchTerm,
+        selectedCountry, selectedRegion, selectedLevel, selectedEventType, selectedDays, searchTerm, tone,
     ].join('|');
-    const hasActiveFilters = filterKey !== '|||||';
+    const hasActiveFilters = filterKey !== '||||||';
     const [lastFilterKey, setLastFilterKey] = useState(filterKey);
     if (filterKey !== lastFilterKey) {
         setLastFilterKey(filterKey);
@@ -91,6 +93,7 @@ const Home = () => {
                 region: selectedRegion,
                 level: selectedLevel,
                 eventType: selectedEventType,
+                tone,
                 days: selectedDays,
                 q: searchTerm,
                 limit: ARTICLES_PER_PAGE,
@@ -111,7 +114,7 @@ const Home = () => {
         } finally {
             if (seq === requestSeq.current) setLoading(false);
         }
-    }, [selectedCountry, selectedRegion, selectedLevel, selectedEventType, selectedDays, searchTerm, currentPage]);
+    }, [selectedCountry, selectedRegion, selectedLevel, selectedEventType, selectedDays, searchTerm, tone, currentPage]);
 
     const fetchOverview = useCallback(async () => {
         try {
@@ -268,6 +271,7 @@ const Home = () => {
         setSelectedEventType('');
         setSelectedDays(0);
         setSearchTerm('');
+        setTone('');
         setCurrentPage(1);
     };
 
@@ -696,6 +700,11 @@ const Home = () => {
                                 {totalArticles} stories
                             </p>
                         </div>
+
+                        {/* Register first, filters second: choosing a mood is a
+                            different act from narrowing a search, and burying it
+                            in the sidebar would make it look like one. */}
+                        <MoodSwitch value={tone} onChange={setTone} />
 
                         {loading ? (
                             <div className="space-y-8">

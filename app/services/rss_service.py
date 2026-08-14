@@ -60,6 +60,23 @@ RSS_FEEDS = [
     {"name": "Google News World", "url": "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"},
 ]
 
+# Constructive-journalism outlets, fetched so the uplifting section has
+# something to show. A geopolitics corpus does not supply it on its own —
+# measured across 5,218 stored articles, under 2% read as uplifting, and the
+# few that scored highest were misreadings ("Young girl finds whale stranded
+# on Australian beach"). Without these feeds the section would be a promise
+# the pipeline could not keep.
+#
+# The Guardian's "Upside" series feed 404s and a Google News search for
+# "good news" returns commentary about the phrase rather than good news, so
+# neither is included.
+UPLIFTING_FEEDS = [
+    {"name": "Good News Network", "url": "https://www.goodnewsnetwork.org/feed/"},
+    {"name": "Positive News", "url": "https://www.positive.news/feed/"},
+    {"name": "Reasons to be Cheerful", "url": "https://reasonstobecheerful.world/feed/"},
+    {"name": "Optimist Daily", "url": "https://www.optimistdaily.com/feed/"},
+]
+
 # Terms appended to each country's Google News query to keep the feed on topic.
 COUNTRY_FEED_TERMS = "politics OR war OR conflict OR sanctions OR diplomacy OR military OR crisis"
 
@@ -269,6 +286,27 @@ def fetch_global_rss() -> list[dict]:
             _global_cache["fetched_at"] = now
         # Every feed failing (offline host) falls back to the last good set.
         return list(articles or _global_cache["articles"])
+
+
+_uplifting_cache: dict = {"articles": [], "fetched_at": 0.0}
+
+
+def fetch_uplifting_rss() -> list[dict]:
+    """Constructive-journalism feeds, cached like the global set."""
+    now = time.time()
+    with _global_lock:
+        cached = _uplifting_cache
+        if now - cached["fetched_at"] <= GLOBAL_CACHE_TTL and cached["articles"]:
+            return list(cached["articles"])
+
+    articles = _collect(UPLIFTING_FEEDS)
+    logger.info("[RSS] Uplifting feeds: %s articles", len(articles))
+
+    with _global_lock:
+        if articles:
+            _uplifting_cache["articles"] = articles
+            _uplifting_cache["fetched_at"] = now
+        return list(articles or _uplifting_cache["articles"])
 
 
 def fetch_country_rss(country_name: str) -> list[dict]:

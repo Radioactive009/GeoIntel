@@ -394,6 +394,10 @@ def get_articles(
         default=None,
         pattern="^(conflict|security|diplomacy|economy|politics|disaster|humanitarian|other)$",
     ),
+    tone: str | None = Query(
+        default=None, pattern="^(uplifting|serious|neutral)$",
+        description="Emotional register, so a reader can choose one",
+    ),
     q: str | None = None,
     days: int | None = Query(default=None, ge=1, le=365),
     include_duplicates: bool = Query(
@@ -436,6 +440,9 @@ def get_articles(
 
     if event_type:
         query = query.filter(models.Article.event_type == event_type)
+
+    if tone:
+        query = query.filter(models.Article.tone == tone)
 
     if not include_duplicates:
         # One event, one card. `isnot(True)` keeps rows stored before the

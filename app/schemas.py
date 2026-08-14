@@ -68,6 +68,9 @@ class ArticleResponse(BaseModel):
     geo_risk_level: Optional[str] = None
     event_type: Optional[str] = None
     category: Optional[str] = None
+    # uplifting | serious | neutral
+    tone: Optional[str] = None
+    tone_score: Optional[float] = None
 
     # Flattened from the article's country relationship.
     country: Optional[str] = None

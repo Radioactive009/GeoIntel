@@ -94,6 +94,11 @@ class Article(Base):
     # revisited or hidden rather than presented with the same authority as a
     # confident one.
     topic_confidence = Column(Float)
+    # Emotional register, so a reader can pick one: uplifting | serious |
+    # neutral. Distinct from geo_risk_level — a low-risk story is usually just
+    # routine, which is neither. See services/tone.py.
+    tone = Column(String, index=True)
+    tone_score = Column(Float)
     event_type = Column(String)      # military | diplomatic | economic | political | hazard
     category = Column(String)        # strategic_activity | conflict | news
 
