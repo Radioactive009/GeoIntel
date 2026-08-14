@@ -1,17 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { VISEMES, JAW, BLINK, SMILE, resolveMorphTargets } from '../lib/morphTargets';
 
 /**
  * A real avatar, if one is configured.
  *
- * Takes any GLB URL. Models exporting ARKit-style blendshapes give proper
+ * Takes any GLB URL. Models exporting ARKit or Oculus blendshapes get proper
  * visemes and eyelids, so the mouth forms shapes instead of a capsule opening
  * and shutting; models without them still animate, just more simply.
  *
  * Source-agnostic on purpose. This was written against Ready Player Me, which
  * shut down weeks later and took every avatar hosted on it — so the loader
- * knows nothing about where a model comes from.
+ * knows nothing about where a model comes from, and self-hosting the file is
+ * the documented default.
  *
  * Falls back to the procedural character whenever the model is absent, slow
  * or broken. A head that cannot load is worse than a simple head that always
@@ -19,12 +24,16 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
  * not control.
  */
 
-// Standard ARKit blendshape names. Every one is optional: models rig
-// different subsets, and a missing shape is skipped rather than assumed.
-const VISEMES = ['viseme_aa', 'viseme_O', 'viseme_E', 'viseme_I', 'viseme_U'];
-const JAW = ['jawOpen', 'mouthOpen'];
-const BLINK = ['eyeBlinkLeft', 'eyeBlinkRight', 'eyesClosed'];
-const SMILE = ['mouthSmileLeft', 'mouthSmileRight'];
+// A model that sends no bytes for this long is treated as dead rather than
+// left spinning; the fallback character is better than an empty box.
+const STALL_MS = 15000;
+// Progress can continue forever on a hostile connection. Past this, the wait
+// costs more than the nicer head is worth.
+const HARD_LIMIT_MS = 60000;
+
+// Beyond roughly this, the avatar is a bigger download than the entire rest
+// of the page. Worth saying out loud rather than silently shipping it.
+const SIZE_WARN_BYTES = 8 * 1024 * 1024;
 
 const AvatarAnchor = ({
     url,
@@ -37,6 +46,7 @@ const AvatarAnchor = ({
     const mountRef = useRef(null);
     const state = useRef({ speaking, listening, thinking, amplitude });
     const [loading, setLoading] = useState(true);
+    const [percent, setPercent] = useState(0);
 
     useEffect(() => {
         state.current = { speaking, listening, thinking, amplitude };
@@ -48,6 +58,7 @@ const AvatarAnchor = ({
 
         let disposed = false;
         let frameId;
+        let settled = false;
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
@@ -67,16 +78,8 @@ const AvatarAnchor = ({
         // Morph targets are spread across several meshes (head, teeth, eyes),
         // so every mesh that has any is collected rather than assuming one.
         const morphs = [];
-        const findMorph = (names) => {
-            const hits = [];
-            morphs.forEach(({ mesh, dictionary }) => {
-                names.forEach((name) => {
-                    const index = dictionary[name];
-                    if (index !== undefined) hits.push({ mesh, index });
-                });
-            });
-            return hits;
-        };
+
+        const findMorph = (names) => resolveMorphTargets(morphs, names);
 
         let head = null;
         let visemeTargets = [];
@@ -84,11 +87,44 @@ const AvatarAnchor = ({
         let blinkTargets = [];
         let smileTargets = [];
 
-        const loader = new GLTFLoader();
+        const giveUp = (reason, detail) => {
+            if (settled || disposed) return;
+            settled = true;
+            console.error(`[avatar] ${reason}`, detail ?? '');
+            onFailed?.();
+        };
+
+        // Compressed geometry and textures are routine in avatar exports, and
+        // without these three the load fails with an error naming a decoder
+        // rather than anything the reader can act on. Decoders are fetched
+        // only when a file actually uses them.
+        const draco = new DRACOLoader().setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+        const ktx2 = new KTX2Loader()
+            .setTranscoderPath(`${import.meta.env.BASE_URL}basis/`)
+            .detectSupport(renderer);
+
+        const loader = new GLTFLoader()
+            .setDRACOLoader(draco)
+            .setKTX2Loader(ktx2)
+            .setMeshoptDecoder(MeshoptDecoder);
+
+        let lastProgress = Date.now();
+        const startedAt = lastProgress;
+        const watchdog = setInterval(() => {
+            if (settled || disposed) return;
+            const now = Date.now();
+            if (now - lastProgress > STALL_MS) {
+                giveUp('download stalled; falling back to the built-in character');
+            } else if (now - startedAt > HARD_LIMIT_MS) {
+                giveUp('model too slow to be worth waiting for; using the built-in character');
+            }
+        }, 2000);
+
         loader.load(
             url,
             (gltf) => {
                 if (disposed) return;
+                settled = true;
                 const model = gltf.scene;
 
                 model.traverse((node) => {
@@ -105,6 +141,13 @@ const AvatarAnchor = ({
                 blinkTargets = findMorph(BLINK);
                 smileTargets = findMorph(SMILE);
 
+                if (!visemeTargets.length && !jawTargets.length) {
+                    console.warn(
+                        '[avatar] model has no viseme or jaw blendshapes, so the mouth cannot move. '
+                        + 'Re-export it with ARKit or Oculus blendshapes enabled.',
+                    );
+                }
+
                 // Frame the head: avatars are exported life-size in metres and
                 // standing on the origin, so a default camera sees the shins.
                 const box = new THREE.Box3().setFromObject(model);
@@ -116,10 +159,26 @@ const AvatarAnchor = ({
                 scene.add(model);
                 setLoading(false);
             },
-            undefined,
+            (event) => {
+                lastProgress = Date.now();
+                if (event.total > 0) {
+                    setPercent(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+                    if (event.total > SIZE_WARN_BYTES) {
+                        console.warn(
+                            `[avatar] model is ${(event.total / 1024 / 1024).toFixed(1)} MB. `
+                            + 'Consider exporting a head-only or lower-resolution version.',
+                        );
+                    }
+                }
+            },
             (error) => {
-                console.error('[avatar] could not load', error);
-                if (!disposed) onFailed?.();
+                // The browser reports a blocked cross-origin fetch and a 404
+                // identically, so name both rather than guess.
+                giveUp(
+                    'could not load the model. Check the URL is reachable and that its host '
+                    + 'sends CORS headers — serving the .glb from this site avoids both problems.',
+                    error,
+                );
             },
         );
 
@@ -196,8 +255,11 @@ const AvatarAnchor = ({
 
         return () => {
             disposed = true;
+            clearInterval(watchdog);
             cancelAnimationFrame(frameId);
             observer.disconnect();
+            draco.dispose();
+            ktx2.dispose();
             renderer.dispose();
             scene.traverse((object) => {
                 if (object.geometry) object.geometry.dispose();
@@ -218,6 +280,11 @@ const AvatarAnchor = ({
             {loading && (
                 <div className="absolute inset-0 grid place-items-center">
                     <div className="w-24 h-24 rounded-full bg-white/[0.04] animate-pulse" />
+                    {percent > 0 && (
+                        <span className="absolute bottom-6 text-[11px] tabular-nums text-slate-500">
+                            {percent}%
+                        </span>
+                    )}
                 </div>
             )}
         </div>
