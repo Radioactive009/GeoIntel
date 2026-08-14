@@ -113,16 +113,25 @@ def chunk(text: str, limit: int = MAX_CHUNK_CHARS) -> list[str]:
         if len(sentence) <= limit:
             pieces.append(sentence)
             continue
-        # Too long to speak in one request: break it down further.
+        # Too long to speak in one request: pack it word by word instead.
         buffer = ""
-        for part in re.split(r"(?<=,)\s+|\s+", sentence):
+        for part in sentence.split():
             candidate = f"{buffer} {part}".strip()
             if len(candidate) <= limit:
                 buffer = candidate
-            else:
-                if buffer:
-                    pieces.append(buffer)
-                buffer = part[:limit]
+                continue
+
+            if buffer:
+                pieces.append(buffer)
+                buffer = ""
+            # A single token longer than the limit — a pasted URL, usually.
+            # Slicing it and keeping only the first piece silently swallowed
+            # the rest of the sentence with it, so it is cut across as many
+            # pieces as it takes.
+            while len(part) > limit:
+                pieces.append(part[:limit])
+                part = part[limit:]
+            buffer = part
         if buffer:
             pieces.append(buffer)
 

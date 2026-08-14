@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------- COUNTRY ----------
@@ -195,10 +195,14 @@ class AgentQuestion(BaseModel):
 
 
 class SpeechRequest(BaseModel):
-    text: str
+    # Bounded here as well as truncated in the service. The service caps what
+    # is *sent upstream*, which bounds the bill; this caps what is accepted at
+    # all, so a public endpoint cannot be made to hold an arbitrarily large
+    # body in memory first.
+    text: str = Field(max_length=8000)
     # Overriding the persona per request is useful for trying voices without a
     # redeploy; the server still bounds length and cost regardless.
-    voice: Optional[str] = None
+    voice: Optional[str] = Field(default=None, max_length=40)
 
 
 class AgentSource(BaseModel):

@@ -98,6 +98,17 @@ class TestChunking:
         pieces = speech.chunk("x" * 900)
         assert pieces and all(len(p) <= speech.MAX_CHUNK_CHARS for p in pieces)
 
+    def test_an_enormous_word_is_not_silently_swallowed(self):
+        """Slicing and keeping only the first piece lost 500 of 900 characters."""
+        assert sum(len(p) for p in speech.chunk("x" * 900)) == 900
+
+    def test_a_long_token_does_not_take_the_sentence_with_it(self):
+        """A pasted URL used to truncate everything after it in the answer."""
+        text = f"See https://example.com/{'a' * 500} for details. Then more here."
+        rebuilt = " ".join(speech.chunk(text))
+        assert rebuilt.replace(" ", "") == text.replace(" ", "")
+        assert "Then more here." in rebuilt
+
     def test_empty_input_produces_nothing(self):
         assert speech.chunk("") == []
         assert speech.chunk("   ") == []

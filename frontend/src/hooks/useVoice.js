@@ -67,7 +67,16 @@ export const useVoice = ({
     // tell "finished" from "was cut off" — speechSynthesis.cancel() and
     // AudioBufferSourceNode.stop() both fire the same end events as success.
     const cancelledRef = useRef(false);
+    // Bumped by every stop and every new utterance. Fetching and decoding
+    // server audio spans two awaits, and without a token to compare against,
+    // pressing stop during them silenced nothing: the request resolved a
+    // moment later and started playing regardless.
+    const speechId = useRef(0);
     const heardRef = useRef(false);
+    // Mirrors `listening` for the callbacks, which run between renders. Two
+    // live recognition instances would each deliver the same question, and
+    // every question spends an upstream request.
+    const listeningRef = useRef(false);
     const onTranscriptRef = useRef(onTranscript);
     const onSpeechEndRef = useRef(onSpeechEnd);
     const onListenEndRef = useRef(onListenEnd);
@@ -107,6 +116,7 @@ export const useVoice = ({
 
     const stopSpeaking = useCallback(() => {
         cancelledRef.current = true;
+        speechId.current += 1;
         if (canSpeak) window.speechSynthesis.cancel();
         stopAudio();
         clearInterval(decayRef.current);
@@ -162,7 +172,7 @@ export const useVoice = ({
     }, [canSpeak]);
 
     /** Play server audio, with the mouth following the actual waveform. */
-    const playAudio = useCallback(async (blob) => {
+    const playAudio = useCallback(async (blob, token) => {
         const Context = window.AudioContext || window.webkitAudioContext;
         if (!Context) return false;
 
@@ -172,6 +182,9 @@ export const useVoice = ({
         if (context.state === 'suspended') await context.resume();
 
         const buffer = await context.decodeAudioData(await blob.arrayBuffer());
+        // Decoding a few seconds of audio is not instant, and a stop during it
+        // must win.
+        if (token !== speechId.current) return true;
         stopAudio();
 
         const source = context.createBufferSource();
@@ -182,6 +195,11 @@ export const useVoice = ({
         analyser.connect(context.destination);
 
         const samples = new Uint8Array(analyser.fftSize);
+        // The mouth interpolates towards whatever it is given, so it does not
+        // need a new figure every frame — and each one re-renders the page
+        // that owns this hook. Roughly 20 a second matches what the synthesis
+        // path produces and is indistinguishable on screen.
+        let lastPublished = 0;
         const follow = () => {
             analyser.getByteTimeDomainData(samples);
             let sum = 0;
@@ -191,7 +209,11 @@ export const useVoice = ({
             }
             // Speech sits well below full scale, so the RMS is scaled up to
             // reach the top of the mouth's range on a loud syllable.
-            setAmplitude(Math.min(1, Math.sqrt(sum / samples.length) * 3.2));
+            const now = performance.now();
+            if (now - lastPublished >= 50) {
+                lastPublished = now;
+                setAmplitude(Math.min(1, Math.sqrt(sum / samples.length) * 3.2));
+            }
             frameRef.current = requestAnimationFrame(follow);
         };
 
@@ -216,21 +238,26 @@ export const useVoice = ({
     const speak = useCallback(async (text) => {
         if (!text) return;
         stopSpeaking();
-        // stopSpeaking above sets this to silence whatever was playing; this
+        // stopSpeaking above sets these to silence whatever was playing; this
         // utterance is a fresh one and must be allowed to report completion.
         cancelledRef.current = false;
+        const token = speechId.current;
 
         if (serverSpeech) {
             setPreparing(true);
             try {
                 const blob = await speakText(text);
+                // Anything that stopped speech while the request was in flight
+                // has already moved the token on; this reply is no longer wanted.
+                if (token !== speechId.current) return;
                 // null means the server declined — disabled, out of budget, or
                 // terms unaccepted. All of them mean use the plainer voice.
-                if (blob && await playAudio(blob)) return;
+                if (blob && await playAudio(blob, token)) return;
             } catch {
                 // Network or decode failure. Same answer: fall back rather than
                 // leave the reader with an answer nobody reads out.
             }
+            if (token !== speechId.current) { setPreparing(false); return; }
             setPreparing(false);
         }
 
@@ -274,6 +301,7 @@ export const useVoice = ({
             setListening(false);
         };
         recognition.onend = () => {
+            listeningRef.current = false;
             setListening(false);
             setInterim('');
             setAmplitude(0);
@@ -295,6 +323,7 @@ export const useVoice = ({
         recorder.onstop = async () => {
             stream.getTracks().forEach((track) => track.stop());
             const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+            listeningRef.current = false;
             setListening(false);
             if (blob.size < 1200) {               // a click, not a sentence
                 onListenEndRef.current?.(false);
@@ -317,13 +346,18 @@ export const useVoice = ({
     }, []);
 
     const startListening = useCallback(async () => {
+        // Hands-free reopens the microphone from several places; starting a
+        // second session while one is live leaves both running.
+        if (listeningRef.current) return;
         setError(null);
         stopSpeaking();
         try {
+            listeningRef.current = true;
             if (supportsNative) startNative();
             else await startRecording();
             setListening(true);
         } catch {
+            listeningRef.current = false;
             setError('Microphone access was blocked.');
             setListening(false);
         }
@@ -332,7 +366,7 @@ export const useVoice = ({
     const stopListening = useCallback(() => {
         recognitionRef.current?.stop();
         if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
-        else setListening(false);
+        else { listeningRef.current = false; setListening(false); }
     }, []);
 
     useEffect(() => () => {

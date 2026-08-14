@@ -18,7 +18,9 @@ import { getOwnerKey, setOwnerKey } from '../services/api';
  * a secret with no explanation is one people are right to distrust.
  */
 const OwnerKey = () => {
-    const [saved, setSaved] = useState(Boolean(getOwnerKey()));
+    // Lazy: this reads localStorage, and a plain initialiser re-reads it on
+    // every render for a value only used on the first.
+    const [saved, setSaved] = useState(() => Boolean(getOwnerKey()));
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState('');
 

@@ -48,6 +48,14 @@ const AvatarAnchor = ({
     const [loading, setLoading] = useState(true);
     const [percent, setPercent] = useState(0);
 
+    // Held in a ref rather than read from the closure. Callers pass this
+    // inline, so it is a new function on every render, and naming it as a
+    // dependency of the loading effect below tore down the scene and
+    // re-downloaded the model every time the parent re-rendered — which,
+    // while speaking, is once per animation frame.
+    const onFailedRef = useRef(onFailed);
+    useEffect(() => { onFailedRef.current = onFailed; }, [onFailed]);
+
     useEffect(() => {
         state.current = { speaking, listening, thinking, amplitude };
     }, [speaking, listening, thinking, amplitude]);
@@ -91,7 +99,7 @@ const AvatarAnchor = ({
             if (settled || disposed) return;
             settled = true;
             console.error(`[avatar] ${reason}`, detail ?? '');
-            onFailed?.();
+            onFailedRef.current?.();
         };
 
         // Compressed geometry and textures are routine in avatar exports, and
@@ -273,7 +281,9 @@ const AvatarAnchor = ({
             });
             if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
         };
-    }, [url, onFailed]);
+        // `url` only. The model is expensive to fetch and build, so this must
+        // run when the model changes and at no other time.
+    }, [url]);
 
     return (
         <div ref={mountRef} className="w-full h-full relative" role="img" aria-label="News assistant">
