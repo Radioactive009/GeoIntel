@@ -50,7 +50,14 @@ logger = logging.getLogger(__name__)
 # user variable silently shadowed the working key in .env, and the only symptom
 # was a 401 surfacing as "the assistant could not answer that". Production sets
 # real environment variables and ships no .env, so this is a no-op there.
-load_dotenv(override=True)
+# Tests set their own environment before importing the app — a throwaway
+# database, a known admin key — and override=True would replace all of it with
+# whatever happens to be in the developer's .env. That made the suite pass or
+# fail depending on the machine it ran on rather than on the code: adding a
+# real ADMIN_API_KEY locally turned green into two 401s, while CI stayed green
+# because CI has no .env at all.
+if os.getenv("GEOINTEL_SKIP_DOTENV", "").strip().lower() not in ("1", "true", "yes"):
+    load_dotenv(override=True)
 
 INGEST_INTERVAL_MINUTES = max(5, int(os.getenv("INGEST_INTERVAL_MINUTES", "30")))
 ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() not in ("0", "false", "no")

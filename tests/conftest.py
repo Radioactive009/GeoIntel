@@ -19,6 +19,10 @@ sys.path.insert(0, str(ROOT))
 # Must be set before app.database is imported — the engine is built at import
 # time from these, so a later assignment would have no effect.
 _TMP = tempfile.mkdtemp()
+# Must be set before the app is imported. Without it the app loads the
+# developer's .env over the top of everything below, and the suite starts
+# depending on which keys happen to be configured on this machine.
+os.environ["GEOINTEL_SKIP_DOTENV"] = "1"
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(_TMP, "test.db").replace("\\", "/")
 os.environ["ENABLE_SCHEDULER"] = "false"
 os.environ["ADMIN_API_KEY"] = "test-key"

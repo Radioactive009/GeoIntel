@@ -10,7 +10,10 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 # user variable silently shadowed the working key in .env, and the only symptom
 # was a 401 surfacing as "the assistant could not answer that". Production sets
 # real environment variables and ships no .env, so this is a no-op there.
-load_dotenv(override=True)
+# See the note in main.py: tests set DATABASE_URL themselves and must not
+# have it replaced by the developer's .env.
+if os.getenv("GEOINTEL_SKIP_DOTENV", "").strip().lower() not in ("1", "true", "yes"):
+    load_dotenv(override=True)
 
 # -- Dynamic Database Selection ---------------------------
 # DATABASE_URL selects the backend (PostgreSQL in production); without it we
