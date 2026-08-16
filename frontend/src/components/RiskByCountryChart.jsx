@@ -1,5 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { getFlagEmoji, getAlertColor, ALERT_STATUS_LABEL } from '../utils/country';
+import { token } from '../utils/palette';
 
 /**
  * Risk-by-country bar chart.
@@ -13,10 +14,10 @@ const ChartTooltip = ({ active, payload }) => {
     const d = payload[0].payload;
 
     return (
-        <div className="glass px-4 py-3 rounded-2xl shadow-2xl border border-white/10">
+        <div className="glass px-4 py-3 rounded-2xl shadow-2xl border border-rule">
             <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-lg" aria-hidden="true">{getFlagEmoji(d.iso_code)}</span>
-                <p className="text-white font-bold text-sm tracking-tight">{d.country}</p>
+                <p className="text-ink font-bold text-sm tracking-tight">{d.country}</p>
             </div>
             <div className="space-y-1">
                 {[
@@ -25,7 +26,7 @@ const ChartTooltip = ({ active, payload }) => {
                     ['Stories', d.total_articles, '#fff'],
                 ].map(([label, value, color]) => (
                     <div key={label} className="flex items-center justify-between gap-8 text-[11px]">
-                        <span className="text-slate-500 font-bold uppercase tracking-wider">{label}</span>
+                        <span className="text-muted font-bold uppercase tracking-wider">{label}</span>
                         <span className="font-bold tabular-nums" style={{ color }}>{value}</span>
                     </div>
                 ))}
@@ -39,7 +40,7 @@ const RiskByCountryChart = ({ data, dense, onSelect }) => (
         <BarChart data={data} margin={{ top: 10, right: 10, bottom: 40, left: -20 }}>
             <XAxis
                 dataKey="iso_code"
-                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                tick={{ fill: token('muted'), fontSize: 10, fontWeight: 700 }}
                 axisLine={false}
                 tickLine={false}
                 dy={15}
@@ -48,7 +49,7 @@ const RiskByCountryChart = ({ data, dense, onSelect }) => (
                 textAnchor="end"
             />
             <YAxis
-                tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                tick={{ fill: token('muted'), fontSize: 11, fontWeight: 600 }}
                 axisLine={false}
                 tickLine={false}
                 domain={[0, 100]}

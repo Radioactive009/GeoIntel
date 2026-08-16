@@ -56,10 +56,10 @@ const StoryPage = () => {
     if (loading) {
         return (
             <div className="max-w-3xl mx-auto px-6 py-12 space-y-6">
-                <div className="h-3 w-24 bg-white/[0.06] rounded animate-pulse" />
-                <div className="h-10 w-full bg-white/[0.06] rounded animate-pulse" />
-                <div className="h-10 w-2/3 bg-white/[0.06] rounded animate-pulse" />
-                <div className="aspect-[16/9] bg-white/[0.06] rounded-2xl animate-pulse" />
+                <div className="h-3 w-24 bg-surface-sunken rounded animate-pulse" />
+                <div className="h-10 w-full bg-surface-sunken rounded animate-pulse" />
+                <div className="h-10 w-2/3 bg-surface-sunken rounded animate-pulse" />
+                <div className="aspect-[16/9] bg-surface-sunken rounded-2xl animate-pulse" />
             </div>
         );
     }
@@ -68,8 +68,8 @@ const StoryPage = () => {
         return (
             <div className="max-w-2xl mx-auto px-6 py-24 text-center space-y-5">
                 <Seo title="Story not found" noIndex />
-                <h1 className="font-serif text-3xl font-bold text-white">Story not found</h1>
-                <p className="text-slate-400">
+                <h1 className="font-serif text-3xl font-bold text-ink">Story not found</h1>
+                <p className="text-body">
                     This story may have passed out of the retention window.
                 </p>
                 <Link to="/" className="btn-primary inline-block">Back to the front page</Link>
@@ -106,7 +106,7 @@ const StoryPage = () => {
 
             <Link
                 to="/"
-                className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-400 hover:text-cyan-400 transition-colors mb-8"
+                className="inline-flex items-center gap-2 text-[13px] font-semibold text-body hover:text-accent transition-colors mb-8"
             >
                 <ArrowLeft size={14} /> Front page
             </Link>
@@ -127,26 +127,26 @@ const StoryPage = () => {
                         {article.event_type && (
                             <Link
                                 to={`/topic/${article.event_type}`}
-                                className="text-[11px] font-bold uppercase tracking-widest text-slate-400 hover:text-cyan-400 transition-colors"
+                                className="text-[11px] font-bold uppercase tracking-widest text-body hover:text-accent transition-colors"
                             >
                                 {EVENT_LABELS[article.event_type] || article.event_type}
                             </Link>
                         )}
                     </div>
 
-                    <h1 className="font-serif text-3xl md:text-4xl lg:text-[2.6rem] font-bold text-white leading-[1.15] tracking-tight">
+                    <h1 className="font-serif text-3xl md:text-4xl lg:text-[2.6rem] font-bold text-ink leading-[1.15] tracking-tight">
                         {article.title}
                     </h1>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-5 pb-6 border-b border-white/10 text-[13px] text-slate-400">
-                        <span className="font-semibold text-slate-300">{article.source?.name || 'Unknown source'}</span>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-5 pb-6 border-b border-rule text-[13px] text-body">
+                        <span className="font-semibold text-body">{article.source?.name || 'Unknown source'}</span>
                         <span className="flex items-center gap-1.5">
                             <Clock size={12} /> {timeAgo(article.published_at)}
                         </span>
                         {article.country_iso_code && (
                             <Link
                                 to={`/country/${article.country_iso_code}`}
-                                className="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"
+                                className="flex items-center gap-1.5 hover:text-accent transition-colors"
                             >
                                 <Globe size={12} /> {article.country}
                             </Link>
@@ -154,7 +154,7 @@ const StoryPage = () => {
                         {article.country_secondary_iso_code && (
                             <Link
                                 to={`/country/${article.country_secondary_iso_code}`}
-                                className="hover:text-cyan-400 transition-colors"
+                                className="hover:text-accent transition-colors"
                             >
                                 {article.country_secondary}
                             </Link>
@@ -185,24 +185,24 @@ const StoryPage = () => {
                                 src={article.image_url}
                                 alt=""
                                 referrerPolicy="no-referrer"
-                                className="w-full rounded-2xl border border-white/10"
+                                className="w-full rounded-2xl border border-rule"
                             />
-                            <figcaption className="mt-2 text-[11px] text-slate-600">
+                            <figcaption className="mt-2 text-[11px] text-faint">
                                 Image: {article.source?.name || 'source publication'}
                             </figcaption>
                         </figure>
                     )}
 
                     {article.description && (
-                        <p className="mt-8 font-serif text-lg md:text-xl text-slate-200 leading-[1.7] max-w-prose">
+                        <p className="mt-8 font-serif text-lg md:text-xl text-ink leading-[1.7] max-w-prose">
                             {article.description}
                         </p>
                     )}
 
-                    <div className="mt-8 p-6 rounded-2xl bg-slate-900/50 border border-white/10">
-                        <p className="text-[13px] text-slate-400 leading-relaxed mb-4">
+                    <div className="mt-8 p-6 rounded-2xl bg-surface border border-rule">
+                        <p className="text-[13px] text-body leading-relaxed mb-4">
                             This is a summary. The full report is published by{' '}
-                            <span className="font-semibold text-slate-300">{article.source?.name || 'the source'}</span>.
+                            <span className="font-semibold text-body">{article.source?.name || 'the source'}</span>.
                         </p>
                         <a
                             href={article.url}
@@ -216,27 +216,27 @@ const StoryPage = () => {
 
                     {alsoReported.length > 0 && (
                         <section className="mt-12">
-                            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-2">
+                            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-body mb-2">
                                 <Layers size={13} /> Also reported by
                             </h2>
-                            <p className="text-[13px] text-slate-500 mb-4">
+                            <p className="text-[13px] text-muted mb-4">
                                 {alsoReported.length} other outlet{alsoReported.length === 1 ? '' : 's'} carried this story.
                             </p>
-                            <ul className="divide-y divide-white/5">
+                            <ul className="divide-y divide-rule">
                                 {alsoReported.map((other) => (
                                     <li key={other.id} className="py-3 flex items-center justify-between gap-4">
                                         <div className="min-w-0">
-                                            <p className="text-[13px] font-semibold text-slate-300 truncate">
+                                            <p className="text-[13px] font-semibold text-body truncate">
                                                 {other.source?.name || 'Unknown'}
                                             </p>
-                                            <p className="text-[12px] text-slate-500 truncate">{other.title}</p>
+                                            <p className="text-[12px] text-muted truncate">{other.title}</p>
                                         </div>
                                         <a
                                             href={other.url}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             aria-label={`Read this story at ${other.source?.name || 'the publisher'}`}
-                                            className="p-2 rounded-lg text-slate-500 hover:text-cyan-400 hover:bg-white/5 transition-colors shrink-0"
+                                            className="p-2 rounded-lg text-muted hover:text-accent hover:bg-surface-sunken transition-colors shrink-0"
                                         >
                                             <ExternalLink size={14} />
                                         </a>
@@ -249,23 +249,23 @@ const StoryPage = () => {
 
                 <aside className="lg:col-span-1">
                     <div className="lg:sticky lg:top-24">
-                        <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 pb-3 border-b border-white/10">
+                        <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-body pb-3 border-b border-rule">
                             {article.country ? `More on ${article.country}` : 'More stories'}
                         </h2>
                         {related.length ? (
-                            <div className="divide-y divide-white/5">
+                            <div className="divide-y divide-rule">
                                 {related.map((row) => <StoryRow key={row.id} article={row} />)}
                             </div>
                         ) : (
                             <div className="pt-3">
                                 <StoryRowSkeleton />
-                                <p className="text-[13px] text-slate-600 mt-2">No other coverage yet.</p>
+                                <p className="text-[13px] text-faint mt-2">No other coverage yet.</p>
                             </div>
                         )}
                         {article.country_iso_code && (
                             <Link
                                 to={`/country/${article.country_iso_code}`}
-                                className="mt-4 inline-block text-[13px] font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
+                                className="mt-4 inline-block text-[13px] font-semibold text-accent hover:text-accent transition-colors"
                             >
                                 All {article.country} coverage →
                             </Link>

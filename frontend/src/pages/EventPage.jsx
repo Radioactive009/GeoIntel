@@ -38,15 +38,15 @@ const FigureTimeline = ({ kind, points }) => {
 
     return (
         <section className="mb-8">
-            <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">
+            <h3 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-body mb-1">
                 <TrendingUp size={13} /> {FIGURE_LABELS[kind] || kind}
             </h3>
-            <p className="text-[12px] text-slate-600 mb-4">
+            <p className="text-[12px] text-faint mb-4">
                 As reported over time. Outlets update at different moments, so a figure can
                 appear to fall — that is a slower outlet, not a correction.
             </p>
 
-            <ol className="relative border-l border-white/10 ml-2">
+            <ol className="relative border-l border-rule ml-2">
                 {points.map((point, i) => (
                     <li key={`${point.t}-${i}`} className="ml-5 pb-5 last:pb-0 relative">
                         <span
@@ -54,25 +54,25 @@ const FigureTimeline = ({ kind, points }) => {
                             style={{ background: i === points.length - 1 ? '#f43f5e' : '#475569' }}
                         />
                         <div className="flex items-baseline gap-3 flex-wrap">
-                            <span className="font-display text-2xl font-black text-white tabular-nums">
+                            <span className="font-display text-2xl font-black text-ink tabular-nums">
                                 {point.value.toLocaleString()}
                             </span>
                             {/* Bar is relative to the peak, so the shape of the
                                 escalation is legible without axes. */}
-                            <div className="flex-grow min-w-[80px] max-w-[220px] h-1 rounded-full bg-slate-800/70 overflow-hidden">
+                            <div className="flex-grow min-w-[80px] max-w-[220px] h-1 rounded-full bg-surface-sunken overflow-hidden">
                                 <div
-                                    className="h-full rounded-full bg-rose-500/70"
+                                    className="h-full rounded-full bg-risk-high/10"
                                     style={{ width: `${(point.value / peak) * 100}%` }}
                                 />
                             </div>
                         </div>
-                        <p className="text-[12px] text-slate-500 mt-1">
+                        <p className="text-[12px] text-muted mt-1">
                             {point.source || 'Unknown'} ·{' '}
                             {new Date(point.t).toLocaleString(undefined, {
                                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                             })}
                         </p>
-                        <p className="text-[12px] text-slate-600 line-clamp-1">{point.title}</p>
+                        <p className="text-[12px] text-faint line-clamp-1">{point.title}</p>
                     </li>
                 ))}
             </ol>
@@ -105,9 +105,9 @@ const EventPage = () => {
     if (loading) {
         return (
             <div className="max-w-4xl mx-auto px-6 py-12 space-y-5">
-                <div className="h-3 w-28 bg-white/[0.06] rounded animate-pulse" />
-                <div className="h-10 w-full bg-white/[0.06] rounded animate-pulse" />
-                <div className="h-40 w-full bg-white/[0.06] rounded-2xl animate-pulse" />
+                <div className="h-3 w-28 bg-surface-sunken rounded animate-pulse" />
+                <div className="h-10 w-full bg-surface-sunken rounded animate-pulse" />
+                <div className="h-40 w-full bg-surface-sunken rounded-2xl animate-pulse" />
             </div>
         );
     }
@@ -116,7 +116,7 @@ const EventPage = () => {
         return (
             <div className="max-w-2xl mx-auto px-6 py-24 text-center space-y-5">
                 <Seo title="Event not found" noIndex />
-                <h1 className="font-serif text-3xl font-bold text-white">Event not found</h1>
+                <h1 className="font-serif text-3xl font-bold text-ink">Event not found</h1>
                 <Link to="/events" className="btn-primary inline-block">All events</Link>
             </div>
         );
@@ -139,7 +139,7 @@ const EventPage = () => {
                 publishedAt={event.first_seen}
             />
 
-            <Link to="/events" className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-400 hover:text-cyan-400 transition-colors mb-8">
+            <Link to="/events" className="inline-flex items-center gap-2 text-[13px] font-semibold text-body hover:text-accent transition-colors mb-8">
                 <ArrowLeft size={14} /> All events
             </Link>
 
@@ -147,33 +147,33 @@ const EventPage = () => {
                 {event.topic && (
                     <Link
                         to={`/topic/${event.topic}`}
-                        className="text-[11px] font-bold uppercase tracking-widest text-slate-400 hover:text-cyan-400"
+                        className="text-[11px] font-bold uppercase tracking-widest text-body hover:text-accent"
                     >
                         {TOPIC_LABELS[event.topic] || event.topic}
                     </Link>
                 )}
                 {event.countries.map((name) => (
-                    <span key={name} className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                    <span key={name} className="text-[11px] font-bold uppercase tracking-widest text-muted">
                         {name}
                     </span>
                 ))}
             </div>
 
-            <h1 className="font-serif text-3xl md:text-4xl font-bold text-white leading-[1.15] tracking-tight">
+            <h1 className="font-serif text-3xl md:text-4xl font-bold text-ink leading-[1.15] tracking-tight">
                 {event.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-6 pb-6 mb-8 border-b border-white/10">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-6 pb-6 mb-8 border-b border-rule">
                 {[
                     [<Newspaper size={13} key="a" />, `${event.article_count} reports`],
                     [<Clock size={13} key="b" />, `over ${span < 48 ? `${span}h` : `${Math.round(span / 24)} days`}`],
                     [<AlertCircle size={13} key="c" />, `peak risk ${event.risk.toFixed(0)}`],
                 ].map(([icon, label]) => (
-                    <span key={label} className="flex items-center gap-1.5 text-[13px] text-slate-400">
+                    <span key={label} className="flex items-center gap-1.5 text-[13px] text-body">
                         {icon} {label}
                     </span>
                 ))}
-                <span className="text-[13px] text-slate-500">
+                <span className="text-[13px] text-muted">
                     first reported {timeAgo(event.first_seen)}
                 </span>
                 <AskAbout
@@ -195,11 +195,11 @@ const EventPage = () => {
             {Object.keys(event.figures || {}).length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
                     {Object.entries(event.figures).map(([kind, value]) => (
-                        <div key={kind} className="p-4 rounded-2xl bg-slate-900/50 border border-white/10">
+                        <div key={kind} className="p-4 rounded-2xl bg-surface border border-rule">
                             <p className="font-display text-2xl font-black tabular-nums" style={{ color }}>
                                 {value.toLocaleString()}
                             </p>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted mt-1">
                                 {FIGURE_LABELS[kind] || kind}
                             </p>
                         </div>
@@ -217,14 +217,14 @@ const EventPage = () => {
             <FramingPanel framing={event.framing} />
 
             <section className="mb-10">
-                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-3">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-body mb-3">
                     Reported by {event.outlet_count} outlets
                 </h2>
                 <div className="flex flex-wrap gap-2">
                     {event.outlets.map((name) => (
                         <span
                             key={name}
-                            className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] font-semibold text-slate-400"
+                            className="px-2.5 py-1 rounded-lg bg-surface-sunken border border-rule text-[11px] font-semibold text-body"
                         >
                             {name}
                         </span>
@@ -233,10 +233,10 @@ const EventPage = () => {
             </section>
 
             <section>
-                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 pb-3 border-b border-white/10">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-body pb-3 border-b border-rule">
                     All coverage
                 </h2>
-                <div className="divide-y divide-white/5">
+                <div className="divide-y divide-rule">
                     {event.articles.map((article) => (
                         <StoryRow key={article.id} article={article} />
                     ))}

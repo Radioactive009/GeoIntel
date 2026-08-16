@@ -59,9 +59,9 @@ const CyberGrid = () => (
 // ── Volumetric Shockwaves (Atmospheric Ripples) ──────────
 const Shockwaves = () => {
     const ripples = [
-        { scale: 12, duration: 2.2, color: 'bg-cyan-400/20', blur: '30px' },
+        { scale: 12, duration: 2.2, color: 'bg-accent/20', blur: '30px' },
         { scale: 18, duration: 1.8, color: 'bg-blue-500/10', blur: '60px' },
-        { scale: 15, duration: 1.4, color: 'bg-white/30', blur: '20px' }
+        { scale: 15, duration: 1.4, color: 'bg-surface', blur: '20px' }
     ];
 
     return (
@@ -105,7 +105,7 @@ const LensFlare = () => (
         {[0.4, 0.7, -0.3, -0.6].map((offset, i) => (
             <motion.div
                 key={i}
-                className="absolute w-12 h-12 rounded-full border border-white/20 bg-white/5 blur-[2px]"
+                className="absolute w-12 h-12 rounded-full border border-rule-strong bg-surface-sunken blur-[2px]"
                 animate={{ 
                     x: [0, 500 * offset],
                     y: [0, 200 * offset],
@@ -187,7 +187,7 @@ const EnergyVortex = () => (
 // ── Glitch Displacement Overlay ─────────────────────────
 const GlitchOverlay = () => (
     <motion.div
-        className="absolute inset-0 z-[10000] border-[20px] border-cyan-500/10 pointer-events-none"
+        className="absolute inset-0 z-[10000] border-[20px] border-accent/50 pointer-events-none"
         animate={{ 
             x: [0, -15, 10, -5, 15, 0],
             skewX: [0, 5, -5, 2, -2, 0],
@@ -227,7 +227,7 @@ const UltraRealGlobe = ({ speedValue, isBursting }) => {
         <div className="relative flex items-center justify-center scale-110 will-change-transform">
             {!isBursting && <div className="absolute inset-0 rounded-full bg-blue-600/10 blur-[100px] animate-pulse" />}
             
-            <div className="relative w-[300px] h-[300px] rounded-full overflow-hidden border border-white/10 shadow-2xl bg-black transform-gpu">
+            <div className="relative w-[300px] h-[300px] rounded-full overflow-hidden border border-rule shadow-2xl bg-black transform-gpu">
                 <motion.div style={{ x: xSurface }} className="absolute inset-y-0 left-0 flex brightness-110 contrast-125 saturate-125">
                     <WorldStrip />
                     <WorldStrip />
@@ -357,7 +357,7 @@ const SplashScreen = ({ onComplete }) => {
                 <>
                     <LensFlare />
                     <motion.div 
-                        className="absolute inset-0 bg-white/60 z-[10000] mix-blend-overlay"
+                        className="absolute inset-0 bg-surface z-[10000] mix-blend-overlay"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: [0, 1, 0.9, 0] }}
                         transition={{ duration: 0.5, times: [0, 0.15, 0.3, 1] }}

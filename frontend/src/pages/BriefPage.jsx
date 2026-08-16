@@ -25,17 +25,17 @@ const WINDOWS = [
 
 const Figure = ({ value, label }) => (
     <div>
-        <p className="font-display text-2xl font-extrabold text-white tabular-nums">
+        <p className="font-display text-2xl font-extrabold text-ink tabular-nums">
             {value.toLocaleString()}
         </p>
-        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500 mt-0.5">{label}</p>
+        <p className="text-[11px] uppercase tracking-[0.16em] text-muted mt-0.5">{label}</p>
     </div>
 );
 
 const Section = ({ icon: Icon, title, children }) => (
     <section className="mt-10">
-        <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">
-            <Icon size={13} className="text-cyan-400" />
+        <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-muted mb-4">
+            <Icon size={13} className="text-accent" />
             {title}
         </h2>
         {children}
@@ -68,11 +68,11 @@ const BriefPage = () => {
                 path="/brief"
             />
 
-            <header className="border-b border-white/10 pb-6">
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-400">
+            <header className="border-b border-rule pb-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-accent">
                     The Brief
                 </p>
-                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">
                     What to know
                 </h1>
 
@@ -83,15 +83,15 @@ const BriefPage = () => {
                             onClick={() => setHours(w.hours)}
                             className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-colors ${
                                 hours === w.hours
-                                    ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
-                                    : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+                                    ? 'border-accent bg-accent-soft text-accent'
+                                    : 'border-rule text-body hover:text-ink hover:border-rule-strong'
                             }`}
                         >
                             {w.label}
                         </button>
                     ))}
                     {brief && (
-                        <span className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-600">
+                        <span className="ml-auto flex items-center gap-1.5 text-[11px] text-faint">
                             <Clock size={11} />
                             {new Date(brief.generated_at + 'Z').toLocaleString()}
                         </span>
@@ -100,7 +100,7 @@ const BriefPage = () => {
             </header>
 
             {failed && (
-                <p className="mt-8 text-[14px] text-slate-400">
+                <p className="mt-8 text-[14px] text-body">
                     The brief could not be loaded. The archive may still be waking up.
                 </p>
             )}
@@ -115,11 +115,11 @@ const BriefPage = () => {
 
             {brief && (
                 <>
-                    <p className="mt-8 font-serif text-[19px] md:text-[21px] leading-[1.65] text-slate-200">
+                    <p className="mt-8 font-serif text-[19px] md:text-[21px] leading-[1.65] text-ink">
                         {brief.summary}
                     </p>
 
-                    <div className="mt-8 grid grid-cols-3 gap-4 py-5 border-y border-white/10">
+                    <div className="mt-8 grid grid-cols-3 gap-4 py-5 border-y border-rule">
                         <Figure value={brief.coverage.articles} label="reports" />
                         <Figure value={brief.coverage.outlets} label="outlets" />
                         <Figure value={brief.coverage.countries} label="countries" />
@@ -130,17 +130,17 @@ const BriefPage = () => {
                             <ol className="space-y-5">
                                 {brief.events.map((event, index) => (
                                     <li key={event.event_key} className="flex gap-4">
-                                        <span className="font-display text-lg font-extrabold text-slate-700 tabular-nums pt-0.5">
+                                        <span className="font-display text-lg font-extrabold text-faint tabular-nums pt-0.5">
                                             {index + 1}
                                         </span>
                                         <div className="min-w-0">
                                             <Link
                                                 to={`/event/${event.event_key}`}
-                                                className="font-display text-[17px] font-bold text-white leading-snug hover:text-cyan-400 transition-colors"
+                                                className="font-display text-[17px] font-bold text-ink leading-snug hover:text-accent transition-colors"
                                             >
                                                 {event.title}
                                             </Link>
-                                            <p className="mt-1.5 text-[12px] text-slate-500">
+                                            <p className="mt-1.5 text-[12px] text-muted">
                                                 {event.outlets} outlet{event.outlets === 1 ? '' : 's'}
                                                 {' · '}{event.reports} report{event.reports === 1 ? '' : 's'}
                                                 {event.countries.length > 0 && ` · ${event.countries.join(', ')}`}
@@ -148,7 +148,7 @@ const BriefPage = () => {
                                                     ` · ${event.figures.deaths.toLocaleString()} reported dead`}
                                             </p>
                                             {event.outlet_names.length > 0 && (
-                                                <p className="mt-1 text-[11px] text-slate-600 truncate">
+                                                <p className="mt-1 text-[11px] text-faint truncate">
                                                     {event.outlet_names.join(' · ')}
                                                 </p>
                                             )}
@@ -166,18 +166,18 @@ const BriefPage = () => {
                                     <li key={row.country} className="flex items-baseline justify-between gap-4">
                                         <Link
                                             to={row.iso_code ? `/country/${row.iso_code}` : '#'}
-                                            className="text-[15px] text-slate-200 hover:text-cyan-400 transition-colors"
+                                            className="text-[15px] text-ink hover:text-accent transition-colors"
                                         >
                                             {row.country}
                                         </Link>
-                                        <span className="text-[12px] text-slate-500 tabular-nums shrink-0">
+                                        <span className="text-[12px] text-muted tabular-nums shrink-0">
                                             {row.baseline} → {row.current}
-                                            <span className="text-amber-400/80 ml-2">+{row.sigma}σ</span>
+                                            <span className="text-risk-medium ml-2">+{row.sigma}σ</span>
                                         </span>
                                     </li>
                                 ))}
                             </ul>
-                            <p className="mt-3 text-[11px] text-slate-600">
+                            <p className="mt-3 text-[11px] text-faint">
                                 Measured against each country&apos;s own recent baseline, so a
                                 consistently tense country does not top this by default.
                             </p>
@@ -191,11 +191,11 @@ const BriefPage = () => {
                                     <li key={row.event_key}>
                                         <Link
                                             to={`/event/${row.event_key}`}
-                                            className="text-[15px] text-slate-200 hover:text-cyan-400 transition-colors leading-snug"
+                                            className="text-[15px] text-ink hover:text-accent transition-colors leading-snug"
                                         >
                                             {row.title}
                                         </Link>
-                                        <p className="mt-0.5 text-[12px] text-slate-500 tabular-nums">
+                                        <p className="mt-0.5 text-[12px] text-muted tabular-nums">
                                             {row.outlets} outlets · spread {row.spread} around {row.consensus}
                                         </p>
                                     </li>
@@ -206,21 +206,21 @@ const BriefPage = () => {
 
                     {toned > 0 && (
                         <Section icon={Scale} title="Tone of coverage">
-                            <div className="flex h-2 rounded-full overflow-hidden bg-white/5">
-                                <div className="bg-rose-500/70" style={{ width: `${(tone.serious / toned) * 100}%` }} />
-                                <div className="bg-slate-600" style={{ width: `${(tone.neutral / toned) * 100}%` }} />
-                                <div className="bg-emerald-500/70" style={{ width: `${(tone.uplifting / toned) * 100}%` }} />
+                            <div className="flex h-2 rounded-full overflow-hidden bg-surface-sunken">
+                                <div className="bg-risk-high/10" style={{ width: `${(tone.serious / toned) * 100}%` }} />
+                                <div className="bg-rule-strong" style={{ width: `${(tone.neutral / toned) * 100}%` }} />
+                                <div className="bg-risk-low" style={{ width: `${(tone.uplifting / toned) * 100}%` }} />
                             </div>
-                            <p className="mt-2.5 text-[12px] text-slate-500">
+                            <p className="mt-2.5 text-[12px] text-muted">
                                 {tone.serious} serious · {tone.neutral} neutral · {tone.uplifting} uplifting
                             </p>
                         </Section>
                     )}
 
-                    <p className="mt-12 pt-6 border-t border-white/10 text-[12px] text-slate-600 leading-relaxed">
+                    <p className="mt-12 pt-6 border-t border-rule text-[12px] text-faint leading-relaxed">
                         Assembled from figures the pipeline counted — not written by a language
                         model. Every number here is traceable to articles in the archive.{' '}
-                        <Link to="/methodology" className="text-slate-500 hover:text-cyan-400 underline">
+                        <Link to="/methodology" className="text-muted hover:text-accent underline">
                             How this is measured
                         </Link>
                     </p>

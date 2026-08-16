@@ -1,23 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Search } from 'lucide-react';
+import { Menu, X, Search, ChevronDown } from 'lucide-react';
 import Logo from './Logo';
 import FreshnessBadge from './FreshnessBadge';
 
 /**
  * Masthead.
  *
- * Sections are the event types the risk engine already assigns, so the
- * navigation is generated from real data rather than being decorative.
+ * Twelve items sat here as equals — the brief, the assistant and seven topic
+ * facets all at the same weight, which is a list rather than a navigation and
+ * was the loudest thing making the page look unconsidered.
+ *
+ * Now four destinations and one menu. The topics are facets of a single feed,
+ * not peers of the brief, so they live behind Sections; the study hub carries
+ * the India desk, glossary and saved stories with it.
  */
-const SECTIONS = [
-    { to: '/', label: 'Home', end: true },
+const PRIMARY = [
     { to: '/brief', label: 'Brief' },
     { to: '/events', label: 'Events' },
-    { to: '/ask', label: 'Ask' },
-    // The study hub carries the India desk, the glossary and saved notes with
-    // it, so following that audience costs one item in the masthead.
     { to: '/study', label: 'Study' },
+    { to: '/ask', label: 'Ask' },
+];
+
+const TOPICS = [
     { to: '/topic/conflict', label: 'Conflict' },
     { to: '/topic/security', label: 'Security' },
     { to: '/topic/diplomacy', label: 'Diplomacy' },
@@ -27,19 +32,42 @@ const SECTIONS = [
     { to: '/topic/humanitarian', label: 'Humanitarian' },
 ];
 
+const DESKS = [
+    { to: '/india', label: 'India & the world' },
+    { to: '/glossary', label: 'Groupings & institutions' },
+    { to: '/notes', label: 'Saved stories' },
+];
+
 const linkClass = ({ isActive }) =>
-    `text-[13px] font-semibold transition-colors ${
-        isActive ? 'text-cyan-400' : 'text-slate-400 hover:text-white'
+    `text-[14px] transition-colors ${
+        isActive ? 'text-ink font-semibold' : 'text-body hover:text-ink'
     }`;
 
 const SiteHeader = () => {
     const [menuOpen, setMenuOpen] = useState(false);
+    const [sectionsOpen, setSectionsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const navigate = useNavigate();
     const location = useLocation();
+    const sectionsRef = useRef(null);
 
     // A navigation should not leave its own menu open behind it.
-    useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+    useEffect(() => { setMenuOpen(false); setSectionsOpen(false); }, [location.pathname]);
+
+    // A menu that only closes by choosing something from it is a trap.
+    useEffect(() => {
+        if (!sectionsOpen) return undefined;
+        const dismiss = (event) => {
+            if (!sectionsRef.current?.contains(event.target)) setSectionsOpen(false);
+        };
+        const onKey = (event) => { if (event.key === 'Escape') setSectionsOpen(false); };
+        document.addEventListener('mousedown', dismiss);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', dismiss);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [sectionsOpen]);
 
     const submit = (e) => {
         e.preventDefault();
@@ -47,23 +75,66 @@ const SiteHeader = () => {
         if (term) navigate(`/search?q=${encodeURIComponent(term)}`);
     };
 
+    const inSections = location.pathname.startsWith('/topic/');
+
     return (
-        <header className="sticky top-0 z-50 glass-strong border-b border-white/10 bg-background/85 backdrop-blur-xl">
-            <div className="max-w-[1440px] mx-auto px-6">
-                <div className="flex items-center justify-between gap-6 py-3.5">
-                    <Link to="/" className="shrink-0 transition-opacity hover:opacity-80" aria-label="GeoIntel home">
+        <header className="sticky top-0 z-50 border-b border-rule bg-paper/95 backdrop-blur-sm">
+            <div className="max-w-[1200px] mx-auto px-6">
+                <div className="flex items-center justify-between gap-8 py-4">
+                    <Link to="/" className="shrink-0 transition-opacity hover:opacity-70" aria-label="GeoIntel home">
                         <Logo />
                     </Link>
 
-                    <nav aria-label="Sections" className="hidden lg:flex items-center gap-6">
-                        {SECTIONS.map((section) => (
-                            <NavLink key={section.to} to={section.to} end={section.end} className={linkClass}>
-                                {section.label}
+                    <nav aria-label="Main" className="hidden lg:flex items-center gap-7">
+                        {PRIMARY.map((item) => (
+                            <NavLink key={item.to} to={item.to} className={linkClass}>
+                                {item.label}
                             </NavLink>
                         ))}
+
+                        <div className="relative" ref={sectionsRef}>
+                            <button
+                                onClick={() => setSectionsOpen((open) => !open)}
+                                aria-expanded={sectionsOpen}
+                                aria-haspopup="true"
+                                className={`flex items-center gap-1 text-[14px] transition-colors ${
+                                    inSections ? 'text-ink font-semibold' : 'text-body hover:text-ink'
+                                }`}
+                            >
+                                Sections
+                                <ChevronDown
+                                    size={13}
+                                    className={`transition-transform ${sectionsOpen ? 'rotate-180' : ''}`}
+                                />
+                            </button>
+
+                            {sectionsOpen && (
+                                <div className="absolute right-0 top-full mt-3 w-60 py-2 rounded-xl border border-rule bg-surface shadow-lg shadow-ink/5">
+                                    {TOPICS.map((item) => (
+                                        <NavLink
+                                            key={item.to}
+                                            to={item.to}
+                                            className="block px-4 py-1.5 text-[13px] text-body hover:text-ink hover:bg-surface-sunken transition-colors"
+                                        >
+                                            {item.label}
+                                        </NavLink>
+                                    ))}
+                                    <div className="my-2 border-t border-rule" />
+                                    {DESKS.map((item) => (
+                                        <NavLink
+                                            key={item.to}
+                                            to={item.to}
+                                            className="block px-4 py-1.5 text-[13px] text-body hover:text-ink hover:bg-surface-sunken transition-colors"
+                                        >
+                                            {item.label}
+                                        </NavLink>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </nav>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                         <FreshnessBadge />
 
                         <form onSubmit={submit} className="hidden md:block relative">
@@ -74,14 +145,13 @@ const SiteHeader = () => {
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 placeholder="Search"
-                                className="w-40 lg:w-52 bg-slate-900/60 border border-white/10 rounded-full pl-9 pr-3 py-1.5 text-[13px] text-white placeholder:text-slate-600 outline-none focus:border-cyan-500/40 transition-colors"
+                                className="w-36 lg:w-44 bg-transparent border-b border-rule pl-6 pr-2 py-1 text-[13px] text-ink placeholder:text-faint outline-none focus:border-ink transition-colors"
                             />
-                            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                            <Search size={13} className="absolute left-0 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
                         </form>
 
-
                         <button
-                            className="lg:hidden p-2 text-slate-400 hover:text-white transition-colors"
+                            className="lg:hidden p-1 text-body hover:text-ink transition-colors"
                             onClick={() => setMenuOpen((open) => !open)}
                             aria-expanded={menuOpen}
                             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
@@ -92,21 +162,28 @@ const SiteHeader = () => {
                 </div>
             </div>
 
-            <div className={`lg:hidden overflow-hidden transition-all duration-300 ${menuOpen ? 'max-h-96 border-t border-white/10' : 'max-h-0'}`}>
-                <nav aria-label="Sections" className="px-6 py-4 flex flex-col gap-3">
-                    {SECTIONS.map((section) => (
-                        <NavLink key={section.to} to={section.to} end={section.end} className={linkClass}>
-                            {section.label}
-                        </NavLink>
+            <div className={`lg:hidden overflow-hidden transition-all duration-300 ${menuOpen ? 'max-h-[32rem] border-t border-rule' : 'max-h-0'}`}>
+                <nav aria-label="Main" className="max-w-[1200px] mx-auto px-6 py-5 flex flex-col gap-3">
+                    {PRIMARY.map((item) => (
+                        <NavLink key={item.to} to={item.to} className={linkClass}>{item.label}</NavLink>
                     ))}
-                    <form onSubmit={submit} className="pt-2">
+                    <p className="mt-3 pt-3 border-t border-rule text-[11px] font-semibold uppercase tracking-[0.16em] text-faint">
+                        Sections
+                    </p>
+                    {TOPICS.map((item) => (
+                        <NavLink key={item.to} to={item.to} className={linkClass}>{item.label}</NavLink>
+                    ))}
+                    {DESKS.map((item) => (
+                        <NavLink key={item.to} to={item.to} className={linkClass}>{item.label}</NavLink>
+                    ))}
+                    <form onSubmit={submit} className="pt-3">
                         <input
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Search stories"
                             aria-label="Search stories"
-                            className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 outline-none focus:border-cyan-500/40"
+                            className="w-full bg-transparent border-b border-rule px-1 py-2 text-sm text-ink placeholder:text-faint outline-none focus:border-ink"
                         />
                     </form>
                 </nav>

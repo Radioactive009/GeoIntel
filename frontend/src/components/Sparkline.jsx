@@ -1,4 +1,5 @@
 import { useMemo, useId } from 'react';
+import { token } from '../utils/palette';
 
 /**
  * Minimal SVG sparkline.
@@ -9,7 +10,7 @@ import { useMemo, useId } from 'react';
  */
 const Sparkline = ({
     points = [],
-    color = '#22d3ee',
+    color = token('accent'),
     width = 96,
     height = 28,
     strokeWidth = 1.5,
@@ -46,7 +47,7 @@ const Sparkline = ({
     if (!geometry) {
         return (
             <div
-                className="flex items-center justify-center text-[8px] font-bold uppercase tracking-widest text-slate-700"
+                className="flex items-center justify-center text-[8px] font-bold uppercase tracking-widest text-faint"
                 style={{ width, height }}
             >
                 No history

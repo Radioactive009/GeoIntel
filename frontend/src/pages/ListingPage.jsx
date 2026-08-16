@@ -64,16 +64,16 @@ const ListingPage = ({ title, standfirst, filters, emptyMessage, headerExtra, pr
 
     return (
         <div className="max-w-[1440px] mx-auto px-6 py-8 lg:py-12">
-            <header className="mb-10 pb-6 border-b border-white/10">
-                <h1 className="font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+            <header className="mb-10 pb-6 border-b border-rule">
+                <h1 className="font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">
                     {title}
                 </h1>
                 {standfirst && (
-                    <p className="mt-2 text-[15px] text-slate-400 leading-relaxed max-w-2xl">{standfirst}</p>
+                    <p className="mt-2 text-[15px] text-body leading-relaxed max-w-2xl">{standfirst}</p>
                 )}
                 {headerExtra}
                 {!loading && !error && (
-                    <p className="mt-3 text-[13px] text-slate-500 tabular-nums">
+                    <p className="mt-3 text-[13px] text-muted tabular-nums">
                         {total.toLocaleString()} {total === 1 ? 'story' : 'stories'}
                     </p>
                 )}
@@ -86,13 +86,13 @@ const ListingPage = ({ title, standfirst, filters, emptyMessage, headerExtra, pr
                 </div>
             ) : error ? (
                 <div className="py-24 text-center space-y-4">
-                    <p className="text-slate-400 max-w-md mx-auto">{error}</p>
+                    <p className="text-body max-w-md mx-auto">{error}</p>
                     <button onClick={load} className="btn-primary">Try again</button>
                 </div>
             ) : articles.length === 0 ? (
                 <div className="py-24 text-center space-y-4">
-                    <SearchX size={32} className="text-slate-700 mx-auto" />
-                    <p className="text-slate-400 max-w-md mx-auto leading-relaxed">
+                    <SearchX size={32} className="text-faint mx-auto" />
+                    <p className="text-body max-w-md mx-auto leading-relaxed">
                         {emptyMessage || 'Nothing matches these filters yet.'}
                     </p>
                     <Link to="/" className="btn-primary inline-block">Back to the front page</Link>
@@ -106,21 +106,21 @@ const ListingPage = ({ title, standfirst, filters, emptyMessage, headerExtra, pr
                     </div>
 
                     {totalPages > 1 && (
-                        <nav aria-label="Pagination" className="flex items-center justify-between pt-8 border-t border-white/10">
+                        <nav aria-label="Pagination" className="flex items-center justify-between pt-8 border-t border-rule">
                             <button
                                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                                 disabled={page === 1}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-[13px] font-semibold text-slate-300 hover:border-cyan-500/40 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-rule text-[13px] font-semibold text-body hover:border-accent disabled:opacity-30 disabled:pointer-events-none transition-all"
                             >
                                 <ChevronLeft size={15} /> Newer
                             </button>
-                            <span className="text-[13px] text-slate-500 tabular-nums">
+                            <span className="text-[13px] text-muted tabular-nums">
                                 Page {page} of {totalPages}
                             </span>
                             <button
                                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={page === totalPages}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-[13px] font-semibold text-slate-300 hover:border-cyan-500/40 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-rule text-[13px] font-semibold text-body hover:border-accent disabled:opacity-30 disabled:pointer-events-none transition-all"
                             >
                                 Older <ChevronRight size={15} />
                             </button>

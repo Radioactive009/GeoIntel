@@ -30,6 +30,7 @@ _SECONDARY_BACKFILL_KEY = "migration_secondary_countries"
 _RECLASSIFY_KEY = "migration_topics_v2"
 _EVENTS_BACKFILL_KEY = "migration_event_groups"
 _TONE_BACKFILL_KEY = "migration_tone_v1"
+_ENTITY_DECODE_KEY = "migration_decode_entities_v1"
 
 ARTICLE_COLUMNS = {
     "sentiment_score": "FLOAT",
@@ -452,6 +453,44 @@ def _backfill_tone(conn) -> None:
                 len(updates), dict(collections.Counter(u["tone"] for u in updates)))
 
 
+def _decode_stored_entities(conn) -> None:
+    """
+    Turn "Romania&#039;s" back into "Romania's" in what is already stored.
+
+    The feed cleaner stripped markup but never decoded entities, so escaped
+    punctuation was published verbatim on every story page. Fixing the cleaner
+    only helps what arrives next; this repairs the archive behind it.
+    """
+    if _flag(conn, _ENTITY_DECODE_KEY):
+        return
+
+    from .services.rss_service import plain_text
+
+    rows = conn.execute(text(
+        "SELECT id, title, description FROM articles "
+        "WHERE title LIKE '%&%;%' OR description LIKE '%&%;%'"
+    )).fetchall()
+    if not rows:
+        _set_flag(conn, _ENTITY_DECODE_KEY)
+        return
+
+    updates = []
+    for article_id, title, description in rows:
+        fixed_title = plain_text(title) if title else title
+        fixed_description = plain_text(description) if description else description
+        if fixed_title != title or fixed_description != description:
+            updates.append({
+                "aid": article_id, "title": fixed_title, "description": fixed_description,
+            })
+
+    statement = text("UPDATE articles SET title = :title, description = :description WHERE id = :aid")
+    for start in range(0, len(updates), 500):
+        conn.execute(statement, updates[start:start + 500])
+
+    _set_flag(conn, _ENTITY_DECODE_KEY)
+    logger.info("[MIGRATE] Decoded HTML entities in %s articles", len(updates))
+
+
 def _backfill_secondary_countries(conn) -> None:
     """Resolve the runner-up country for articles that have none recorded."""
     if _flag(conn, _SECONDARY_BACKFILL_KEY):
@@ -529,6 +568,7 @@ def run_migrations(engine: Engine) -> None:
         _reclassify_topics,
         _backfill_event_groups,
         _backfill_tone,
+        _decode_stored_entities,
     ):
         try:
             with engine.begin() as conn:

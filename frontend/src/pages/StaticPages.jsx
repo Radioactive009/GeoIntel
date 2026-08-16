@@ -16,19 +16,19 @@ const Page = ({ children }) => (
 );
 
 const H1 = ({ children }) => (
-    <h1 className="font-display text-4xl font-extrabold text-white tracking-tight mb-4">{children}</h1>
+    <h1 className="font-display text-4xl font-extrabold text-ink tracking-tight mb-4">{children}</h1>
 );
 
 const Lede = ({ children }) => (
-    <p className="font-serif text-xl text-slate-300 leading-relaxed mb-10">{children}</p>
+    <p className="font-serif text-xl text-body leading-relaxed mb-10">{children}</p>
 );
 
 const H2 = ({ children }) => (
-    <h2 className="font-display text-xl font-bold text-white mt-10 mb-3">{children}</h2>
+    <h2 className="font-display text-xl font-bold text-ink mt-10 mb-3">{children}</h2>
 );
 
 const P = ({ children }) => (
-    <p className="text-[15px] text-slate-400 leading-[1.75] mb-4 max-w-prose">{children}</p>
+    <p className="text-[15px] text-body leading-[1.75] mb-4 max-w-prose">{children}</p>
 );
 
 export const AboutPage = () => (
@@ -68,7 +68,7 @@ export const AboutPage = () => (
             renders the map and the feed. It runs on free-tier infrastructure, which is why the
             scoring is deliberately lightweight — keyword tiers and a rule-based sentiment
             model rather than anything that needs a GPU.{' '}
-            <Link to="/methodology" className="text-cyan-400 hover:underline">
+            <Link to="/methodology" className="text-accent hover:underline">
                 The methodology page
             </Link>{' '}
             sets out exactly how a score is produced.
@@ -81,7 +81,7 @@ export const AboutPage = () => (
                 href="https://github.com/Radioactive009/GeoIntel"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-cyan-400 hover:underline"
+                className="text-accent hover:underline"
             >
                 GitHub repository
             </a>
@@ -200,13 +200,13 @@ export const SourcesPage = () => {
 
             <div className="mt-8 columns-2 md:columns-3 gap-x-6">
                 {sources.map((source) => (
-                    <p key={source.id} className="text-[13px] text-slate-400 break-inside-avoid py-1">
+                    <p key={source.id} className="text-[13px] text-body break-inside-avoid py-1">
                         {source.name}
                     </p>
                 ))}
             </div>
             {!sources.length && (
-                <p className="text-slate-500 text-sm">Source list unavailable right now.</p>
+                <p className="text-muted text-sm">Source list unavailable right now.</p>
             )}
         </Page>
     );
@@ -216,7 +216,7 @@ export const NotFoundPage = () => (
     <Page>
         <Seo title="Page not found" noIndex />
         <div className="py-16 text-center space-y-5">
-            <p className="font-display text-6xl font-black text-slate-800">404</p>
+            <p className="font-display text-6xl font-black text-ink">404</p>
             <H1>Page not found</H1>
             <P>The page you asked for does not exist, or has moved.</P>
             <Link to="/" className="btn-primary inline-block">Back to the front page</Link>

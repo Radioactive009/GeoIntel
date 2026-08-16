@@ -11,15 +11,15 @@ const MoverRow = ({ mover, series, rising, onSelect }) => {
     return (
         <button
             onClick={() => onSelect(mover.country)}
-            className="w-full text-left flex items-center gap-3 p-3 rounded-2xl bg-slate-900/40 border border-white/5 hover:border-white/10 transition-all hover:translate-x-1"
+            className="w-full text-left flex items-center gap-3 p-3 rounded-2xl bg-surface border border-rule hover:border-rule transition-all hover:translate-x-1"
         >
             <span className="text-xl leading-none shrink-0">{getFlagEmoji(mover.iso_code)}</span>
 
             <div className="flex-grow min-w-0">
-                <p className="text-xs font-bold text-white truncate">{mover.country}</p>
-                <p className="text-[10px] font-medium text-slate-500 tabular-nums">
+                <p className="text-xs font-bold text-ink truncate">{mover.country}</p>
+                <p className="text-[10px] font-medium text-muted tabular-nums">
                     {mover.baseline.toFixed(0)} → {mover.current.toFixed(0)}
-                    <span className="text-slate-600"> · {mover.article_count} reports</span>
+                    <span className="text-faint"> · {mover.article_count} reports</span>
                 </p>
             </div>
 
@@ -33,7 +33,7 @@ const MoverRow = ({ mover, series, rising, onSelect }) => {
                     </span>
                 </div>
                 {/* No `uppercase` here: it would render σ (std-dev) as Σ (summation). */}
-                <p className="text-[9px] font-bold text-slate-600 tabular-nums tracking-wider">
+                <p className="text-[9px] font-bold text-faint tabular-nums tracking-wider">
                     {Math.abs(mover.z_score).toFixed(1)}σ
                 </p>
             </div>
@@ -55,26 +55,26 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
     const hasData = rising.length > 0 || falling.length > 0;
 
     return (
-        <div className="glass rounded-[2.5rem] p-8 animate-fade-in-up" style={{ animationDelay: '450ms' }}>
+        <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '450ms' }}>
             <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                        <Activity size={18} className="text-rose-400" />
+                    <div className="p-2 rounded-xl bg-risk-high/10 border border-risk-high/30">
+                        <Activity size={18} className="text-risk-high" />
                     </div>
-                    <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">
+                    <h2 className="text-base font-bold text-ink uppercase tracking-widest leading-none">
                         Escalation Board
                     </h2>
                 </div>
 
-                <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 gap-1">
+                <div className="flex bg-surface p-1 rounded-xl border border-rule gap-1">
                     {[24, 72, 168, 720].map((h) => (
                         <button
                             key={h}
                             onClick={() => onWindowChange(h)}
                             className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all ${
                                 windowHours === h
-                                    ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20'
-                                    : 'text-slate-500 hover:text-slate-300'
+                                    ? 'bg-accent text-ink shadow-lg shadow-transparent'
+                                    : 'text-muted hover:text-body'
                             }`}
                         >
                             {WINDOW_LABEL[h]}
@@ -85,11 +85,11 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
 
             {!hasData ? (
                 <div className="py-12 text-center space-y-3">
-                    <Clock size={28} className="text-slate-700 mx-auto" />
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                    <Clock size={28} className="text-faint mx-auto" />
+                    <p className="text-muted font-bold uppercase tracking-widest text-[10px]">
                         Building baseline
                     </p>
-                    <p className="text-[11px] text-slate-600 font-medium max-w-xs mx-auto leading-relaxed">
+                    <p className="text-[11px] text-faint font-medium max-w-xs mx-auto leading-relaxed">
                         {history?.distinct_observations
                             ? `${history.distinct_observations} observation${history.distinct_observations === 1 ? '' : 's'} recorded so far. Escalation needs at least 4 before it can tell a real move from noise.`
                             : 'Risk history is captured at the end of each ingest cycle. The board fills in as observations accumulate.'}
@@ -99,7 +99,7 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
                     <section className="space-y-2">
-                        <p className="text-[10px] font-extrabold text-rose-400/70 uppercase tracking-[0.2em] px-1">
+                        <p className="text-[10px] font-extrabold text-risk-high uppercase tracking-[0.2em] px-1">
                             Escalating
                         </p>
                         {rising.length ? (
@@ -113,12 +113,12 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
                                 />
                             ))
                         ) : (
-                            <p className="text-[11px] text-slate-600 font-medium px-1">No zones escalating in this window.</p>
+                            <p className="text-[11px] text-faint font-medium px-1">No zones escalating in this window.</p>
                         )}
                     </section>
 
                     <section className="space-y-2">
-                        <p className="text-[10px] font-extrabold text-emerald-400/70 uppercase tracking-[0.2em] px-1">
+                        <p className="text-[10px] font-extrabold text-risk-low uppercase tracking-[0.2em] px-1">
                             De-escalating
                         </p>
                         {falling.length ? (
@@ -132,12 +132,12 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
                                 />
                             ))
                         ) : (
-                            <p className="text-[11px] text-slate-600 font-medium px-1">No zones de-escalating in this window.</p>
+                            <p className="text-[11px] text-faint font-medium px-1">No zones de-escalating in this window.</p>
                         )}
                     </section>
                   </div>
 
-                    <p className="text-[9px] text-slate-600 font-medium leading-relaxed pt-3 border-t border-white/5">
+                    <p className="text-[9px] text-faint font-medium leading-relaxed pt-3 border-t border-rule">
                         σ is the move measured against that country&apos;s own recent volatility — a large
                         shift in a normally quiet zone outranks routine noise elsewhere.
                     </p>

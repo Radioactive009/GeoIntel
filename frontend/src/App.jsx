@@ -43,7 +43,7 @@ function App() {
                 masthead on every navigation. */}
             <a
                 href="#main"
-                className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-3 focus:left-3 focus:px-4 focus:py-2 focus:rounded-xl focus:bg-cyan-500 focus:text-white focus:font-semibold"
+                className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-3 focus:left-3 focus:px-4 focus:py-2 focus:rounded-xl focus:bg-accent focus:text-ink focus:font-semibold"
             >
                 Skip to content
             </a>

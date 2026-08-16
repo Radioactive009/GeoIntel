@@ -80,17 +80,17 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
     };
 
     return (
-        <div className="glass rounded-[2.5rem] p-6 lg:p-8 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+        <div className="glass rounded-2xl p-6 lg:p-8 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
             <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                        <Radio size={18} className="text-rose-400 animate-pulse" />
+                    <div className="p-2 rounded-xl bg-risk-high/10 border border-risk-high/30">
+                        <Radio size={18} className="text-risk-high animate-pulse" />
                     </div>
-                    <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">
+                    <h2 className="text-base font-bold text-ink uppercase tracking-widest leading-none">
                         Live Broadcast
                     </h2>
                     {live.length > 0 && (
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        <span className="text-[10px] font-bold text-muted uppercase tracking-widest">
                             {live.length} streams online
                         </span>
                     )}
@@ -100,7 +100,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setMuted((m) => !m)}
-                            className="p-2 rounded-xl glass border border-white/5 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/30 transition-all"
+                            className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-all"
                             title={muted ? 'Unmute' : 'Mute'}
                         >
                             {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -109,7 +109,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
                             href={`https://www.youtube.com/watch?v=${active.live_video_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2 rounded-xl glass border border-white/5 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/30 transition-all"
+                            className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-all"
                             title="Open on YouTube"
                         >
                             <ExternalLink size={14} />
@@ -119,25 +119,25 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
             </div>
 
             {loading ? (
-                <div className="aspect-video rounded-3xl bg-slate-900/60 border border-white/5 flex items-center justify-center">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600">
+                <div className="aspect-video rounded-2xl bg-surface border border-rule flex items-center justify-center">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-faint">
                         Resolving streams…
                     </p>
                 </div>
             ) : !active ? (
-                <div className="aspect-video rounded-3xl bg-slate-900/60 border border-white/5 flex flex-col items-center justify-center gap-3 px-8 text-center">
-                    <Tv size={28} className="text-slate-700" />
-                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600">
+                <div className="aspect-video rounded-2xl bg-surface border border-rule flex flex-col items-center justify-center gap-3 px-8 text-center">
+                    <Tv size={28} className="text-faint" />
+                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-faint">
                         No streams online
                     </p>
-                    <p className="text-[11px] text-slate-600 font-medium max-w-sm leading-relaxed">
+                    <p className="text-[11px] text-faint font-medium max-w-sm leading-relaxed">
                         Broadcaster streams restart through the day. The backend re-checks which
                         channels are live on every ingest cycle.
                     </p>
                 </div>
             ) : (
                 <div className="space-y-4">
-                    <div className="relative aspect-video rounded-3xl overflow-hidden border border-white/10 bg-black shadow-2xl">
+                    <div className="relative aspect-video rounded-2xl overflow-hidden border border-rule bg-black shadow-2xl">
                         {/* The iframe mounts only once the viewer opts in, so the page
                             doesn't pull a video stream on every load. */}
                         {started ? (
@@ -155,23 +155,23 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
                         ) : (
                             <button
                                 onClick={() => setStarted(true)}
-                                className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-4 group bg-gradient-to-br from-slate-900 to-slate-950"
+                                className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-4 group bg-gradient-to-br from-surface to-surface"
                             >
-                                <div className="p-5 rounded-full bg-rose-500/15 border border-rose-500/30 group-hover:bg-rose-500/25 group-hover:scale-110 transition-all">
-                                    <Play size={26} className="text-rose-400 translate-x-0.5" fill="currentColor" />
+                                <div className="p-5 rounded-full bg-risk-high/10 border border-risk-high/30 group-hover:bg-risk-high/10 group-hover:scale-110 transition-all">
+                                    <Play size={26} className="text-risk-high translate-x-0.5" fill="currentColor" />
                                 </div>
                                 <div className="text-center px-6">
-                                    <p className="text-sm font-bold text-white">{active.name}</p>
-                                    <p className="text-[11px] text-slate-500 font-medium mt-1 max-w-md line-clamp-2">
+                                    <p className="text-sm font-bold text-ink">{active.name}</p>
+                                    <p className="text-[11px] text-muted font-medium mt-1 max-w-md line-clamp-2">
                                         {active.live_title || 'Live broadcast'}
                                     </p>
                                 </div>
                             </button>
                         )}
 
-                        <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-600/90 backdrop-blur-sm pointer-events-none">
+                        <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-risk-high/90 backdrop-blur-sm pointer-events-none">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                            <span className="text-[9px] font-extrabold text-white uppercase tracking-widest">Live</span>
+                            <span className="text-[9px] font-extrabold text-ink uppercase tracking-widest">Live</span>
                         </div>
                     </div>
 
@@ -185,7 +185,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
                     />
 
                     {selectedCountry && !countryMatch && (
-                        <p className="text-[10px] text-slate-600 font-medium px-1">
+                        <p className="text-[10px] text-faint font-medium px-1">
                             No live broadcaster for {selectedLabel || selectedCountry} — showing {active.name}.
                         </p>
                     )}

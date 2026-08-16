@@ -23,23 +23,23 @@ const NoteCard = ({ entry, onWrite, onRemove }) => {
     };
 
     return (
-        <li className="p-5 rounded-2xl border border-white/10 bg-slate-900/40">
+        <li className="p-5 rounded-2xl border border-rule bg-surface">
             <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                     <Link
                         to={entry.kind === 'event' ? `/event/${entry.id}` : `/story/${entry.id}`}
-                        className="font-display text-[16px] font-bold text-white leading-snug hover:text-cyan-400 transition-colors"
+                        className="font-display text-[16px] font-bold text-ink leading-snug hover:text-accent transition-colors"
                     >
                         {entry.title}
                     </Link>
-                    <p className="mt-1 text-[12px] text-slate-500">
+                    <p className="mt-1 text-[12px] text-muted">
                         {[entry.source, entry.country, entry.published].filter(Boolean).join(' · ')}
                     </p>
                 </div>
                 <button
                     onClick={() => onRemove(entry.kind, entry.id)}
                     aria-label={`Remove ${entry.title}`}
-                    className="p-2 rounded-xl text-slate-600 hover:text-rose-400 transition-colors shrink-0"
+                    className="p-2 rounded-xl text-faint hover:text-risk-high transition-colors shrink-0"
                 >
                     <Trash2 size={14} />
                 </button>
@@ -56,9 +56,9 @@ const NoteCard = ({ entry, onWrite, onRemove }) => {
                 rows={draft ? 3 : 1}
                 maxLength={2000}
                 placeholder="Why this matters, what it connects to…"
-                className="mt-3 w-full bg-transparent border border-white/10 rounded-xl px-3 py-2 text-[13px] text-slate-300 placeholder:text-slate-600 outline-none focus:border-cyan-500/40 transition-colors resize-y"
+                className="mt-3 w-full bg-transparent border border-rule rounded-xl px-3 py-2 text-[13px] text-body placeholder:text-faint outline-none focus:border-accent transition-colors resize-y"
             />
-            {saved && <p className="mt-1 text-[11px] text-cyan-400/80">Note saved</p>}
+            {saved && <p className="mt-1 text-[11px] text-accent/80">Note saved</p>}
         </li>
     );
 };
@@ -92,14 +92,14 @@ const NotesPage = () => {
         <div className="max-w-3xl mx-auto px-6 py-8 lg:py-12">
             <Seo title="Saved" description="Stories you have put aside, with your own notes." path="/notes" noIndex />
 
-            <header className="border-b border-white/10 pb-6">
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-400">
+            <header className="border-b border-rule pb-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-accent">
                     Your reading
                 </p>
-                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">
                     Saved stories
                 </h1>
-                <p className="mt-3 text-[15px] text-slate-400 leading-relaxed max-w-2xl">
+                <p className="mt-3 text-[15px] text-body leading-relaxed max-w-2xl">
                     Kept in this browser only — no account, and nothing sent anywhere. That also
                     means they disappear with the browser profile, so export anything you intend
                     to keep.
@@ -109,24 +109,24 @@ const NotesPage = () => {
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                         <button
                             onClick={copy}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[12px] font-semibold text-slate-400 hover:text-white hover:border-white/25 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rule text-[12px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-colors"
                         >
                             {copied ? <Check size={12} /> : <Copy size={12} />}
                             {copied ? 'Copied' : 'Copy as Markdown'}
                         </button>
                         <button
                             onClick={download}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[12px] font-semibold text-slate-400 hover:text-white hover:border-white/25 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rule text-[12px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-colors"
                         >
                             <Download size={12} /> Download
                         </button>
                         <button
                             onClick={() => { if (window.confirm(`Remove all ${notes.length} saved stories?`)) clear(); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[12px] font-semibold text-slate-500 hover:text-rose-400 hover:border-rose-500/30 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rule text-[12px] font-semibold text-muted hover:text-risk-high hover:border-risk-high/30 transition-colors"
                         >
                             <Trash2 size={12} /> Clear all
                         </button>
-                        <span className="text-[11px] text-slate-600 ml-auto tabular-nums">
+                        <span className="text-[11px] text-faint ml-auto tabular-nums">
                             {notes.length} saved
                         </span>
                     </div>
@@ -134,15 +134,15 @@ const NotesPage = () => {
             </header>
 
             {notes.length === 0 ? (
-                <div className="mt-10 p-6 rounded-2xl border border-white/10 bg-white/[0.02]">
-                    <p className="flex items-center gap-2 text-[14px] text-slate-300">
-                        <Bookmark size={15} className="text-slate-500" />
+                <div className="mt-10 p-6 rounded-2xl border border-rule bg-surface-sunken">
+                    <p className="flex items-center gap-2 text-[14px] text-body">
+                        <Bookmark size={15} className="text-muted" />
                         Nothing saved yet.
                     </p>
-                    <p className="mt-2 text-[13px] text-slate-500 leading-relaxed">
-                        Use <span className="text-slate-400 font-semibold">Save</span> on any story
+                    <p className="mt-2 text-[13px] text-muted leading-relaxed">
+                        Use <span className="text-body font-semibold">Save</span> on any story
                         or event to put it here, then write down why it mattered.{' '}
-                        <Link to="/brief" className="text-cyan-400 hover:underline">Start with the brief</Link>.
+                        <Link to="/brief" className="text-accent hover:underline">Start with the brief</Link>.
                     </p>
                 </div>
             ) : (

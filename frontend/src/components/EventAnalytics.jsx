@@ -1,4 +1,5 @@
 import { Scale, Activity, Info } from 'lucide-react';
+import { token } from '../utils/palette';
 
 /**
  * How outlets framed an event, and how attention moved through it.
@@ -28,12 +29,12 @@ export const FramingPanel = ({ framing }) => {
 
     return (
         <section className="mb-10">
-            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">
+            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-body mb-1">
                 <Scale size={13} /> How outlets framed it
             </h2>
-            <p className="text-[12px] text-slate-600 mb-5 max-w-prose leading-relaxed">
+            <p className="text-[12px] text-faint mb-5 max-w-prose leading-relaxed">
                 Each outlet&apos;s average severity reading against the consensus of{' '}
-                <span className="text-slate-400 font-semibold tabular-nums">{framing.consensus}</span>{' '}
+                <span className="text-body font-semibold tabular-nums">{framing.consensus}</span>{' '}
                 across {framing.outlets.length} outlets. This measures how a story was
                 <em> headlined</em>, not the article behind it.
             </p>
@@ -45,29 +46,29 @@ export const FramingPanel = ({ framing }) => {
 
                     return (
                         <div key={outlet.source} className="flex items-center gap-3 text-[12px]">
-                            <span className="w-36 sm:w-48 truncate text-slate-400 text-right shrink-0">
+                            <span className="w-36 sm:w-48 truncate text-body text-right shrink-0">
                                 {outlet.source}
                             </span>
 
                             {/* Centre line is the consensus; bars grow either side. */}
                             <div className="flex-grow relative h-5 flex items-center">
-                                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/15" />
+                                <div className="absolute left-1/2 top-0 bottom-0 w-px bg-surface" />
                                 <div
-                                    className="absolute h-2 rounded-sm"
+                                    className="absolute h-2 rounded-lg"
                                     style={{
                                         [above ? 'left' : 'right']: '50%',
                                         width: `${width}%`,
-                                        background: above ? '#f43f5e' : '#10b981',
+                                        background: above ? token('risk-high') : token('risk-low'),
                                         opacity: outlet.reports > 1 ? 0.9 : 0.55,
                                     }}
                                 />
                             </div>
 
-                            <span className="w-10 text-right tabular-nums font-semibold text-slate-300 shrink-0">
+                            <span className="w-10 text-right tabular-nums font-semibold text-body shrink-0">
                                 {outlet.score}
                             </span>
                             <span
-                                className="w-14 text-right tabular-nums text-slate-600 shrink-0"
+                                className="w-14 text-right tabular-nums text-faint shrink-0"
                                 title={
                                     outlet.reports > 1
                                         ? `${outlet.reports} reports, own spread ${outlet.spread}`
@@ -81,7 +82,7 @@ export const FramingPanel = ({ framing }) => {
                 })}
             </div>
 
-            <p className="flex items-start gap-2 text-[11px] text-slate-600 mt-4 max-w-prose leading-relaxed">
+            <p className="flex items-start gap-2 text-[11px] text-faint mt-4 max-w-prose leading-relaxed">
                 <Info size={12} className="mt-0.5 shrink-0" />
                 Faded bars come from outlets with a single report. Scores are produced
                 automatically from headline wording, so treat a lone bar as a hint rather
@@ -99,10 +100,10 @@ export const CoveragePanel = ({ coverage }) => {
 
     return (
         <section className="mb-10">
-            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">
+            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-body mb-1">
                 <Activity size={13} /> Attention
             </h2>
-            <p className="text-[12px] text-slate-600 mb-4 max-w-prose leading-relaxed">
+            <p className="text-[12px] text-faint mb-4 max-w-prose leading-relaxed">
                 {SHAPE_BLURB[coverage.shape] || 'How coverage arrived over time.'}
             </p>
 
@@ -111,7 +112,7 @@ export const CoveragePanel = ({ coverage }) => {
                 {coverage.points.map((point, i) => (
                     <div
                         key={i}
-                        className="flex-1 rounded-t-sm bg-cyan-500/70 min-h-[2px] transition-all"
+                        className="flex-1 rounded-t-sm bg-accent-soft min-h-[2px] transition-all"
                         style={{ height: `${(point.count / peak) * 100}%` }}
                         title={`${point.count} report${point.count === 1 ? '' : 's'} around hour ${point.hour}`}
                     />
@@ -124,9 +125,9 @@ export const CoveragePanel = ({ coverage }) => {
                     ['Peak', `${coverage.peak_hour}h`, 'Busiest point after the first report'],
                     ['Span', `${coverage.span_hours}h`, 'First report to last'],
                 ].map(([label, value, hint]) => (
-                    <div key={label} className="p-3 rounded-xl bg-slate-900/50 border border-white/10" title={hint}>
-                        <p className="font-display text-lg font-bold text-white tabular-nums">{value}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-0.5">
+                    <div key={label} className="p-3 rounded-xl bg-surface border border-rule" title={hint}>
+                        <p className="font-display text-lg font-bold text-ink tabular-nums">{value}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted mt-0.5">
                             {label}
                         </p>
                     </div>

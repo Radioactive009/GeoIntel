@@ -3,6 +3,7 @@
 // Dashboard.jsx and MapChart.jsx, where they could drift apart.
 
 import NUMERIC_TO_ALPHA2 from './isoNumericToAlpha2';
+import { riskColor, riskColorByLevel } from './palette';
 
 // Maps the short labels used by the world-atlas TopoJSON onto the canonical
 // ISO names the backend returns.
@@ -121,18 +122,10 @@ export const getFlagEmoji = (countryCode) => {
     }
 };
 
-export const getAlertColor = (status) => {
-    if (status === 'high') return '#f43f5e';
-    if (status === 'medium') return '#f59e0b';
-    return '#10b981';
-};
-
-export const getAlertColorByLevel = (level) => {
-    if (typeof level !== 'number') return '#1f2937';
-    if (level >= 70) return '#f43f5e';
-    if (level >= 40) return '#f59e0b';
-    return '#10b981';
-};
+// Kept as re-exports so the many existing call sites do not all have to move;
+// the values themselves now come from the one palette definition.
+export const getAlertColor = riskColor;
+export const getAlertColorByLevel = riskColorByLevel;
 
 export const ALERT_STATUS_LABEL = {
     high: 'CRITICAL',

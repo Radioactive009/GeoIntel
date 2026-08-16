@@ -293,9 +293,9 @@ const AvatarAnchor = ({
         <div ref={mountRef} className="w-full h-full relative" role="img" aria-label="News assistant">
             {loading && (
                 <div className="absolute inset-0 grid place-items-center">
-                    <div className="w-24 h-24 rounded-full bg-white/[0.04] animate-pulse" />
+                    <div className="w-24 h-24 rounded-full bg-surface-sunken animate-pulse" />
                     {percent > 0 && (
-                        <span className="absolute bottom-6 text-[11px] tabular-nums text-slate-500">
+                        <span className="absolute bottom-6 text-[11px] tabular-nums text-muted">
                             {percent}%
                         </span>
                     )}

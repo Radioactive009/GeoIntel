@@ -49,10 +49,10 @@ const FreshnessBadge = () => {
             }
         >
             <span
-                className={`w-1.5 h-1.5 rounded-full ${stale ? 'bg-amber-400' : 'bg-emerald-400 animate-pulse'}`}
+                className={`w-1.5 h-1.5 rounded-full ${stale ? 'bg-amber-400' : 'bg-risk-low animate-pulse'}`}
                 aria-hidden="true"
             />
-            <span className={stale ? 'text-amber-400/90' : 'text-slate-500'}>
+            <span className={stale ? 'text-risk-medium' : 'text-muted'}>
                 Updated {label}
             </span>
         </span>

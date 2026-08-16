@@ -48,21 +48,21 @@ const VISIBLE_SOURCES = 6;
 const TONES = {
     fault: {
         icon: AlertCircle,
-        box: 'border-rose-500/20 bg-rose-500/[0.06]',
-        mark: 'text-rose-400',
-        body: 'text-rose-200/90',
+        box: 'border-risk-high/30 bg-risk-high/10',
+        mark: 'text-risk-high',
+        body: 'text-risk-high',
     },
     wait: {
         icon: Clock,
-        box: 'border-amber-500/20 bg-amber-500/[0.06]',
-        mark: 'text-amber-400',
-        body: 'text-amber-200/90',
+        box: 'border-risk-medium/30 bg-risk-medium/10',
+        mark: 'text-risk-medium',
+        body: 'text-risk-medium',
     },
     nudge: {
         icon: Info,
-        box: 'border-white/10 bg-white/[0.03]',
-        mark: 'text-slate-400',
-        body: 'text-slate-300',
+        box: 'border-rule bg-surface-sunken',
+        mark: 'text-body',
+        body: 'text-body',
     },
 };
 
@@ -74,8 +74,8 @@ const SourceList = ({ sources }) => {
     const hidden = sources.length - shown.length;
 
     return (
-        <div className="mt-4 pt-4 border-t border-white/10">
-            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-2">
+        <div className="mt-4 pt-4 border-t border-rule">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-muted mb-2">
                 <Newspaper size={11} /> Drawn from {sources.length} article{sources.length === 1 ? '' : 's'}
             </p>
             <ul className="space-y-1">
@@ -83,9 +83,9 @@ const SourceList = ({ sources }) => {
                     <li key={s.id ?? s.title} className="text-[12px] leading-snug">
                         <Link
                             to={s.id ? `/story/${s.id}` : '#'}
-                            className="text-slate-400 hover:text-cyan-400 transition-colors"
+                            className="text-body hover:text-accent transition-colors"
                         >
-                            <span className="font-semibold text-slate-300">{s.source}</span>
+                            <span className="font-semibold text-body">{s.source}</span>
                             {' · '}{s.title}
                         </Link>
                     </li>
@@ -96,7 +96,7 @@ const SourceList = ({ sources }) => {
             {(hidden > 0 || expanded) && (
                 <button
                     onClick={() => setExpanded((open) => !open)}
-                    className="mt-2 text-[11px] font-semibold text-slate-500 hover:text-cyan-400 transition-colors"
+                    className="mt-2 text-[11px] font-semibold text-muted hover:text-accent transition-colors"
                 >
                     {expanded ? 'Show fewer' : `Show ${hidden} more`}
                 </button>
@@ -110,7 +110,7 @@ const ToolTrace = ({ toolsUsed }) => {
     const steps = describeTools(toolsUsed);
     if (!steps.length) return null;
     return (
-        <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
+        <p className="flex items-start gap-1.5 text-[11px] text-muted">
             <Search size={11} className="mt-0.5 shrink-0" />
             <span>It {steps.join(', then ')}.</span>
         </p>
@@ -139,7 +139,7 @@ const CopyAnswer = ({ turn }) => {
         <button
             onClick={copy}
             aria-label="Copy answer and sources"
-            className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-cyan-400 transition-colors shrink-0"
+            className="flex items-center gap-1.5 text-[11px] text-muted hover:text-accent transition-colors shrink-0"
         >
             {copied ? <Check size={11} /> : <Copy size={11} />}
             {copied ? 'Copied' : 'Copy'}
@@ -148,8 +148,8 @@ const CopyAnswer = ({ turn }) => {
 };
 
 const SUGGESTION_CLASS =
-    'text-left px-4 py-3 rounded-2xl border border-white/10 bg-white/[0.02] text-[13px] '
-    + 'text-slate-300 hover:border-cyan-500/30 hover:text-white transition-all';
+    'text-left px-4 py-3 rounded-2xl border border-rule bg-surface-sunken text-[13px] '
+    + 'text-body hover:border-accent hover:text-ink transition-all';
 
 const AskPage = () => {
     // Restored from this browser, so a stray reload does not throw away a
@@ -408,11 +408,11 @@ const AskPage = () => {
             />
 
             <header className="mb-8">
-                <h1 className="font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight flex items-center gap-3">
-                    <Sparkles size={26} className="text-cyan-400" />
+                <h1 className="font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight flex items-center gap-3">
+                    <Sparkles size={26} className="text-accent" />
                     Ask the archive
                 </h1>
-                <p className="mt-2 text-[15px] text-slate-400 leading-relaxed max-w-2xl">
+                <p className="mt-2 text-[15px] text-body leading-relaxed max-w-2xl">
                     Answers are drawn from the articles this site has collected, and the sources
                     are shown so you can check them. Background questions are answered from
                     general knowledge, and it will say so.
@@ -422,8 +422,8 @@ const AskPage = () => {
                         onClick={() => setVoiceMode((on) => !on)}
                         className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-all ${
                             voiceMode
-                                ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
-                                : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+                                ? 'border-accent bg-accent-soft text-accent'
+                                : 'border-rule text-body hover:text-ink hover:border-rule-strong'
                         }`}
                     >
                         <Mic size={14} />
@@ -435,8 +435,8 @@ const AskPage = () => {
                         title="Structured answers with the facts that can be cited"
                         className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-all ${
                             mode === 'exam'
-                                ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
-                                : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+                                ? 'border-accent bg-accent-soft text-accent'
+                                : 'border-rule text-body hover:text-ink hover:border-rule-strong'
                         }`}
                     >
                         <GraduationCap size={14} />
@@ -445,7 +445,7 @@ const AskPage = () => {
                     {turns.length > 0 && (
                         <button
                             onClick={clearThread}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-[13px] font-semibold text-slate-400 hover:text-white hover:border-white/25 transition-all"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-rule text-[13px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-all"
                         >
                             <Trash2 size={13} />
                             Clear
@@ -456,7 +456,7 @@ const AskPage = () => {
                 {/* Said plainly and up front. Being refused mid-question by a
                     limit nobody mentioned is the worse version of this. */}
                 {mode === 'exam' && (
-                    <p className="mt-3 text-[12px] text-slate-500 leading-relaxed max-w-2xl">
+                    <p className="mt-3 text-[12px] text-muted leading-relaxed max-w-2xl">
                         Answers come back as study notes — the facts that can be cited, what a
                         development bears on, and both readings where informed people disagree.
                         Still drawn from the archive, with the articles shown.
@@ -464,7 +464,7 @@ const AskPage = () => {
                 )}
 
                 {budget > 0 && (
-                    <p className={`mt-3 text-[11px] ${budgetLow ? 'text-amber-400/90' : 'text-slate-600'}`}>
+                    <p className={`mt-3 text-[11px] ${budgetLow ? 'text-risk-medium' : 'text-faint'}`}>
                         {remaining} of {budget} questions left today, shared by everyone using the site.
                     </p>
                 )}
@@ -473,9 +473,9 @@ const AskPage = () => {
             </header>
 
             {unavailable && (
-                <div className="mb-6 flex items-start gap-3 p-4 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06]">
-                    <AlertCircle size={16} className="text-amber-400 mt-0.5 shrink-0" />
-                    <p className="text-[13px] text-amber-200/90">
+                <div className="mb-6 flex items-start gap-3 p-4 rounded-2xl border border-risk-medium/30 bg-risk-medium/10">
+                    <AlertCircle size={16} className="text-risk-medium mt-0.5 shrink-0" />
+                    <p className="text-[13px] text-risk-medium">
                         The assistant is not configured on this server. Set <code>GROQ_API_KEY</code> to
                         enable it — everything else on the site works without it.
                     </p>
@@ -486,7 +486,7 @@ const AskPage = () => {
                 <div className="mb-8 flex flex-col items-center">
                     <div className="w-full max-w-[180px] aspect-square">
                         <Suspense fallback={
-                            <div className="w-full h-full rounded-full bg-white/[0.03] animate-pulse" />
+                            <div className="w-full h-full rounded-full bg-surface-sunken animate-pulse" />
                         }>
                             {AVATAR_URL && !avatarFailed ? (
                                 <AvatarAnchor
@@ -508,7 +508,7 @@ const AskPage = () => {
                         </Suspense>
                     </div>
 
-                    <p className="h-6 text-[13px] text-slate-400 text-center px-4">
+                    <p className="h-6 text-[13px] text-body text-center px-4">
                         {voice.interim
                             || (voice.listening && 'Listening…')
                             || (busy && 'Checking the archive…')
@@ -532,8 +532,8 @@ const AskPage = () => {
                             }
                             className={`p-4 rounded-full transition-all disabled:opacity-30 ${
                                 (handsFree ? conversing : voice.listening)
-                                    ? 'bg-rose-500 text-white scale-110 shadow-lg shadow-rose-500/30'
-                                    : 'bg-cyan-500 text-white hover:bg-cyan-400'
+                                    ? 'bg-risk-high text-ink scale-110 shadow-lg shadow-transparent'
+                                    : 'bg-accent text-ink hover:bg-accent'
                             }`}
                         >
                             {(handsFree ? conversing : voice.listening)
@@ -542,7 +542,7 @@ const AskPage = () => {
                         <button
                             onClick={() => { setMuted((m) => !m); voice.stopSpeaking(); }}
                             aria-label={muted ? 'Unmute replies' : 'Mute replies'}
-                            className="p-3 rounded-full border border-white/10 text-slate-400 hover:text-white transition-colors"
+                            className="p-3 rounded-full border border-rule text-body hover:text-ink transition-colors"
                         >
                             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
                         </button>
@@ -553,10 +553,10 @@ const AskPage = () => {
                             id="ask-language"
                             value={language}
                             onChange={(e) => setLanguage(e.target.value)}
-                            className="px-3 py-2 rounded-full border border-white/10 bg-transparent text-[12px] text-slate-400 hover:text-white transition-colors outline-none focus:border-cyan-500/40"
+                            className="px-3 py-2 rounded-full border border-rule bg-transparent text-[12px] text-body hover:text-ink transition-colors outline-none focus:border-accent"
                         >
                             {LANGUAGES.map((entry) => (
-                                <option key={entry.code} value={entry.code} className="bg-slate-900 text-slate-200">
+                                <option key={entry.code} value={entry.code} className="bg-surface text-ink">
                                     {entry.label}
                                 </option>
                             ))}
@@ -564,9 +564,9 @@ const AskPage = () => {
                     </div>
 
                     {voice.error && (
-                        <p className="mt-3 text-[12px] text-rose-300">{voice.error}</p>
+                        <p className="mt-3 text-[12px] text-risk-high">{voice.error}</p>
                     )}
-                    <p className="mt-2 text-[11px] text-slate-600 text-center max-w-xs">
+                    <p className="mt-2 text-[11px] text-faint text-center max-w-xs">
                         {!handsFree
                             ? 'This browser has no speech recognition, so recordings are transcribed on the server. Tap to record, tap again when finished.'
                             : conversing
@@ -593,7 +593,7 @@ const AskPage = () => {
 
                     return (
                         <div key={i} className="space-y-3">
-                            <p className="font-serif text-lg text-white leading-snug">{turn.question}</p>
+                            <p className="font-serif text-lg text-ink leading-snug">{turn.question}</p>
 
                             {turn.error ? (
                                 <div className={`flex items-start gap-2.5 p-4 rounded-2xl border ${tone.box}`}>
@@ -601,14 +601,14 @@ const AskPage = () => {
                                     <p className={`text-[13px] ${tone.body}`}>{turn.error}</p>
                                 </div>
                             ) : turn.cancelled ? (
-                                <p className="text-[13px] text-slate-600">Stopped.</p>
+                                <p className="text-[13px] text-faint">Stopped.</p>
                             ) : turn.answer ? (
-                                <div className="p-5 rounded-2xl border border-white/10 bg-slate-900/40">
+                                <div className="p-5 rounded-2xl border border-rule bg-surface">
                                     {/* Derived server-side from whether a tool ran, so
                                         the provenance does not depend on the model
                                         choosing to admit it. */}
                                     {!turn.fromArchive && (
-                                        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-amber-400/90">
+                                        <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-risk-medium">
                                             From general knowledge — not this site&apos;s archive
                                         </p>
                                     )}
@@ -619,26 +619,26 @@ const AskPage = () => {
                                     {readableLines(turn.answer).map((line, j) => {
                                         const body = line.runs.map((run, k) => (
                                             run.strong
-                                                ? <strong key={k} className="font-semibold text-white">{run.text}</strong>
+                                                ? <strong key={k} className="font-semibold text-ink">{run.text}</strong>
                                                 : <span key={k}>{run.text}</span>
                                         ));
                                         if (line.kind === 'heading') {
                                             return (
-                                                <p key={j} className="text-[13px] font-bold uppercase tracking-wider text-slate-400 mt-4 first:mt-0 mb-2">
+                                                <p key={j} className="text-[13px] font-bold uppercase tracking-wider text-body mt-4 first:mt-0 mb-2">
                                                     {body}
                                                 </p>
                                             );
                                         }
                                         if (line.kind === 'bullet') {
                                             return (
-                                                <p key={j} className="flex gap-2 text-[14.5px] text-slate-300 leading-[1.7] mb-1.5">
-                                                    <span className="text-slate-600 shrink-0">•</span>
+                                                <p key={j} className="flex gap-2 text-[14.5px] text-body leading-[1.7] mb-1.5">
+                                                    <span className="text-faint shrink-0">•</span>
                                                     <span>{body}</span>
                                                 </p>
                                             );
                                         }
                                         return (
-                                            <p key={j} className="text-[14.5px] text-slate-300 leading-[1.7] mb-3 last:mb-0">
+                                            <p key={j} className="text-[14.5px] text-body leading-[1.7] mb-3 last:mb-0">
                                                 {body}
                                             </p>
                                         );
@@ -650,7 +650,7 @@ const AskPage = () => {
                                     <SourceList sources={turn.sources} />
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-2.5 text-[13px] text-slate-500">
+                                <div className="flex items-center gap-2.5 text-[13px] text-muted">
                                     <Loader2 size={14} className="animate-spin" />
                                     Searching the archive…
                                 </div>
@@ -667,7 +667,7 @@ const AskPage = () => {
                             <button
                                 key={question}
                                 onClick={() => send(question)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/10 bg-white/[0.02] text-[12px] text-slate-400 hover:border-cyan-500/30 hover:text-white transition-all"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-rule bg-surface-sunken text-[12px] text-body hover:border-accent hover:text-ink transition-all"
                             >
                                 <CornerDownRight size={11} />
                                 {question}
@@ -682,7 +682,7 @@ const AskPage = () => {
                 onSubmit={(e) => { e.preventDefault(); send(); }}
                 className="sticky bottom-4 mt-8"
             >
-                <div className="flex items-center gap-2 p-2 rounded-2xl border border-white/15 bg-background/95 backdrop-blur-xl shadow-2xl">
+                <div className="flex items-center gap-2 p-2 rounded-2xl border border-rule-strong bg-background/95 backdrop-blur-xl shadow-2xl">
                     <label htmlFor="ask-input" className="sr-only">Ask a question</label>
                     <input
                         id="ask-input"
@@ -691,14 +691,14 @@ const AskPage = () => {
                         placeholder={unavailable ? 'Assistant unavailable' : 'Ask about a country, an event, anything…'}
                         disabled={busy || unavailable}
                         maxLength={500}
-                        className="flex-grow bg-transparent px-3 py-2 text-[15px] text-white placeholder:text-slate-600 outline-none disabled:opacity-50"
+                        className="flex-grow bg-transparent px-3 py-2 text-[15px] text-ink placeholder:text-faint outline-none disabled:opacity-50"
                     />
                     {busy ? (
                         <button
                             type="button"
                             onClick={stopAnswer}
                             aria-label="Stop"
-                            className="p-2.5 rounded-xl bg-white/10 text-slate-200 hover:bg-white/15 transition-colors"
+                            className="p-2.5 rounded-xl bg-surface-sunken text-ink hover:bg-surface-sunken transition-colors"
                         >
                             <Square size={16} />
                         </button>
@@ -707,13 +707,13 @@ const AskPage = () => {
                             type="submit"
                             disabled={unavailable || !draft.trim()}
                             aria-label="Send question"
-                            className="p-2.5 rounded-xl bg-cyan-500 text-white disabled:opacity-25 disabled:pointer-events-none hover:bg-cyan-400 transition-colors"
+                            className="p-2.5 rounded-xl bg-accent text-ink disabled:opacity-25 disabled:pointer-events-none hover:bg-accent transition-colors"
                         >
                             <Send size={16} />
                         </button>
                     )}
                 </div>
-                <p className="text-[11px] text-slate-600 mt-2 px-2">
+                <p className="text-[11px] text-faint mt-2 px-2">
                     Answers are generated automatically and can be wrong. Check the sources.
                 </p>
             </form>

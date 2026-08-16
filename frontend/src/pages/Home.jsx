@@ -22,7 +22,7 @@ import {
 } from '../services/api';
 import {
     ChevronLeft, ChevronRight, AlertCircle, BarChart3, Globe, Activity,
-    Newspaper, Zap, Target, AlertTriangle, Search, Star, Bell, BellOff,
+    Newspaper, Zap, AlertTriangle, Search, Star, Bell, BellOff,
 } from 'lucide-react';
 import { getFlagEmoji, getAlertColor, matchesCountry } from '../utils/country';
 
@@ -314,7 +314,7 @@ const Home = () => {
     }, [currentPage, totalPages]);
 
     return (
-        <div className="flex flex-col min-h-screen app-bg text-slate-400 font-sans">
+        <div className="flex flex-col min-h-screen app-bg text-body font-sans">
             <Seo
                 path="/"
                 schema={{
@@ -332,31 +332,22 @@ const Home = () => {
 
             <main className="flex-grow max-w-[1440px] mx-auto w-full px-6 py-10 lg:py-12">
                 {/* Dashboard Header */}
-                <header className="mb-12 flex flex-col md:flex-row md:items-end md:justify-between gap-6 animate-fade-in">
-                    <div className="space-y-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Target size={18} className="text-cyan-400" />
-                            <span className="text-[10px] font-extrabold uppercase tracking-[0.4em] text-cyan-400/60">Updated continuously</span>
-                        </div>
-                        <h1 className="text-4xl lg:text-5xl font-extrabold text-white tracking-tight">
-                            Geopolitical <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 decoration-cyan-500/20 underline underline-offset-8">Intelligence</span>
-                        </h1>
-                        <p className="text-slate-500 text-sm font-medium pt-2">
-                            Tracking {totalReports} stories across {activeAlertData.length} countries.
-                        </p>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <div className="glass px-4 py-2 rounded-2xl flex items-center gap-3 border border-emerald-500/20">
-                            <Activity size={16} className="text-emerald-400" />
-                            <div className="leading-tight">
-                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Status</p>
-                                <p className="text-xs font-bold text-emerald-400">
-                                    {error ? 'OFFLINE' : 'LIVE'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                {/* A masthead rather than a console readout. The gradient
+                    wordmark, the target icon, the "UPDATED CONTINUOUSLY"
+                    eyebrow and the LIVE status lamp were all borrowed from
+                    monitoring dashboards, and they made a news site look like
+                    a demo of one. What a reader wants first is what the site
+                    is and how much it is holding. */}
+                <header className="mb-12 pb-8 border-b border-rule animate-fade-in">
+                    <h1 className="font-display text-4xl lg:text-5xl font-extrabold text-ink tracking-tight max-w-3xl">
+                        World coverage, attributed and measured
+                    </h1>
+                    <p className="mt-4 text-[15px] text-body leading-relaxed max-w-2xl">
+                        Stories from international wire services, each attributed to a country and
+                        scored for risk. {totalReports ? `${totalReports} held` : 'Loading'}
+                        {activeAlertData.length > 0 && ` across ${activeAlertData.length} countries`}.
+                        {error && ' The archive is unreachable at the moment.'}
+                    </p>
                 </header>
 
                 {/* ── SECTION 1: MAP + COUNTRY DOSSIER ───────
@@ -378,7 +369,7 @@ const Home = () => {
                                         <button
                                             onClick={() => toggleWatch(selectedIso)}
                                             className={`flex flex-col items-start transition-colors ${
-                                                isWatched(selectedIso) ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'
+                                                isWatched(selectedIso) ? 'text-risk-medium' : 'text-muted hover:text-risk-medium'
                                             }`}
                                         >
                                             <Star size={14} fill={isWatched(selectedIso) ? 'currentColor' : 'none'} />
@@ -440,27 +431,27 @@ const Home = () => {
 
                     <div className="xl:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-6">
                     {[
-                        { icon: Globe, label: 'Countries covered', value: activeAlertData.length, color: 'text-cyan-400', sub: 'With recent coverage' },
-                        { icon: Activity, label: 'Average risk', value: `${avgAlert}%`, color: 'text-amber-400', sub: 'Across covered countries' },
-                        { icon: AlertTriangle, label: 'High risk', value: criticalCount, color: 'text-rose-400', sub: 'Countries flagged critical' },
-                        { icon: Newspaper, label: 'Stories held', value: totalReports, color: 'text-indigo-400', sub: 'In the current window' },
+                        { icon: Globe, label: 'Countries covered', value: activeAlertData.length, color: 'text-accent', sub: 'With recent coverage' },
+                        { icon: Activity, label: 'Average risk', value: `${avgAlert}%`, color: 'text-risk-medium', sub: 'Across covered countries' },
+                        { icon: AlertTriangle, label: 'High risk', value: criticalCount, color: 'text-risk-high', sub: 'Countries flagged critical' },
+                        { icon: Newspaper, label: 'Stories held', value: totalReports, color: 'text-accent', sub: 'In the current window' },
                     ].map(({ icon: Icon, label, value, color, sub }, i) => (
                         <div
                             key={label}
-                            className="glass rounded-3xl p-6 hover:border-cyan-500/30 transition-all duration-300 relative overflow-hidden group animate-fade-in-up"
+                            className="border border-rule rounded-lg bg-surface p-6 relative animate-fade-in-up"
                             style={{ animationDelay: `${i * 100}ms` }}
                         >
-                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                                <Icon size={80} />
-                            </div>
+                            {/* The oversized watermark of the same icon behind
+                                each figure was decoration standing in for
+                                information. A number this large needs no help. */}
                             <div className="relative z-10 space-y-4">
-                                <div className={`p-2.5 rounded-xl bg-white/5 border border-white/5 w-fit ${color}`}>
+                                <div className={`w-fit ${color}`}>
                                     <Icon size={18} />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-[0.2em] mb-1">{label}</p>
-                                    <p className="text-3xl font-extrabold text-white tracking-tight tabular-nums">{value}</p>
-                                    <p className="text-[10px] font-medium text-slate-600 mt-2 uppercase tracking-wide">{sub}</p>
+                                    <p className="text-[10px] font-extrabold text-muted uppercase tracking-[0.2em] mb-1">{label}</p>
+                                    <p className="text-3xl font-extrabold text-ink tracking-tight tabular-nums">{value}</p>
+                                    <p className="text-[10px] font-medium text-faint mt-2 uppercase tracking-wide">{sub}</p>
                                 </div>
                             </div>
                         </div>
@@ -470,16 +461,16 @@ const Home = () => {
 
                 {/* ── WATCHLIST ─────────────────────────────── */}
                 {(watchedRows.length > 0 || watched.length > 0) && (
-                    <section className="mb-12 glass rounded-[2.5rem] p-6 lg:p-7 animate-fade-in-up">
+                    <section className="mb-12 glass rounded-2xl p-6 lg:p-7 animate-fade-in-up">
                         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                                    <Star size={16} className="text-amber-400" fill="currentColor" />
+                                <div className="p-2 rounded-xl bg-risk-medium/10 border border-risk-medium/30">
+                                    <Star size={16} className="text-risk-medium" fill="currentColor" />
                                 </div>
-                                <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">
+                                <h2 className="text-base font-bold text-ink uppercase tracking-widest leading-none">
                                     Watchlist
                                 </h2>
-                                <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                                <span className="text-[10px] font-bold text-faint uppercase tracking-widest">
                                     {watched.length} pinned
                                 </span>
                             </div>
@@ -487,26 +478,26 @@ const Home = () => {
                             {permission === 'default' && (
                                 <button
                                     onClick={requestPermission}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-amber-400 hover:border-amber-500/30 transition-all"
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-sunken border border-rule text-[10px] font-bold uppercase tracking-widest text-body hover:text-risk-medium hover:border-risk-medium/30 transition-all"
                                 >
                                     <Bell size={12} />
                                     Alert me on escalation
                                 </button>
                             )}
                             {permission === 'granted' && (
-                                <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                                <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-risk-low">
                                     <Bell size={12} /> Alerts on
                                 </span>
                             )}
                             {permission === 'denied' && (
-                                <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                                <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-faint">
                                     <BellOff size={12} /> Alerts blocked in browser
                                 </span>
                             )}
                         </div>
 
                         {watchedRows.length === 0 ? (
-                            <p className="text-[11px] text-slate-600 font-medium">
+                            <p className="text-[11px] text-faint font-medium">
                                 Pinned zones have no coverage yet — they appear here once an ingest
                                 cycle reaches them.
                             </p>
@@ -516,19 +507,19 @@ const Home = () => {
                                     <button
                                         key={row.iso_code}
                                         onClick={() => setSelectedCountry(row.iso_code)}
-                                        className="group text-left p-3.5 rounded-2xl bg-slate-900/40 border border-white/5 hover:border-amber-500/30 transition-all"
+                                        className="group text-left p-3.5 rounded-2xl bg-surface border border-rule hover:border-risk-medium/30 transition-all"
                                     >
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <span className="text-lg leading-none">{getFlagEmoji(row.iso_code)}</span>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); toggleWatch(row.iso_code); }}
                                                 aria-label={`Unpin ${row.country}`}
-                                                className="text-amber-400/70 hover:text-amber-300 transition-colors"
+                                                className="text-risk-medium hover:text-risk-medium transition-colors"
                                             >
                                                 <Star size={11} fill="currentColor" />
                                             </button>
                                         </div>
-                                        <p className="text-[11px] font-bold text-white truncate">{row.country}</p>
+                                        <p className="text-[11px] font-bold text-ink truncate">{row.country}</p>
                                         <p
                                             className="text-sm font-black tabular-nums mt-0.5"
                                             style={{ color: getAlertColor(row.alert_status) }}
@@ -544,16 +535,16 @@ const Home = () => {
 
                 {/* ── SECTION 2: ANALYTICS ──────────────────── */}
                 <section className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12 items-stretch">
-                    <div className="xl:col-span-2 glass rounded-[2.5rem] p-8 lg:p-10 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+                    <div className="xl:col-span-2 glass rounded-2xl p-8 lg:p-10 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
                         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-                                    <BarChart3 size={18} className="text-cyan-400" />
+                                <div className="p-2 rounded-xl bg-accent-soft border border-accent/50">
+                                    <BarChart3 size={18} className="text-accent" />
                                 </div>
-                                <h2 className="text-base font-bold text-white uppercase tracking-widest leading-none">Risk by country</h2>
+                                <h2 className="text-base font-bold text-ink uppercase tracking-widest leading-none">Risk by country</h2>
                             </div>
 
-                            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 gap-1">
+                            <div className="flex bg-surface p-1 rounded-xl border border-rule gap-1">
                                 {[
                                     { id: 'top', label: 'Top 15' },
                                     { id: 'critical', label: 'Critical' },
@@ -566,8 +557,8 @@ const Home = () => {
                                         onClick={() => setChartFilter(f.id)}
                                         className={`px-3 py-1 rounded-lg text-[9px] font-bold transition-all whitespace-nowrap ${
                                             chartFilter === f.id
-                                                ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20'
-                                                : 'text-slate-500 hover:text-slate-300'
+                                                ? 'bg-accent text-ink shadow-lg shadow-transparent'
+                                                : 'text-muted hover:text-body'
                                         }`}
                                     >
                                         {f.label}
@@ -578,14 +569,14 @@ const Home = () => {
                         <div className="h-[350px] w-full min-h-[350px] overflow-x-auto chart-scrollbar pb-4">
                             {filteredChartData.length === 0 ? (
                                 <div className="h-full flex items-center justify-center">
-                                    <p className="text-slate-600 font-bold uppercase tracking-widest text-[10px]">No countries match this filter</p>
+                                    <p className="text-faint font-bold uppercase tracking-widest text-[10px]">No countries match this filter</p>
                                 </div>
                             ) : (
                                 <div style={{
                                     minWidth: chartFilter === 'all' ? `${filteredChartData.length * 45}px` : '100%',
                                     height: '100%'
                                 }}>
-                                    <Suspense fallback={<div className="h-full w-full bg-white/[0.03] rounded-2xl animate-pulse" />}>
+                                    <Suspense fallback={<div className="h-full w-full bg-surface-sunken rounded-2xl animate-pulse" />}>
                                         <RiskByCountryChart
                                             data={filteredChartData}
                                             dense={chartFilter === 'all'}
@@ -597,29 +588,29 @@ const Home = () => {
                         </div>
                     </div>
 
-                    <div className="glass rounded-[2.5rem] p-8 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
+                    <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
                         <div className="flex items-center gap-3 mb-8">
-                            <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
-                                <Zap size={18} className="text-indigo-400" />
+                            <div className="p-2 rounded-xl bg-indigo-500/10 border border-rule">
+                                <Zap size={18} className="text-accent" />
                             </div>
-                            <h2 className="text-base font-bold text-white uppercase tracking-widest">Highest risk</h2>
+                            <h2 className="text-base font-bold text-ink uppercase tracking-widest">Highest risk</h2>
                         </div>
                         <div className="space-y-4">
                             {activeAlertData.length === 0 && (
-                                <p className="text-slate-600 text-xs font-bold uppercase tracking-widest">Waiting for the first update</p>
+                                <p className="text-faint text-xs font-bold uppercase tracking-widest">Waiting for the first update</p>
                             )}
                             {activeAlertData.slice(0, 5).map((item, i) => (
                                 <button
                                     key={item.iso_code}
                                     onClick={() => setSelectedCountry(item.country)}
-                                    className="w-full text-left flex items-center gap-3 p-4 rounded-3xl bg-slate-900/40 border border-white/5 transition-transform duration-300 hover:translate-x-1"
+                                    className="w-full text-left flex items-center gap-3 p-4 rounded-2xl bg-surface border border-rule transition-transform duration-300 hover:translate-x-1"
                                 >
-                                    <span className="text-xs font-bold text-slate-600 tabular-nums w-4">0{i + 1}</span>
+                                    <span className="text-xs font-bold text-faint tabular-nums w-4">0{i + 1}</span>
                                     <div className="text-2xl leading-none">{getFlagEmoji(item.iso_code)}</div>
                                     <div className="flex-grow min-w-0">
-                                        <p className="text-sm font-bold text-white truncate">{item.country}</p>
+                                        <p className="text-sm font-bold text-ink truncate">{item.country}</p>
                                         <div className="flex items-center gap-2 mt-1.5">
-                                            <div className="flex-grow h-1 rounded-full bg-slate-800/60 overflow-hidden">
+                                            <div className="flex-grow h-1 rounded-full bg-surface-sunken overflow-hidden">
                                                 <div
                                                     className="h-full rounded-full transition-all duration-1000 ease-out"
                                                     style={{ width: `${item.alert_level}%`, background: getAlertColor(item.alert_status) }}
@@ -685,10 +676,10 @@ const Home = () => {
                         {/* Feed Header */}
                         <div className="flex items-center justify-between px-2 flex-wrap gap-3">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-cyan-500/10">
-                                    <Search size={18} className="text-cyan-400" />
+                                <div className="p-2 rounded-xl bg-accent-soft">
+                                    <Search size={18} className="text-accent" />
                                 </div>
-                                <h2 className="text-base font-bold text-white uppercase tracking-widest">
+                                <h2 className="text-base font-bold text-ink uppercase tracking-widest">
                                     {searchTerm
                                         ? `Search: “${searchTerm}”`
                                         : selectedCountry
@@ -696,7 +687,7 @@ const Home = () => {
                                             : 'Latest stories'}
                                 </h2>
                             </div>
-                            <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest tabular-nums">
+                            <p className="text-[10px] font-extrabold text-muted uppercase tracking-widest tabular-nums">
                                 {totalArticles} stories
                             </p>
                         </div>
@@ -712,15 +703,15 @@ const Home = () => {
                                 <StoryGridSkeleton count={6} />
                             </div>
                         ) : error ? (
-                            <div className="py-24 flex flex-col items-center justify-center rounded-3xl border border-rose-500/20 bg-slate-900/40 text-center px-10">
-                                <AlertCircle className="text-rose-500 mb-5" size={40} />
-                                <h3 className="font-display text-white font-bold text-xl mb-2">Can’t load stories</h3>
-                                <p className="text-slate-400 text-sm max-w-md leading-relaxed mb-6">{error}</p>
+                            <div className="py-24 flex flex-col items-center justify-center rounded-2xl border border-risk-high/30 bg-surface text-center px-10">
+                                <AlertCircle className="text-risk-high mb-5" size={40} />
+                                <h3 className="font-display text-ink font-bold text-xl mb-2">Can’t load stories</h3>
+                                <p className="text-body text-sm max-w-md leading-relaxed mb-6">{error}</p>
                                 <button onClick={fetchArticles} className="btn-primary">Try again</button>
                             </div>
                         ) : articles.length === 0 ? (
-                            <div className="py-24 text-center rounded-3xl border border-white/10 bg-slate-900/30">
-                                <p className="text-slate-400">No stories match these filters.</p>
+                            <div className="py-24 text-center rounded-2xl border border-rule bg-surface">
+                                <p className="text-body">No stories match these filters.</p>
                                 <button onClick={resetFilters} className="btn-primary mt-5">Clear filters</button>
                             </div>
                         ) : (
@@ -735,8 +726,8 @@ const Home = () => {
                                             <div className="lg:col-span-2">
                                                 <LeadStory article={leadStory} />
                                             </div>
-                                            <div className="flex flex-col gap-6 lg:border-l lg:border-white/10 lg:pl-8">
-                                                <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                                            <div className="flex flex-col gap-6 lg:border-l lg:border-rule lg:pl-8">
+                                                <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
                                                     Also developing
                                                 </h3>
                                                 {secondaryStories.map((article) => (
@@ -746,8 +737,8 @@ const Home = () => {
                                         </div>
 
                                         {riverStories.length > 0 && (
-                                            <div className="pt-2 border-t border-white/10">
-                                                <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 py-6">
+                                            <div className="pt-2 border-t border-rule">
+                                                <h3 className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted py-6">
                                                     More stories
                                                 </h3>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
@@ -768,17 +759,17 @@ const Home = () => {
 
                                 {/* Pagination */}
                                 {totalPages > 1 && (
-                                    <div className="flex items-center justify-between py-8 border-t border-white/5 flex-wrap gap-4">
-                                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest tabular-nums">
-                                            Scanning bulletins <span className="text-white mx-1">{idxFirst + 1}</span>—
-                                            <span className="text-white mx-1">{Math.min(idxFirst + ARTICLES_PER_PAGE, totalArticles)}</span>
-                                            {' of '}<span className="text-white mx-1">{totalArticles}</span>
+                                    <div className="flex items-center justify-between py-8 border-t border-rule flex-wrap gap-4">
+                                        <p className="text-[11px] font-bold text-muted uppercase tracking-widest tabular-nums">
+                                            Scanning bulletins <span className="text-ink mx-1">{idxFirst + 1}</span>—
+                                            <span className="text-ink mx-1">{Math.min(idxFirst + ARTICLES_PER_PAGE, totalArticles)}</span>
+                                            {' of '}<span className="text-ink mx-1">{totalArticles}</span>
                                         </p>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                                                 disabled={currentPage === 1}
-                                                className="p-3 rounded-2xl glass hover:border-cyan-500/40 disabled:opacity-20 transition-all text-white active:scale-95"
+                                                className="p-3 rounded-2xl glass hover:border-accent disabled:opacity-20 transition-all text-ink active:scale-95"
                                                 aria-label="Previous page"
                                             >
                                                 <ChevronLeft size={20} />
@@ -789,8 +780,8 @@ const Home = () => {
                                                         key={page}
                                                         onClick={() => setCurrentPage(page)}
                                                         className={`w-10 h-10 rounded-2xl text-xs font-bold transition-all ${currentPage === page
-                                                            ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-xl shadow-cyan-500/30 scale-110'
-                                                            : 'text-slate-500 hover:bg-white/5 hover:text-white'
+                                                            ? 'bg-gradient-to-r from-accent to-accent text-ink shadow-xl shadow-transparent scale-110'
+                                                            : 'text-muted hover:bg-surface-sunken hover:text-ink'
                                                             }`}
                                                     >
                                                         {page}
@@ -800,7 +791,7 @@ const Home = () => {
                                             <button
                                                 onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
                                                 disabled={currentPage === totalPages}
-                                                className="p-3 rounded-2xl glass hover:border-cyan-500/40 disabled:opacity-20 transition-all text-white active:scale-95"
+                                                className="p-3 rounded-2xl glass hover:border-accent disabled:opacity-20 transition-all text-ink active:scale-95"
                                                 aria-label="Next page"
                                             >
                                                 <ChevronRight size={20} />

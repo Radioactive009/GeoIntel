@@ -22,8 +22,8 @@ const SaveStory = ({ item, className = '' }) => {
                 className
                 || `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-colors ${
                     on
-                        ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
-                        : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+                        ? 'border-accent bg-accent-soft text-accent'
+                        : 'border-rule text-body hover:text-ink hover:border-rule-strong'
                 }`
             }
         >

@@ -1,24 +1,25 @@
-import { Shield } from 'lucide-react';
-
-const Logo = ({ className = '', showText = true }) => {
-    return (
-        <div className={`flex items-center gap-3 ${className}`}>
-            <div className="relative">
-                <div className="bg-gradient-to-br from-cyan-400 to-blue-600 p-2.5 rounded-xl shadow-lg shadow-cyan-500/20">
-                    <Shield size={22} className="text-white" />
-                </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-background animate-pulse" />
-            </div>
-            {showText && (
-                <div className="hidden sm:block">
-                    <h1 className="text-lg font-extrabold tracking-tight text-white leading-none">
-                        GEO<span className="text-cyan-400">INTEL</span>
-                    </h1>
-                    <p className="text-[10px] uppercase tracking-[0.25em] text-slate-500 font-bold mt-1">Intelligence Platform</p>
-                </div>
-            )}
-        </div>
-    );
-};
+/**
+ * The masthead wordmark.
+ *
+ * Was a gradient shield with a pulsing status light, wordmarked GEO + cyan
+ * INTEL, over "Intelligence Platform" in letterspaced caps. That is the visual
+ * language of a security dashboard, and this is a publication — the shield in
+ * particular claimed an authority the site does not have and does not need.
+ *
+ * A wordmark instead: one typeface, one weight, no ornament. The name carries
+ * it, which is what a masthead is for.
+ */
+const Logo = ({ className = '', showText = true }) => (
+    <div className={`flex items-baseline gap-2.5 ${className}`}>
+        <span className="font-display text-[22px] font-extrabold tracking-[-0.02em] text-ink leading-none">
+            GeoIntel
+        </span>
+        {showText && (
+            <span className="hidden sm:inline text-[11px] text-muted leading-none border-l border-rule pl-2.5">
+                World coverage, measured
+            </span>
+        )}
+    </div>
+);
 
 export default Logo;

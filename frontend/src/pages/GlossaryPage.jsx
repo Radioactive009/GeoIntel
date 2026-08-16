@@ -45,14 +45,14 @@ const GlossaryPage = () => {
                 path="/glossary"
             />
 
-            <header className="border-b border-white/10 pb-6">
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-400">
+            <header className="border-b border-rule pb-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-accent">
                     Reference
                 </p>
-                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">
                     Groupings &amp; institutions
                 </h1>
-                <p className="mt-3 text-[15px] text-slate-400 leading-relaxed max-w-2xl">
+                <p className="mt-3 text-[15px] text-body leading-relaxed max-w-2xl">
                     The bodies and agreements that turn up in coverage without explanation. Each
                     entry says what it is and, where there is a specific fact worth knowing, where
                     India stands in it.
@@ -66,24 +66,24 @@ const GlossaryPage = () => {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search — SCO, chokepoint, treaty…"
-                        className="w-full bg-slate-900/60 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-[14px] text-white placeholder:text-slate-600 outline-none focus:border-cyan-500/40 transition-colors"
+                        className="w-full bg-surface border border-rule rounded-2xl pl-10 pr-4 py-2.5 text-[14px] text-ink placeholder:text-faint outline-none focus:border-accent transition-colors"
                     />
-                    <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
                 </div>
             </header>
 
             {grouped.length === 0 && (
-                <p className="mt-10 text-[14px] text-slate-400">
+                <p className="mt-10 text-[14px] text-body">
                     Nothing matches “{query}”.{' '}
-                    <Link to="/ask" className="text-cyan-400 hover:underline">Ask the archive</Link>{' '}
+                    <Link to="/ask" className="text-accent hover:underline">Ask the archive</Link>{' '}
                     instead — it can answer from the articles themselves.
                 </p>
             )}
 
             {grouped.map(([label, entries]) => (
                 <section key={label} className="mt-10">
-                    <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">
-                        <BookOpen size={13} className="text-cyan-400" />
+                    <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-muted mb-4">
+                        <BookOpen size={13} className="text-accent" />
                         {label}
                     </h2>
                     <div className="space-y-5">
@@ -91,23 +91,23 @@ const GlossaryPage = () => {
                             <article
                                 key={entry.id}
                                 id={entry.id}
-                                className="scroll-mt-24 p-5 rounded-2xl border border-white/10 bg-slate-900/40 target:border-cyan-500/40"
+                                className="scroll-mt-24 p-5 rounded-2xl border border-rule bg-surface target:border-accent"
                             >
-                                <h3 className="font-display text-[17px] font-bold text-white">
+                                <h3 className="font-display text-[17px] font-bold text-ink">
                                     {entry.name}
                                 </h3>
-                                <p className="mt-2 text-[14px] text-slate-300 leading-[1.7]">
+                                <p className="mt-2 text-[14px] text-body leading-[1.7]">
                                     {entry.what}
                                 </p>
                                 {entry.india && (
-                                    <p className="mt-2.5 text-[13px] text-slate-400 leading-relaxed">
-                                        <span className="font-semibold text-slate-300">India: </span>
+                                    <p className="mt-2.5 text-[13px] text-body leading-relaxed">
+                                        <span className="font-semibold text-body">India: </span>
                                         {entry.india}
                                     </p>
                                 )}
                                 <Link
                                     to={`/search?q=${encodeURIComponent(entry.match[0])}`}
-                                    className="mt-3 inline-block text-[12px] font-semibold text-slate-500 hover:text-cyan-400 transition-colors"
+                                    className="mt-3 inline-block text-[12px] font-semibold text-muted hover:text-accent transition-colors"
                                 >
                                     Coverage mentioning it →
                                 </Link>
@@ -117,7 +117,7 @@ const GlossaryPage = () => {
                 </section>
             ))}
 
-            <p className="mt-12 pt-6 border-t border-white/10 text-[12px] text-slate-600 leading-relaxed">
+            <p className="mt-12 pt-6 border-t border-rule text-[12px] text-faint leading-relaxed">
                 These are written summaries, not sources — the one part of this site that is not
                 computed from the archive. Memberships and mandates change; check the body&apos;s own
                 material before relying on a detail in anything that is marked.

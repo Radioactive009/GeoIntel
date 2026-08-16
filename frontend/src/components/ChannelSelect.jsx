@@ -123,25 +123,25 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                 aria-expanded={open}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all duration-300 text-left group ${
                     open
-                        ? 'bg-slate-900/80 border-cyan-500/40 shadow-lg shadow-cyan-500/10'
-                        : 'bg-slate-900/50 border-white/8 hover:border-white/20'
+                        ? 'bg-surface border-accent shadow-lg shadow-transparent'
+                        : 'bg-surface border-rule hover:border-rule-strong'
                 }`}
             >
                 <CountryBadge code={active?.country_iso_code} size="lg" title={active?.country} />
 
                 <span className="flex-grow min-w-0">
                     <span className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-white truncate">
+                        <span className="text-sm font-bold text-ink truncate">
                             {active?.name || 'Select a channel'}
                         </span>
                         <span className="flex items-center gap-1 shrink-0">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                            <span className="text-[9px] font-extrabold text-rose-400 uppercase tracking-widest">
+                            <span className="w-1.5 h-1.5 rounded-full bg-risk-high animate-pulse" />
+                            <span className="text-[9px] font-extrabold text-risk-high uppercase tracking-widest">
                                 Live
                             </span>
                         </span>
                     </span>
-                    <span className="block text-[11px] text-slate-500 font-medium truncate mt-0.5">
+                    <span className="block text-[11px] text-muted font-medium truncate mt-0.5">
                         {active?.country || 'Global'}
                         {active?.live_title ? ` · ${active.live_title}` : ''}
                     </span>
@@ -149,8 +149,8 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
 
                 <ChevronDown
                     size={16}
-                    className={`shrink-0 text-slate-500 group-hover:text-cyan-400 transition-all duration-300 ${
-                        open ? 'rotate-180 text-cyan-400' : ''
+                    className={`shrink-0 text-muted group-hover:text-accent transition-all duration-300 ${
+                        open ? 'rotate-180 text-accent' : ''
                     }`}
                 />
             </button>
@@ -161,24 +161,24 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                     // Explicit opaque hex, not a slash-opacity utility: the panel
                     // floats over the stat cards, and any translucency lets their
                     // headings bleed through the list rows.
-                    className={`absolute z-50 left-0 right-0 rounded-2xl border border-white/10 bg-[#070d1a] shadow-2xl shadow-black/70 overflow-hidden animate-fade-in ${
+                    className={`absolute z-50 left-0 right-0 rounded-2xl border border-rule bg-[#070d1a] shadow-2xl shadow-black/70 overflow-hidden animate-fade-in ${
                         dropUp ? 'bottom-full mb-2' : 'mt-2'
                     }`}
                 >
-                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/5">
-                        <Search size={13} className="text-slate-500 shrink-0" />
+                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-rule">
+                        <Search size={13} className="text-muted shrink-0" />
                         <input
                             ref={inputRef}
                             value={query}
                             onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
                             placeholder="Search channels or countries…"
-                            className="flex-grow bg-transparent text-xs text-white placeholder:text-slate-600 outline-none font-medium"
+                            className="flex-grow bg-transparent text-xs text-ink placeholder:text-faint outline-none font-medium"
                         />
                         {query && (
                             <button
                                 type="button"
                                 onClick={() => { setQuery(''); inputRef.current?.focus(); }}
-                                className="text-slate-500 hover:text-white transition-colors"
+                                className="text-muted hover:text-ink transition-colors"
                                 aria-label="Clear search"
                             >
                                 <X size={12} />
@@ -188,7 +188,7 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
 
                     <div ref={listRef} className="max-h-[290px] overflow-y-auto chart-scrollbar py-1" role="listbox">
                         {matches.length === 0 && offlineMatches.length === 0 && (
-                            <p className="px-4 py-6 text-center text-[11px] text-slate-600 font-medium">
+                            <p className="px-4 py-6 text-center text-[11px] text-faint font-medium">
                                 No channels match “{query}”.
                             </p>
                         )}
@@ -205,27 +205,27 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                                     onMouseEnter={() => setCursor(i)}
                                     onClick={() => commit(channel)}
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
-                                        isCursor ? 'bg-white/[0.07]' : ''
-                                    } ${isActive ? 'bg-cyan-500/10' : ''}`}
+                                        isCursor ? 'bg-surface-sunken' : ''
+                                    } ${isActive ? 'bg-accent-soft' : ''}`}
                                 >
                                     <CountryBadge code={channel.country_iso_code} size="md" title={channel.country} />
                                     <span className="flex-grow min-w-0">
-                                        <span className={`block text-xs font-bold truncate ${isActive ? 'text-cyan-300' : 'text-white'}`}>
+                                        <span className={`block text-xs font-bold truncate ${isActive ? 'text-accent' : 'text-ink'}`}>
                                             {channel.name}
                                         </span>
-                                        <span className="block text-[10px] text-slate-500 font-medium truncate">
+                                        <span className="block text-[10px] text-muted font-medium truncate">
                                             {channel.country || 'Global'}
                                             {channel.live_title ? ` · ${channel.live_title}` : ''}
                                         </span>
                                     </span>
-                                    <Radio size={11} className="text-rose-500 shrink-0" />
+                                    <Radio size={11} className="text-risk-high shrink-0" />
                                 </button>
                             );
                         })}
 
                         {offlineMatches.length > 0 && (
                             <>
-                                <p className="px-3 pt-3 pb-1.5 text-[9px] font-extrabold text-slate-600 uppercase tracking-[0.2em]">
+                                <p className="px-3 pt-3 pb-1.5 text-[9px] font-extrabold text-faint uppercase tracking-[0.2em]">
                                     Offline · {offlineMatches.length}
                                 </p>
                                 {offlineMatches.map((channel) => (
@@ -236,10 +236,10 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                                     >
                                         <CountryBadge code={channel.country_iso_code} size="md" className="grayscale" title={channel.country} />
                                         <span className="flex-grow min-w-0">
-                                            <span className="block text-xs font-bold text-slate-400 truncate">
+                                            <span className="block text-xs font-bold text-body truncate">
                                                 {channel.name}
                                             </span>
-                                            <span className="block text-[10px] text-slate-600 font-medium truncate">
+                                            <span className="block text-[10px] text-faint font-medium truncate">
                                                 {channel.country || 'Global'}
                                             </span>
                                         </span>
@@ -249,11 +249,11 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                         )}
                     </div>
 
-                    <div className="px-3 py-2 border-t border-white/5 flex items-center justify-between">
-                        <span className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+                    <div className="px-3 py-2 border-t border-rule flex items-center justify-between">
+                        <span className="text-[9px] font-bold text-faint uppercase tracking-widest">
                             {channels.length} live
                         </span>
-                        <span className="text-[9px] text-slate-700 font-medium">↑↓ navigate · ↵ select · esc close</span>
+                        <span className="text-[9px] text-faint font-medium">↑↓ navigate · ↵ select · esc close</span>
                     </div>
                 </div>
             )}

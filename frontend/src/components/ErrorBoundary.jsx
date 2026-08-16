@@ -26,11 +26,11 @@ class ErrorBoundary extends React.Component {
 
         return (
             <div className="min-h-[60vh] flex items-center justify-center px-6">
-                <div className="glass rounded-3xl p-10 max-w-md text-center space-y-5">
-                    <AlertOctagon size={40} className="text-rose-400 mx-auto" />
+                <div className="glass rounded-2xl p-10 max-w-md text-center space-y-5">
+                    <AlertOctagon size={40} className="text-risk-high mx-auto" />
                     <div className="space-y-2">
-                        <h1 className="text-xl font-bold text-white font-display">Something went wrong</h1>
-                        <p className="text-sm text-slate-400 leading-relaxed">
+                        <h1 className="text-xl font-bold text-ink font-display">Something went wrong</h1>
+                        <p className="text-sm text-body leading-relaxed">
                             This section failed to load. The rest of the site is still available.
                         </p>
                     </div>

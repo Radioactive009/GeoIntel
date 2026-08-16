@@ -19,6 +19,7 @@ the article text after ingestion.
 from __future__ import annotations
 
 import concurrent.futures as futures
+import html
 import logging
 import re
 import threading
@@ -114,13 +115,27 @@ def _parse_date(entry) -> str | None:
     return None
 
 
-def _clean_summary(entry) -> str:
-    """RSS summaries often carry markup; strip it down to plain text."""
-    raw = entry.get("summary") or entry.get("description") or ""
+def plain_text(raw: str | None) -> str:
+    """
+    Feed text as prose: no markup, no entities.
+
+    Stripping tags alone was not enough — feeds escape their punctuation, so
+    "Romania's" arrives as "Romania&#039;s" and was published that way. The
+    unescape runs between two strips because a feed can escape its markup as
+    well as its apostrophes, and decoding would otherwise reintroduce tags
+    that the first pass had already removed.
+    """
     if not raw:
         return ""
     text = re.sub(r"<[^>]+>", " ", raw)
+    text = html.unescape(text)
+    text = re.sub(r"<[^>]+>", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _clean_summary(entry) -> str:
+    """RSS summaries often carry markup; strip it down to plain text."""
+    return plain_text(entry.get("summary") or entry.get("description") or "")
 
 
 def _widest(candidates: list[dict]) -> str | None:

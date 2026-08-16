@@ -66,19 +66,19 @@ const Sidebar = ({
 
     return (
         <aside className="w-full lg:w-72 flex-shrink-0 transition-all duration-500">
-            <div className="glass rounded-3xl p-6 sticky top-24 space-y-8 animate-fade-in-up">
+            <div className="glass rounded-2xl p-6 sticky top-24 space-y-8 animate-fade-in-up">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                        <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-                            <Filter size={16} className="text-cyan-400" />
+                        <div className="p-2 rounded-xl bg-accent-soft border border-accent/50">
+                            <Filter size={16} className="text-accent" />
                         </div>
-                        <span className="text-sm font-bold text-white uppercase tracking-wider">Filter stories</span>
+                        <span className="text-sm font-bold text-ink uppercase tracking-wider">Filter stories</span>
                     </div>
                     {hasFilters && (
                         <button
                             onClick={onReset}
-                            className="p-1.5 text-slate-500 hover:text-rose-400 transition-colors active:scale-90"
+                            className="p-1.5 text-muted hover:text-risk-high transition-colors active:scale-90"
                             title="Clear all filters"
                         >
                             <XCircle size={18} />
@@ -91,8 +91,8 @@ const Sidebar = ({
                     {/* Keyword search */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
-                            <Search size={12} className="text-slate-500" />
-                            <label htmlFor="feed-search" className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">
+                            <Search size={12} className="text-muted" />
+                            <label htmlFor="feed-search" className="text-[10px] uppercase font-bold text-muted tracking-[0.2em]">
                                 Keyword Search
                             </label>
                         </div>
@@ -103,13 +103,13 @@ const Sidebar = ({
                                 value={draft}
                                 onChange={(e) => setDraft(e.target.value)}
                                 placeholder="e.g. sanctions, Kyiv…"
-                                className="input-field w-full pr-9 hover:border-cyan-500/30 transition-colors"
+                                className="input-field w-full pr-9 hover:border-accent transition-colors"
                             />
                             {draft && (
                                 <button
                                     onClick={() => { setDraft(''); onSearchChange(''); }}
                                     aria-label="Clear search"
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-ink transition-colors"
                                 >
                                     <X size={13} />
                                 </button>
@@ -120,18 +120,18 @@ const Sidebar = ({
                     {/* Time range */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
-                            <Calendar size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Time range</label>
+                            <Calendar size={12} className="text-muted" />
+                            <label className="text-[10px] uppercase font-bold text-muted tracking-[0.2em]">Time range</label>
                         </div>
-                        <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 gap-1">
+                        <div className="flex bg-surface p-1 rounded-xl border border-rule gap-1">
                             {TIME_RANGES.map((range) => (
                                 <button
                                     key={range.id}
                                     onClick={() => onDaysChange(range.id)}
                                     className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
                                         selectedDays === range.id
-                                            ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20'
-                                            : 'text-slate-500 hover:text-slate-300'
+                                            ? 'bg-accent text-ink shadow-lg shadow-transparent'
+                                            : 'text-muted hover:text-body'
                                     }`}
                                 >
                                     {range.label}
@@ -143,13 +143,13 @@ const Sidebar = ({
                     {/* Region Selector */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
-                            <Globe size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Region</label>
+                            <Globe size={12} className="text-muted" />
+                            <label className="text-[10px] uppercase font-bold text-muted tracking-[0.2em]">Region</label>
                         </div>
                         <select
                             value={selectedRegion}
                             onChange={(e) => onRegionChange(e.target.value)}
-                            className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
+                            className="input-field w-full cursor-pointer pr-10 hover:border-accent transition-colors"
                         >
                             <option value="">All regions</option>
                             {regions.map(r => <option key={r} value={r}>{r}</option>)}
@@ -159,13 +159,13 @@ const Sidebar = ({
                     {/* Country Selector */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
-                            <MapPin size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Country</label>
+                            <MapPin size={12} className="text-muted" />
+                            <label className="text-[10px] uppercase font-bold text-muted tracking-[0.2em]">Country</label>
                         </div>
                         <select
                             value={selectedCountry}
                             onChange={(e) => onCountryChange(e.target.value)}
-                            className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
+                            className="input-field w-full cursor-pointer pr-10 hover:border-accent transition-colors"
                         >
                             <option value="">All countries</option>
                             {countries.map(c => <option key={c} value={c}>{c}</option>)}
@@ -175,13 +175,13 @@ const Sidebar = ({
                     {/* Risk level */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
-                            <AlertTriangle size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Risk level</label>
+                            <AlertTriangle size={12} className="text-muted" />
+                            <label className="text-[10px] uppercase font-bold text-muted tracking-[0.2em]">Risk level</label>
                         </div>
                         <select
                             value={selectedLevel}
                             onChange={(e) => onLevelChange(e.target.value)}
-                            className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
+                            className="input-field w-full cursor-pointer pr-10 hover:border-accent transition-colors"
                         >
                             {RISK_LEVELS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
                         </select>
@@ -190,13 +190,13 @@ const Sidebar = ({
                     {/* Event Type Selector */}
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 px-1">
-                            <Crosshair size={12} className="text-slate-500" />
-                            <label className="text-[10px] uppercase font-bold text-slate-500 tracking-[0.2em]">Event type</label>
+                            <Crosshair size={12} className="text-muted" />
+                            <label className="text-[10px] uppercase font-bold text-muted tracking-[0.2em]">Event type</label>
                         </div>
                         <select
                             value={selectedEventType}
                             onChange={(e) => onEventTypeChange(e.target.value)}
-                            className="input-field w-full cursor-pointer pr-10 hover:border-cyan-500/30 transition-colors"
+                            className="input-field w-full cursor-pointer pr-10 hover:border-accent transition-colors"
                         >
                             {EVENT_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                         </select>
@@ -204,29 +204,29 @@ const Sidebar = ({
                 </div>
 
                 {/* System Info — real pipeline numbers, not a hardcoded bar */}
-                <div className="pt-6 border-t border-white/5">
-                    <div className="p-4 rounded-2xl bg-slate-900/40 border border-white/5 space-y-3">
+                <div className="pt-6 border-t border-rule">
+                    <div className="p-4 rounded-2xl bg-surface border border-rule space-y-3">
                         <div className="flex items-center gap-3">
-                            <div className="p-1.5 rounded-lg bg-emerald-500/10">
-                                <Cpu size={14} className="text-emerald-400" />
+                            <div className="p-1.5 rounded-lg bg-risk-low">
+                                <Cpu size={14} className="text-risk-low" />
                             </div>
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest leading-none">Scoring</span>
+                            <span className="text-[11px] font-bold text-body uppercase tracking-widest leading-none">Scoring</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-slate-500">Method</span>
-                            <span className="text-[10px] font-bold text-emerald-400">Keywords + sentiment</span>
+                            <span className="text-[10px] font-medium text-muted">Method</span>
+                            <span className="text-[10px] font-bold text-risk-low">Keywords + sentiment</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-slate-500">Stories scored</span>
-                            <span className="text-[10px] font-bold text-slate-300 tabular-nums">{total}</span>
+                            <span className="text-[10px] font-medium text-muted">Stories scored</span>
+                            <span className="text-[10px] font-bold text-body tabular-nums">{total}</span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-slate-500">Share high risk</span>
-                            <span className="text-[10px] font-bold text-rose-400 tabular-nums">{highShare}%</span>
+                            <span className="text-[10px] font-medium text-muted">Share high risk</span>
+                            <span className="text-[10px] font-bold text-risk-high tabular-nums">{highShare}%</span>
                         </div>
-                        <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="w-full h-1 bg-surface-sunken rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-gradient-to-r from-emerald-500 to-rose-500 transition-all duration-1000 ease-out"
+                                className="h-full bg-gradient-to-r from-risk-low to-risk-high transition-all duration-1000 ease-out"
                                 style={{ width: `${Math.max(highShare, 2)}%` }}
                             />
                         </div>

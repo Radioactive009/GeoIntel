@@ -31,8 +31,8 @@ const DESK = { iso: 'IN', name: 'India' };
 const Section = ({ icon: Icon, title, children, aside }) => (
     <section className="mt-10">
         <div className="flex items-baseline justify-between gap-4 mb-4">
-            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                <Icon size={13} className="text-cyan-400" />
+            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-muted">
+                <Icon size={13} className="text-accent" />
                 {title}
             </h2>
             {aside}
@@ -74,14 +74,14 @@ const IndiaPage = () => {
                 path="/india"
             />
 
-            <header className="border-b border-white/10 pb-6">
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-400">
+            <header className="border-b border-rule pb-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-accent">
                     Country desk
                 </p>
-                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">
                     India &amp; the world
                 </h1>
-                <p className="mt-3 text-[15px] text-slate-400 leading-relaxed max-w-2xl">
+                <p className="mt-3 text-[15px] text-body leading-relaxed max-w-2xl">
                     The same archive, arranged around one country&apos;s stake in it — who India is
                     in the news with, and what is being reported. Bilateral stories filed under the
                     other party are included, which the ordinary country feed leaves out.
@@ -89,7 +89,7 @@ const IndiaPage = () => {
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                     <Link
                         to={`/country/${DESK.iso}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[12px] font-semibold text-slate-400 hover:text-white hover:border-white/25 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rule text-[12px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-colors"
                     >
                         All India coverage <ArrowRight size={12} />
                     </Link>
@@ -101,22 +101,22 @@ const IndiaPage = () => {
             </header>
 
             {standing && (
-                <div className="mt-6 flex flex-wrap items-center gap-x-10 gap-y-4 p-5 rounded-2xl bg-slate-900/40 border border-white/10">
+                <div className="mt-6 flex flex-wrap items-center gap-x-10 gap-y-4 p-5 rounded-2xl bg-surface border border-rule">
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Risk level</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Risk level</p>
                         <p className="text-3xl font-black tabular-nums leading-none" style={{ color }}>
                             {standing.alert_level.toFixed(1)}<span className="text-base opacity-60">%</span>
                         </p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Status</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Status</p>
                         <p className="text-sm font-bold uppercase tracking-wider" style={{ color }}>
                             {ALERT_STATUS_LABEL[standing.alert_status] || 'Stable'}
                         </p>
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Reports held</p>
-                        <p className="text-sm font-bold text-white tabular-nums">{standing.total_articles}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Reports held</p>
+                        <p className="text-sm font-bold text-ink tabular-nums">{standing.total_articles}</p>
                     </div>
                 </div>
             )}
@@ -133,10 +133,10 @@ const IndiaPage = () => {
                 <Section
                     icon={Users}
                     title="In the news with"
-                    aside={<span className="text-[11px] text-slate-600">last 30 days</span>}
+                    aside={<span className="text-[11px] text-faint">last 30 days</span>}
                 >
                     {pairs.length === 0 ? (
-                        <p className="text-[13px] text-slate-500">
+                        <p className="text-[13px] text-muted">
                             No bilateral coverage in the window yet. Pairs appear once the archive
                             holds stories naming India alongside another country.
                         </p>
@@ -152,12 +152,12 @@ const IndiaPage = () => {
                                     <li key={pair.iso_codes.join('-')}>
                                         <Link
                                             to={`/country/${partnerIso}`}
-                                            className="flex items-baseline justify-between gap-3 px-4 py-3 rounded-2xl border border-white/10 bg-white/[0.02] hover:border-cyan-500/30 transition-colors"
+                                            className="flex items-baseline justify-between gap-3 px-4 py-3 rounded-2xl border border-rule bg-surface-sunken hover:border-accent transition-colors"
                                         >
-                                            <span className="text-[14px] font-semibold text-slate-200">
+                                            <span className="text-[14px] font-semibold text-ink">
                                                 India &middot; {partner}
                                             </span>
-                                            <span className="text-[11px] text-slate-500 tabular-nums shrink-0">
+                                            <span className="text-[11px] text-muted tabular-nums shrink-0">
                                                 {pair.articles} report{pair.articles === 1 ? '' : 's'}
                                             </span>
                                         </Link>
@@ -166,7 +166,7 @@ const IndiaPage = () => {
                             })}
                         </ul>
                     )}
-                    <p className="mt-3 text-[11px] text-slate-600">
+                    <p className="mt-3 text-[11px] text-faint">
                         Built from the second country named in each story, so a pair appears here
                         whichever side the report was filed under.
                     </p>
@@ -177,15 +177,15 @@ const IndiaPage = () => {
                 <Section icon={Newspaper} title="Latest coverage">
                     <ul className="space-y-5">
                         {stories.map((story) => (
-                            <li key={story.id} className="pb-5 border-b border-white/5 last:border-0">
+                            <li key={story.id} className="pb-5 border-b border-rule last:border-0">
                                 <Link
                                     to={`/story/${story.id}`}
-                                    className="font-display text-[17px] font-bold text-white leading-snug hover:text-cyan-400 transition-colors"
+                                    className="font-display text-[17px] font-bold text-ink leading-snug hover:text-accent transition-colors"
                                 >
                                     {story.title}
                                 </Link>
-                                <p className="mt-1.5 text-[12px] text-slate-500">
-                                    <span className="font-semibold text-slate-400">
+                                <p className="mt-1.5 text-[12px] text-muted">
+                                    <span className="font-semibold text-body">
                                         {story.source?.name || 'Unknown'}
                                     </span>
                                     {' · '}{timeAgo(story.published_at)}
@@ -211,7 +211,7 @@ const IndiaPage = () => {
 
             {!loading && stories.length === 0 && (
                 <Section icon={Globe2} title="Latest coverage">
-                    <p className="text-[13px] text-slate-500">
+                    <p className="text-[13px] text-muted">
                         Nothing held for India in this window yet.
                     </p>
                 </Section>

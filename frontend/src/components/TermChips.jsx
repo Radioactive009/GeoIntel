@@ -17,7 +17,7 @@ const TermChips = ({ title, description, className = '' }) => {
 
     return (
         <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600">
+            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-faint">
                 <BookOpen size={11} /> In this story
             </span>
             {terms.map((term) => (
@@ -25,7 +25,7 @@ const TermChips = ({ title, description, className = '' }) => {
                     key={term.id}
                     to={`/glossary#${term.id}`}
                     title={term.what}
-                    className="px-2.5 py-1 rounded-full border border-white/10 bg-white/[0.02] text-[11px] font-semibold text-slate-400 hover:text-cyan-300 hover:border-cyan-500/30 transition-colors"
+                    className="px-2.5 py-1 rounded-full border border-rule bg-surface-sunken text-[11px] font-semibold text-body hover:text-accent hover:border-accent transition-colors"
                 >
                     {term.name}
                 </Link>

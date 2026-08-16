@@ -130,3 +130,26 @@ class TestImages:
             countries,
         )
         assert db.query(models.Article).one().image_url == "https://cdn.test/late.jpg"
+
+
+class TestFeedTextIsProse:
+    """A feed's escaped punctuation was published verbatim: story pages read
+    "Romania&#039;s Defence Ministry", which is the sort of detail that makes
+    a site look unfinished regardless of what else is on it."""
+
+    def test_entities_are_decoded(self):
+        from app.services.rss_service import plain_text
+        assert plain_text("Romania&#039;s reply") == "Romania's reply"
+        assert plain_text("Fish &amp; chips") == "Fish & chips"
+
+    def test_markup_is_stripped_however_it_arrives(self):
+        from app.services.rss_service import plain_text
+        assert plain_text("<b>bold</b> text") == "bold text"
+        # Escaped markup would become real markup if decoding ran last.
+        assert plain_text("&lt;script&gt;alert(1)&lt;/script&gt; after") == "alert(1) after"
+
+    def test_empty_input_is_an_empty_string(self):
+        from app.services.rss_service import plain_text
+        assert plain_text(None) == ""
+        assert plain_text("") == ""
+        assert plain_text("   ") == ""

@@ -59,25 +59,25 @@ const EventsPage = () => {
                 path="/events"
             />
 
-            <header className="mb-10 pb-6 border-b border-white/10 flex items-end justify-between flex-wrap gap-4">
+            <header className="mb-10 pb-6 border-b border-rule flex items-end justify-between flex-wrap gap-4">
                 <div>
-                    <h1 className="font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                    <h1 className="font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">
                         Major events
                     </h1>
-                    <p className="mt-2 text-[15px] text-slate-400 max-w-2xl leading-relaxed">
+                    <p className="mt-2 text-[15px] text-body max-w-2xl leading-relaxed">
                         Articles grouped into the happenings they describe, ranked by how many
                         outlets carried each one.
                     </p>
                 </div>
-                <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 gap-1">
+                <div className="flex bg-surface p-1 rounded-xl border border-rule gap-1">
                     {WINDOWS.map((w) => (
                         <button
                             key={w.hours}
                             onClick={() => setHours(w.hours)}
                             className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
                                 hours === w.hours
-                                    ? 'bg-cyan-500 text-white'
-                                    : 'text-slate-500 hover:text-slate-300'
+                                    ? 'bg-accent text-ink'
+                                    : 'text-muted hover:text-body'
                             }`}
                         >
                             {w.label}
@@ -89,11 +89,11 @@ const EventsPage = () => {
             {/* Disagreement is its own kind of story, and only visible once
                 articles are grouped by the happening they describe. */}
             {contested.length > 0 && !loading && (
-                <section className="mb-10 p-5 rounded-2xl border border-white/10 bg-slate-900/30">
-                    <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-1">
+                <section className="mb-10 p-5 rounded-2xl border border-rule bg-surface">
+                    <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-body mb-1">
                         <Scale size={13} /> Outlets disagreed most on
                     </h2>
-                    <p className="text-[12px] text-slate-600 mb-4">
+                    <p className="text-[12px] text-faint mb-4">
                         Ranked by how widely severity readings varied across every outlet that
                         covered the story.
                     </p>
@@ -104,16 +104,16 @@ const EventsPage = () => {
                                     to={`/event/${e.event_key}`}
                                     className="group flex items-center gap-4 py-2"
                                 >
-                                    <span className="font-display text-base font-black tabular-nums text-amber-400 w-10 shrink-0">
+                                    <span className="font-display text-base font-black tabular-nums text-risk-medium w-10 shrink-0">
                                         {e.spread.toFixed(0)}
                                     </span>
                                     <span className="min-w-0 flex-grow">
-                                        <span className="block text-[13px] font-semibold text-slate-200 truncate group-hover:text-cyan-300 transition-colors">
+                                        <span className="block text-[13px] font-semibold text-ink truncate group-hover:text-accent transition-colors">
                                             {e.title}
                                         </span>
-                                        <span className="block text-[11px] text-slate-600 truncate">
+                                        <span className="block text-[11px] text-faint truncate">
                                             {e.highest.source} {e.highest.score} · {e.lowest.source} {e.lowest.score}
-                                            <span className="text-slate-700"> · {e.outlet_count} outlets</span>
+                                            <span className="text-faint"> · {e.outlet_count} outlets</span>
                                         </span>
                                     </span>
                                 </Link>
@@ -126,12 +126,12 @@ const EventsPage = () => {
             {loading ? (
                 <div className="space-y-3">
                     {Array.from({ length: 6 }, (_, i) => (
-                        <div key={i} className="h-24 rounded-2xl bg-white/[0.04] animate-pulse" />
+                        <div key={i} className="h-24 rounded-2xl bg-surface-sunken animate-pulse" />
                     ))}
                 </div>
             ) : events.length === 0 ? (
                 <div className="py-24 text-center">
-                    <p className="text-slate-400">
+                    <p className="text-body">
                         No events with three or more reports in this window yet.
                     </p>
                 </div>
@@ -145,14 +145,14 @@ const EventsPage = () => {
                             <li key={event.event_key}>
                                 <Link
                                     to={`/event/${event.event_key}`}
-                                    className="group flex gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/30 hover:border-white/20 transition-colors"
+                                    className="group flex gap-4 p-4 rounded-2xl border border-rule bg-surface hover:border-rule-strong transition-colors"
                                 >
-                                    <span className="font-display text-lg font-black text-slate-700 tabular-nums w-8 shrink-0 pt-0.5">
+                                    <span className="font-display text-lg font-black text-faint tabular-nums w-8 shrink-0 pt-0.5">
                                         {index + 1}
                                     </span>
 
                                     {event.image_url && (
-                                        <div className="hidden sm:block w-28 aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 shrink-0">
+                                        <div className="hidden sm:block w-28 aspect-[4/3] rounded-xl overflow-hidden bg-surface shrink-0">
                                             <img
                                                 src={event.image_url}
                                                 alt=""
@@ -166,11 +166,11 @@ const EventsPage = () => {
                                     )}
 
                                     <div className="min-w-0 flex-grow">
-                                        <h2 className="font-serif text-lg font-semibold text-white leading-snug line-clamp-2 group-hover:text-cyan-300 transition-colors">
+                                        <h2 className="font-serif text-lg font-semibold text-ink leading-snug line-clamp-2 group-hover:text-accent transition-colors">
                                             {event.title}
                                         </h2>
 
-                                        <div className="flex items-center gap-3 mt-2 flex-wrap text-[12px] text-slate-500">
+                                        <div className="flex items-center gap-3 mt-2 flex-wrap text-[12px] text-muted">
                                             <span className="flex items-center gap-1.5">
                                                 <Newspaper size={11} /> {event.article_count} reports
                                             </span>
@@ -188,7 +188,7 @@ const EventsPage = () => {
                                         </div>
 
                                         {/* Reach relative to the biggest event in the window. */}
-                                        <div className="mt-2.5 h-1 rounded-full bg-slate-800/60 overflow-hidden max-w-md">
+                                        <div className="mt-2.5 h-1 rounded-full bg-surface-sunken overflow-hidden max-w-md">
                                             <div
                                                 className="h-full rounded-full transition-all duration-700"
                                                 style={{ width: `${(event.article_count / busiest) * 100}%`, background: color }}

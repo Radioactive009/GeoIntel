@@ -30,9 +30,9 @@ const SearchPage = () => {
                 defaultValue={term}
                 key={term}
                 placeholder="Search headlines and summaries"
-                className="w-full bg-slate-900/60 border border-white/10 rounded-full pl-11 pr-4 py-3 text-[15px] text-white placeholder:text-slate-600 outline-none focus:border-cyan-500/40 transition-colors"
+                className="w-full bg-surface border border-rule rounded-full pl-11 pr-4 py-3 text-[15px] text-ink placeholder:text-faint outline-none focus:border-accent transition-colors"
             />
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
         </form>
     );
 
@@ -40,9 +40,9 @@ const SearchPage = () => {
         return (
             <div className="max-w-[1440px] mx-auto px-6 py-8 lg:py-12">
                 <Seo title="Search" path="/search" noIndex />
-                <header className="mb-10 pb-6 border-b border-white/10">
-                    <h1 className="font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">Search</h1>
-                    <p className="mt-2 text-[15px] text-slate-400">
+                <header className="mb-10 pb-6 border-b border-rule">
+                    <h1 className="font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">Search</h1>
+                    <p className="mt-2 text-[15px] text-body">
                         Search every headline and summary in the archive.
                     </p>
                     {form}

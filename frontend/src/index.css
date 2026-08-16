@@ -19,27 +19,43 @@
 :root {
   color-scheme: light;
 
-  --paper: 251 251 249;            /* page ground, faintly warm */
-  --surface: 255 255 255;          /* raised: cards, the composer */
-  --surface-sunken: 244 243 240;   /* recessed: fills, empty states */
+  /* Warm ivory rather than off-white. The previous ground sat a shade from
+     #fff, which reads as an unstyled page — and near-black on near-white is
+     a contrast of about 17:1, which is technically excellent and tiring to
+     read. Everything here is warmed and softened: the text ramp tops out
+     near 14:1, which is still far above the accessible floor. */
+  --paper: 250 247 242;            /* page ground: ivory, visibly not white */
+  --surface: 255 253 250;          /* raised: cards lift off the ground */
+  --surface-sunken: 242 236 228;   /* recessed: fills, empty states */
 
-  --ink: 20 23 26;                 /* headlines and primary text */
-  --body: 44 50 56;                /* running text */
-  --muted: 90 97 104;              /* metadata, bylines, counts */
-  --faint: 122 129 137;            /* the least important thing on the page */
+  /* Only faintly warm. Text carrying as much warmth as the ground turns
+     brown at small sizes and the whole page reads muddy; the ivory does the
+     warming and the type stays close to neutral so it still looks like ink. */
+  --ink: 36 33 30;                 /* headlines and primary text  ~14.4:1 */
+  --body: 71 66 61;                /* running text                ~8.7:1  */
+  --muted: 108 102 95;             /* metadata, bylines, counts    ~5.0:1  */
+  --faint: 141 134 126;            /* the least important thing    ~3.3:1  */
 
-  --rule: 229 228 224;             /* hairlines */
-  --rule-strong: 209 208 202;      /* a rule that has to be seen */
+  --rule: 230 221 208;             /* hairlines */
+  --rule-strong: 214 202 185;      /* a rule that has to be seen */
 
-  --accent: 31 58 95;              /* ink blue: links and active state only */
-  --accent-strong: 20 40 68;
-  --accent-soft: 232 237 243;      /* the wash behind an active control */
+  /* Deep teal, which has enough life to register as a link against ivory
+     while staying quiet enough not to compete with the risk scale. The
+     previous ink blue was so dark and desaturated that nothing on the page
+     looked clickable. */
+  --accent: 22 112 107;
+  --accent-strong: 15 88 84;
+  --accent-soft: 226 240 238;      /* the wash behind an active control */
 
-  /* Print-weight rather than screen-neon: these have to read as ink on
-     paper, and they are the only saturated colours in the design. */
-  --risk-high: 180 35 24;
-  --risk-medium: 181 71 8;
-  --risk-low: 6 118 71;
+  /* Warmed to sit on ivory rather than on white. Still the only saturated
+     colours in the design, so red means something when it appears. */
+  --risk-high: 179 38 30;
+  --risk-medium: 192 120 7;
+  --risk-low: 47 125 95;
+
+  /* Cards lift with a soft shadow instead of relying on a hard border for
+     every edge, which is what made the last pass look like a wireframe. */
+  --lift: 0 1px 2px rgb(36 33 29 / 0.04), 0 10px 28px -16px rgb(36 33 29 / 0.16);
 
   font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
 }
@@ -68,6 +84,7 @@ body {
 .glass-card {
   background: rgb(var(--surface));
   border: 1px solid rgb(var(--rule));
+  box-shadow: var(--lift);
 }
 
 .glass-strong {
@@ -78,11 +95,12 @@ body {
 }
 
 .glass-card {
-  transition: border-color 0.2s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .glass-card:hover {
   border-color: rgb(var(--rule-strong));
+  box-shadow: 0 1px 2px rgb(36 33 29 / 0.05), 0 16px 36px -18px rgb(36 33 29 / 0.22);
 }
 
 .glow-cyan { box-shadow: none; }
@@ -91,16 +109,25 @@ body {
   border: 1px solid rgb(var(--rule-strong));
 }
 
+/* Anything that is both a raised surface and outlined gets the same soft
+   lift, without every card having to ask for it. Matching the utility class
+   names Tailwind emits keeps this to one rule instead of an edit in forty
+   files — and a card that only has a border reads as a wireframe on a ground
+   this close in tone to it. */
+.bg-surface.border-rule,
+.bg-surface.border-rule-strong {
+  box-shadow: var(--lift);
+}
+
 /* ── Interactive Elements ───────────────────────────────── */
 .btn-primary {
-  @apply bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold py-2 px-4 rounded-xl 
-         shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 hover:scale-[1.02] active:scale-[0.98] 
-         transition-all duration-200;
+  @apply bg-accent text-white font-semibold py-2 px-4 rounded-md
+         hover:bg-accent-strong transition-colors duration-150;
 }
 
 .input-field {
-  @apply bg-slate-900/40 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-white 
-         focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all;
+  @apply bg-surface border border-rule rounded-md px-4 py-2.5 text-sm text-ink
+         focus:outline-none focus:border-accent transition-colors;
 }
 
 /* ── Scrollbar ─────────────────────────────────────────── */
@@ -109,16 +136,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-deep);
+  background: rgb(var(--surface-sunken));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.1);
+  background: rgb(var(--rule-strong));
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(34, 211, 238, 0.3);
+  background: rgb(var(--faint));
 }
 
 .chart-scrollbar::-webkit-scrollbar {
@@ -126,17 +153,17 @@ body {
 }
 
 .chart-scrollbar::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.1);
+  background: rgb(var(--surface-sunken));
   border-radius: 10px;
 }
 
 .chart-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(34, 211, 238, 0.15);
+  background: rgb(var(--rule-strong));
   border-radius: 10px;
 }
 
 .chart-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(34, 211, 238, 0.3);
+  background: rgb(var(--faint));
 }
 
 /* ── Animations ────────────────────────────────────────── */

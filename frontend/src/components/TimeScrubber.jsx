@@ -34,8 +34,8 @@ const TimeScrubber = ({ frames = [], index, onIndexChange, playing, onPlayingCha
     if (frames.length < 2) {
         return (
             <div className="flex items-center gap-2 mt-4 px-1">
-                <History size={12} className="text-slate-700" />
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-700">
+                <History size={12} className="text-faint" />
+                <p className="text-[10px] font-bold uppercase tracking-widest text-faint">
                     Timeline builds as snapshots accumulate
                 </p>
             </div>
@@ -58,7 +58,7 @@ const TimeScrubber = ({ frames = [], index, onIndexChange, playing, onPlayingCha
                     if (!playing && atLive) onIndexChange(0);
                     onPlayingChange(!playing);
                 }}
-                className="p-2 rounded-xl glass border border-white/5 text-slate-300 hover:text-cyan-400 hover:border-cyan-500/30 transition-all active:scale-95 shrink-0"
+                className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-all active:scale-95 shrink-0"
                 title={playing ? 'Pause' : 'Replay history'}
                 aria-label={playing ? 'Pause replay' : 'Replay history'}
             >
@@ -75,13 +75,13 @@ const TimeScrubber = ({ frames = [], index, onIndexChange, playing, onPlayingCha
                     onIndexChange(Number(e.target.value));
                 }}
                 aria-label="Scrub map through time"
-                className="flex-grow min-w-[120px] h-1 accent-cyan-400 cursor-pointer"
+                className="flex-grow min-w-[120px] h-1 accent-accent cursor-pointer"
             />
 
             <div className="flex items-center gap-2 shrink-0">
                 <span
                     className={`text-[10px] font-bold tabular-nums tracking-wide ${
-                        atLive ? 'text-emerald-400' : 'text-cyan-300'
+                        atLive ? 'text-risk-low' : 'text-accent'
                     }`}
                 >
                     {atLive ? 'LIVE' : label}
@@ -89,7 +89,7 @@ const TimeScrubber = ({ frames = [], index, onIndexChange, playing, onPlayingCha
                 {!atLive && (
                     <button
                         onClick={() => { onPlayingChange(false); onIndexChange(frames.length - 1); }}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-white transition-colors"
+                        className="p-1.5 rounded-lg text-muted hover:text-ink transition-colors"
                         title="Return to now"
                         aria-label="Return to now"
                     >

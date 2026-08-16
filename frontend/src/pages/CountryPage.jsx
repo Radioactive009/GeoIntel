@@ -39,27 +39,27 @@ const CountryPage = () => {
     const color = getAlertColor(record?.alert_status);
 
     const standing = record && (
-        <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 p-5 rounded-2xl bg-slate-900/40 border border-white/10">
+        <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 p-5 rounded-2xl bg-surface border border-rule">
             <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Risk level</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Risk level</p>
                 <p className="text-3xl font-black tabular-nums leading-none" style={{ color }}>
                     {record.alert_level.toFixed(1)}
                     <span className="text-base opacity-60">%</span>
                 </p>
             </div>
             <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Status</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Status</p>
                 <p className="text-sm font-bold uppercase tracking-wider" style={{ color }}>
                     {ALERT_STATUS_LABEL[record.alert_status] || 'Stable'}
                 </p>
             </div>
             <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Flagged critical</p>
-                <p className="text-sm font-bold text-white tabular-nums">{record.critical_alerts}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Flagged critical</p>
+                <p className="text-sm font-bold text-ink tabular-nums">{record.critical_alerts}</p>
             </div>
             {trend.length > 1 && (
                 <div className="flex-grow min-w-[140px]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">7-day trend</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">7-day trend</p>
                     <Sparkline points={trend} color={color} width={200} height={36} strokeWidth={2} />
                 </div>
             )}
@@ -68,8 +68,8 @@ const CountryPage = () => {
                     onClick={() => toggle(code)}
                     className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[12px] font-bold transition-all ${
                         isWatched(code)
-                            ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
-                            : 'text-slate-400 border-white/10 hover:text-amber-400 hover:border-amber-500/30'
+                            ? 'text-risk-medium border-risk-medium/30 bg-risk-medium/10'
+                            : 'text-body border-rule hover:text-risk-medium hover:border-risk-medium/30'
                     }`}
                 >
                     <Star size={13} fill={isWatched(code) ? 'currentColor' : 'none'} />
@@ -77,7 +77,7 @@ const CountryPage = () => {
                 </button>
                 <a
                     href={`${API_URL}/feed.xml?country=${code}`}
-                    className="p-2 rounded-xl border border-white/10 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all"
+                    className="p-2 rounded-xl border border-rule text-body hover:text-accent hover:border-accent transition-all"
                     title={`RSS feed for ${name}`}
                     aria-label={`RSS feed for ${name}`}
                 >
@@ -86,7 +86,7 @@ const CountryPage = () => {
                 <AskAbout
                     question={`What is happening in ${name} right now?`}
                     label="Ask"
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-[12px] font-bold text-slate-400 hover:text-cyan-300 hover:border-cyan-500/30 transition-all"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rule text-[12px] font-bold text-body hover:text-accent hover:border-accent transition-all"
                 />
             </div>
         </div>
@@ -108,7 +108,7 @@ const CountryPage = () => {
                 }
                 standfirst={
                     record?.region
-                        ? <>All coverage from the <Link to="/" className="text-cyan-400 hover:underline">monitoring feed</Link> · {record.region}</>
+                        ? <>All coverage from the <Link to="/" className="text-accent hover:underline">monitoring feed</Link> · {record.region}</>
                         : 'All coverage from the monitoring feed.'
                 }
                 headerExtra={standing}

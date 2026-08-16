@@ -17,24 +17,24 @@ const MODES = [
         label: 'Everything',
         blurb: 'The full feed',
         icon: Newspaper,
-        accent: 'text-slate-300',
-        active: 'bg-slate-200 text-slate-900',
+        accent: 'text-body',
+        active: 'bg-surface-sunken text-ink',
     },
     {
         id: 'uplifting',
         label: 'Good news',
         blurb: 'Rescues, recoveries, progress',
         icon: Sun,
-        accent: 'text-emerald-400',
-        active: 'bg-emerald-500 text-white',
+        accent: 'text-risk-low',
+        active: 'bg-risk-low text-ink',
     },
     {
         id: 'serious',
         label: 'Serious',
         blurb: 'Conflict, crisis, hard news',
         icon: Scale,
-        accent: 'text-amber-400',
-        active: 'bg-amber-500 text-white',
+        accent: 'text-risk-medium',
+        active: 'bg-amber-500 text-ink',
     },
 ];
 
@@ -53,26 +53,26 @@ const MoodSwitch = ({ value, onChange, counts = {} }) => (
                     className={`group flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left flex-1 ${
                         isActive
                             ? 'border-transparent shadow-lg'
-                            : 'border-white/10 bg-slate-900/40 hover:border-white/25'
+                            : 'border-rule bg-surface hover:border-rule-strong'
                     }`}
                 >
                     <span
                         className={`p-2 rounded-xl shrink-0 transition-colors ${
-                            isActive ? mode.active : `bg-white/5 ${mode.accent}`
+                            isActive ? mode.active : `bg-surface-sunken ${mode.accent}`
                         }`}
                     >
                         <Icon size={16} />
                     </span>
                     <span className="min-w-0">
-                        <span className={`block text-[13px] font-bold ${isActive ? 'text-white' : 'text-slate-200'}`}>
+                        <span className={`block text-[13px] font-bold ${isActive ? 'text-ink' : 'text-ink'}`}>
                             {mode.label}
                             {typeof count === 'number' && (
-                                <span className="ml-1.5 text-[11px] font-semibold text-slate-500 tabular-nums">
+                                <span className="ml-1.5 text-[11px] font-semibold text-muted tabular-nums">
                                     {count}
                                 </span>
                             )}
                         </span>
-                        <span className="block text-[11px] text-slate-500 truncate">{mode.blurb}</span>
+                        <span className="block text-[11px] text-muted truncate">{mode.blurb}</span>
                     </span>
                 </button>
             );

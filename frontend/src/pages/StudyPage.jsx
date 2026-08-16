@@ -37,12 +37,12 @@ const TOPIC_LABELS = {
 const Shortcut = ({ to, icon: Icon, title, children }) => (
     <Link
         to={to}
-        className="flex gap-3 p-4 rounded-2xl border border-white/10 bg-white/[0.02] hover:border-cyan-500/30 transition-colors"
+        className="flex gap-3 p-4 rounded-2xl border border-rule bg-surface-sunken hover:border-accent transition-colors"
     >
-        <Icon size={16} className="text-cyan-400 mt-0.5 shrink-0" />
+        <Icon size={16} className="text-accent mt-0.5 shrink-0" />
         <span className="min-w-0">
-            <span className="block text-[14px] font-bold text-white">{title}</span>
-            <span className="block mt-0.5 text-[12px] text-slate-500 leading-relaxed">{children}</span>
+            <span className="block text-[14px] font-bold text-ink">{title}</span>
+            <span className="block mt-0.5 text-[12px] text-muted leading-relaxed">{children}</span>
         </span>
     </Link>
 );
@@ -94,14 +94,14 @@ const StudyPage = () => {
                 path="/study"
             />
 
-            <header className="border-b border-white/10 pb-6 print:border-0">
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-400">
+            <header className="border-b border-rule pb-6 print:border-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-accent">
                     Study
                 </p>
-                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                <h1 className="mt-2 font-display text-3xl md:text-4xl font-extrabold text-ink tracking-tight">
                     Revision compilation
                 </h1>
-                <p className="mt-3 text-[15px] text-slate-400 leading-relaxed max-w-2xl">
+                <p className="mt-3 text-[15px] text-body leading-relaxed max-w-2xl">
                     The period&apos;s coverage grouped by theme, with the number of outlets behind
                     each item. Assembled from counted figures, not written by a model — so every
                     line here can be traced back to the reports underneath it.
@@ -114,8 +114,8 @@ const StudyPage = () => {
                             onClick={() => setPeriod(option)}
                             className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-colors ${
                                 period.hours === option.hours
-                                    ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
-                                    : 'border-white/10 text-slate-400 hover:text-white hover:border-white/25'
+                                    ? 'border-accent bg-accent-soft text-accent'
+                                    : 'border-rule text-body hover:text-ink hover:border-rule-strong'
                             }`}
                         >
                             {option.label}
@@ -125,7 +125,7 @@ const StudyPage = () => {
                         <button
                             onClick={copy}
                             disabled={!brief}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[12px] font-semibold text-slate-400 hover:text-white hover:border-white/25 transition-colors disabled:opacity-40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rule text-[12px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-colors disabled:opacity-40"
                         >
                             {copied ? <Check size={12} /> : <Copy size={12} />}
                             {copied ? 'Copied' : 'Markdown'}
@@ -133,7 +133,7 @@ const StudyPage = () => {
                         <button
                             onClick={() => window.print()}
                             disabled={!brief}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/10 text-[12px] font-semibold text-slate-400 hover:text-white hover:border-white/25 transition-colors disabled:opacity-40"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-rule text-[12px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-colors disabled:opacity-40"
                         >
                             <Printer size={12} /> Print
                         </button>
@@ -157,7 +157,7 @@ const StudyPage = () => {
             </div>
 
             {failed && (
-                <p className="mt-10 text-[14px] text-slate-400">
+                <p className="mt-10 text-[14px] text-body">
                     The compilation could not be loaded. The archive may still be waking up.
                 </p>
             )}
@@ -172,19 +172,19 @@ const StudyPage = () => {
 
             {brief && (
                 <>
-                    <p className="mt-10 font-serif text-[19px] leading-[1.65] text-slate-200">
+                    <p className="mt-10 font-serif text-[19px] leading-[1.65] text-ink">
                         {brief.summary}
                     </p>
-                    <p className="mt-3 text-[12px] text-slate-500">
+                    <p className="mt-3 text-[12px] text-muted">
                         {brief.coverage.articles.toLocaleString()} reports ·{' '}
                         {brief.coverage.outlets} outlets · {brief.coverage.countries} countries
                     </p>
 
                     {byTopic.map(([topic, events]) => (
                         <section key={topic} className="mt-10 break-inside-avoid">
-                            <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4 pb-2 border-b border-white/10">
+                            <h2 className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted mb-4 pb-2 border-b border-rule">
                                 {TOPIC_LABELS[topic] || topic}
-                                <span className="ml-2 text-slate-600 tabular-nums">{events.length}</span>
+                                <span className="ml-2 text-faint tabular-nums">{events.length}</span>
                             </h2>
                             <ol className="space-y-5">
                                 {events.map((event) => {
@@ -193,11 +193,11 @@ const StudyPage = () => {
                                         <li key={event.event_key}>
                                             <Link
                                                 to={`/event/${event.event_key}`}
-                                                className="font-display text-[16px] font-bold text-white leading-snug hover:text-cyan-400 transition-colors"
+                                                className="font-display text-[16px] font-bold text-ink leading-snug hover:text-accent transition-colors"
                                             >
                                                 {event.title}
                                             </Link>
-                                            <p className="mt-1.5 text-[12px] text-slate-500">
+                                            <p className="mt-1.5 text-[12px] text-muted">
                                                 {event.outlets} outlet{event.outlets === 1 ? '' : 's'}
                                                 {' · '}{event.reports} report{event.reports === 1 ? '' : 's'}
                                                 {event.countries.length > 0 && ` · ${event.countries.join(', ')}`}
@@ -206,7 +206,7 @@ const StudyPage = () => {
                                                     .join('')}
                                             </p>
                                             {terms.length > 0 && (
-                                                <p className="mt-1 text-[11px] text-slate-600">
+                                                <p className="mt-1 text-[11px] text-faint">
                                                     {terms.map((term) => term.name).join(' · ')}
                                                 </p>
                                             )}
@@ -219,13 +219,13 @@ const StudyPage = () => {
 
                     {brief.contested.length > 0 && (
                         <section className="mt-12 break-inside-avoid">
-                            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-3">
-                                <Scale size={13} className="text-cyan-400" />
+                            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-muted mb-3">
+                                <Scale size={13} className="text-accent" />
                                 Where outlets disagreed
                             </h2>
                             {/* The most directly useful thing here for anyone who has
                                 to write about an issue rather than recall it. */}
-                            <p className="text-[13px] text-slate-400 leading-relaxed mb-4">
+                            <p className="text-[13px] text-body leading-relaxed mb-4">
                                 These are events the outlets in the archive framed most differently
                                 from one another — measured by the spread in how serious each judged
                                 the same story. An issue that reads as settled in one paper and
@@ -237,11 +237,11 @@ const StudyPage = () => {
                                     <li key={row.event_key}>
                                         <Link
                                             to={`/event/${row.event_key}`}
-                                            className="text-[15px] text-slate-200 hover:text-cyan-400 transition-colors leading-snug"
+                                            className="text-[15px] text-ink hover:text-accent transition-colors leading-snug"
                                         >
                                             {row.title}
                                         </Link>
-                                        <p className="mt-0.5 text-[12px] text-slate-500 tabular-nums">
+                                        <p className="mt-0.5 text-[12px] text-muted tabular-nums">
                                             {row.outlets} outlets · spread {row.spread} around {row.consensus}
                                         </p>
                                     </li>
@@ -252,8 +252,8 @@ const StudyPage = () => {
 
                     {brief.escalating.length > 0 && (
                         <section className="mt-12 break-inside-avoid">
-                            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-4">
-                                <TrendingUp size={13} className="text-cyan-400" />
+                            <h2 className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-muted mb-4">
+                                <TrendingUp size={13} className="text-accent" />
                                 Risk rising fastest
                             </h2>
                             <ul className="space-y-2.5">
@@ -261,13 +261,13 @@ const StudyPage = () => {
                                     <li key={row.country} className="flex items-baseline justify-between gap-4">
                                         <Link
                                             to={row.iso_code ? `/country/${row.iso_code}` : '#'}
-                                            className="text-[15px] text-slate-200 hover:text-cyan-400 transition-colors"
+                                            className="text-[15px] text-ink hover:text-accent transition-colors"
                                         >
                                             {row.country}
                                         </Link>
-                                        <span className="text-[12px] text-slate-500 tabular-nums shrink-0">
+                                        <span className="text-[12px] text-muted tabular-nums shrink-0">
                                             {row.baseline} → {row.current}
-                                            <span className="text-amber-400/80 ml-2">+{row.sigma}σ</span>
+                                            <span className="text-risk-medium ml-2">+{row.sigma}σ</span>
                                         </span>
                                     </li>
                                 ))}
@@ -275,11 +275,11 @@ const StudyPage = () => {
                         </section>
                     )}
 
-                    <p className="mt-12 pt-6 border-t border-white/10 text-[12px] text-slate-600 leading-relaxed">
+                    <p className="mt-12 pt-6 border-t border-rule text-[12px] text-faint leading-relaxed">
                         <GraduationCap size={12} className="inline mr-1.5 -mt-0.5" />
                         Every figure here was counted from the archive, and every item links to the
                         reports behind it. Check them before writing anything down —{' '}
-                        <Link to="/methodology" className="text-slate-500 hover:text-cyan-400 underline">
+                        <Link to="/methodology" className="text-muted hover:text-accent underline">
                             how this is measured
                         </Link>.
                     </p>

@@ -6,27 +6,27 @@ import { timeAgo } from '../utils/time';
 const alertConfig = {
     high: {
         icon: AlertCircle,
-        color: 'text-rose-400',
-        bg: 'bg-rose-500/10',
-        border: 'border-rose-500/20',
+        color: 'text-risk-high',
+        bg: 'bg-risk-high/10',
+        border: 'border-risk-high/30',
         label: 'CRITICAL',
-        gradient: 'from-rose-500 to-rose-600',
+        gradient: 'from-risk-high to-risk-high',
     },
     medium: {
         icon: AlertTriangle,
-        color: 'text-amber-400',
-        bg: 'bg-amber-500/10',
-        border: 'border-amber-500/20',
+        color: 'text-risk-medium',
+        bg: 'bg-risk-medium/10',
+        border: 'border-risk-medium/30',
         label: 'ELEVATED',
-        gradient: 'from-amber-500 to-amber-600',
+        gradient: 'from-risk-medium to-risk-medium',
     },
     low: {
         icon: ShieldCheck,
-        color: 'text-emerald-400',
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/20',
+        color: 'text-risk-low',
+        bg: 'bg-risk-low',
+        border: 'border-risk-low/30',
         label: 'STABLE',
-        gradient: 'from-emerald-500 to-emerald-600',
+        gradient: 'from-risk-low to-risk-low',
     },
 };
 
@@ -79,7 +79,7 @@ const ArticleCard = ({ article, index }) => {
 
     return (
         <div
-            className="group glass-card rounded-3xl overflow-hidden flex flex-col h-full relative transition-all duration-500 hover:shadow-2xl hover:shadow-cyan-500/10 hover:-translate-y-1 animate-fade-in-up"
+            className="group glass-card rounded-2xl overflow-hidden flex flex-col h-full relative transition-all duration-500 hover:shadow-2xl hover:shadow-transparent hover:-translate-y-1 animate-fade-in-up"
             style={{ animationDelay: `${index * 50}ms` }}
         >
             {/* Alert Status Bar */}
@@ -87,7 +87,7 @@ const ArticleCard = ({ article, index }) => {
 
             {/* Lead image */}
             {showImage && (
-                <div className="relative aspect-[16/9] w-full overflow-hidden bg-slate-900/80 shrink-0">
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface shrink-0">
                     <img
                         src={image_url}
                         alt=""
@@ -110,11 +110,11 @@ const ArticleCard = ({ article, index }) => {
                 {/* Meta Header */}
                 <div className="flex items-center justify-between mb-4 gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                        <div className="p-1 rounded-lg bg-white/5 border border-white/10 group-hover:border-cyan-500/30 transition-colors">
+                        <div className="p-1 rounded-lg bg-surface-sunken border border-rule group-hover:border-accent transition-colors">
                             <span className="text-lg leading-none" title={countryName}>{getFlagEmoji(isoCode)}</span>
                         </div>
                         <span
-                            className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[120px]"
+                            className="text-[10px] font-bold text-muted uppercase tracking-widest truncate max-w-[120px]"
                             title={sourceName}
                         >
                             {sourceName}
@@ -134,15 +134,15 @@ const ArticleCard = ({ article, index }) => {
 
                 {/* Content */}
                 <div className="flex-grow">
-                    <h3 className="text-base font-bold text-white mb-2.5 line-clamp-2 leading-snug group-hover:text-cyan-400 transition-colors duration-300 decoration-cyan-500/30 decoration-2 underline-offset-4 group-hover:underline">
+                    <h3 className="text-base font-bold text-ink mb-2.5 line-clamp-2 leading-snug group-hover:text-accent transition-colors duration-300 decoration-cyan-500/30 decoration-2 underline-offset-4 group-hover:underline">
                         {title}
                     </h3>
-                    <p className="text-slate-400 text-xs leading-relaxed line-clamp-3 mb-4 font-medium opacity-80 group-hover:opacity-100 transition-opacity">
+                    <p className="text-body text-xs leading-relaxed line-clamp-3 mb-4 font-medium opacity-80 group-hover:opacity-100 transition-opacity">
                         {description || 'Intelligence bulletin summary currently pending analysis.'}
                     </p>
                     <div className="flex items-center gap-2 flex-wrap">
                         {event_type && (
-                            <span className="inline-block px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                            <span className="inline-block px-2 py-0.5 rounded-xl bg-surface-sunken border border-rule text-[9px] font-bold uppercase tracking-widest text-body">
                                 {EVENT_LABELS[event_type] || event_type}
                             </span>
                         )}
@@ -151,7 +151,7 @@ const ArticleCard = ({ article, index }) => {
                             others carried it rather than repeating the card. */}
                         {duplicate_count > 0 && (
                             <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-[9px] font-bold uppercase tracking-widest text-cyan-300"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xl bg-accent-soft border border-accent/50 text-[9px] font-bold uppercase tracking-widest text-accent"
                                 title={`Also reported by ${duplicate_count} other outlet${duplicate_count === 1 ? '' : 's'}`}
                             >
                                 <Layers size={9} />
@@ -162,14 +162,14 @@ const ArticleCard = ({ article, index }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="mt-auto pt-5 border-t border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-[10px] font-bold text-slate-500 tracking-wider">
+                <div className="mt-auto pt-5 border-t border-rule flex items-center justify-between">
+                    <div className="flex items-center gap-4 text-[10px] font-bold text-muted tracking-wider">
                         <div className="flex items-center gap-1.5">
-                            <Clock size={12} className="text-slate-600" />
+                            <Clock size={12} className="text-faint" />
                             <span>{age}</span>
                         </div>
                         <div className="flex items-center gap-1.5" title={countryName}>
-                            <Globe size={12} className="text-slate-600" />
+                            <Globe size={12} className="text-faint" />
                             <span className="uppercase">{isoCode}</span>
                         </div>
                     </div>
@@ -178,7 +178,7 @@ const ArticleCard = ({ article, index }) => {
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-2 rounded-xl bg-white/5 border border-white/10 text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/30 hover:scale-110 active:scale-95 transition-all"
+                        className="p-2 rounded-xl bg-surface-sunken border border-rule text-accent hover:bg-accent-soft hover:border-accent hover:scale-110 active:scale-95 transition-all"
                         title="View Full Intel Report"
                     >
                         <ExternalLink size={14} />

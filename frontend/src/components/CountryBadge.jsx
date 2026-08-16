@@ -8,7 +8,7 @@
  * identical on every platform.
  */
 const SIZES = {
-    sm: 'w-6 h-6 text-[9px] rounded-md',
+    sm: 'w-6 h-6 text-[9px] rounded-xl',
     md: 'w-8 h-8 text-[10px] rounded-lg',
     lg: 'w-10 h-10 text-xs rounded-xl',
 };
@@ -23,8 +23,8 @@ const CountryBadge = ({ code, size = 'md', className = '', title }) => {
             className={`shrink-0 inline-flex items-center justify-center font-mono font-bold tracking-tight
                         border select-none ${SIZES[size]} ${
                 isValid
-                    ? 'bg-cyan-500/10 border-cyan-500/25 text-cyan-300'
-                    : 'bg-white/5 border-white/10 text-slate-500'
+                    ? 'bg-accent-soft border-accent/50 text-accent'
+                    : 'bg-surface-sunken border-rule text-muted'
             } ${className}`}
         >
             {isValid ? label : '··'}

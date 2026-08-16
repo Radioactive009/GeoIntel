@@ -42,10 +42,10 @@ const OwnerKey = () => {
 
     if (saved) {
         return (
-            <div className="mt-4 inline-flex items-center gap-2 text-[12px] text-slate-500">
-                <Check size={13} className="text-emerald-400" />
+            <div className="mt-4 inline-flex items-center gap-2 text-[12px] text-muted">
+                <Check size={13} className="text-risk-low" />
                 <span>Signed in as the site owner — you can ask it to refresh the news.</span>
-                <button onClick={forget} className="underline hover:text-slate-300">
+                <button onClick={forget} className="underline hover:text-body">
                     Forget key
                 </button>
             </div>
@@ -56,7 +56,7 @@ const OwnerKey = () => {
         return (
             <button
                 onClick={() => setOpen(true)}
-                className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-slate-600 hover:text-slate-400 transition-colors"
+                className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-faint hover:text-body transition-colors"
             >
                 <KeyRound size={12} />
                 Site owner?
@@ -73,11 +73,11 @@ const OwnerKey = () => {
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     placeholder="Admin API key"
-                    className="flex-1 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-[13px] text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/40"
+                    className="flex-1 px-3 py-2 rounded-lg bg-surface-sunken border border-rule text-[13px] text-ink placeholder:text-faint focus:outline-none focus:border-accent"
                 />
                 <button
                     type="submit"
-                    className="px-3 py-2 rounded-lg bg-cyan-500 text-white text-[13px] font-semibold hover:bg-cyan-400"
+                    className="px-3 py-2 rounded-lg bg-accent text-ink text-[13px] font-semibold hover:bg-accent"
                 >
                     Save
                 </button>
@@ -85,12 +85,12 @@ const OwnerKey = () => {
                     type="button"
                     onClick={() => { setOpen(false); setValue(''); }}
                     aria-label="Cancel"
-                    className="p-2 text-slate-500 hover:text-white"
+                    className="p-2 text-muted hover:text-ink"
                 >
                     <X size={15} />
                 </button>
             </div>
-            <p className="mt-2 text-[11px] text-slate-600">
+            <p className="mt-2 text-[11px] text-faint">
                 Stored in this browser only, never in the site's code. It lets you ask the
                 assistant to pull in the latest news.
             </p>

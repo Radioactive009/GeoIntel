@@ -52,8 +52,8 @@ const RiskTag = ({ level, score, className = '' }) => {
 };
 
 const Meta = ({ article, className = '' }) => (
-    <div className={`flex items-center gap-2 text-[12px] text-slate-500 ${className}`}>
-        <span className="font-semibold text-slate-400 truncate">{article.source?.name || 'Unknown'}</span>
+    <div className={`flex items-center gap-2 text-[12px] text-muted ${className}`}>
+        <span className="font-semibold text-body truncate">{article.source?.name || 'Unknown'}</span>
         <span aria-hidden="true">·</span>
         <span className="flex items-center gap-1 shrink-0">
             <Clock size={11} />
@@ -62,7 +62,7 @@ const Meta = ({ article, className = '' }) => (
         {article.duplicate_count > 0 && (
             <>
                 <span aria-hidden="true">·</span>
-                <span className="flex items-center gap-1 text-cyan-400/80 shrink-0" title={`${article.duplicate_count} other outlets carried this`}>
+                <span className="flex items-center gap-1 text-accent/80 shrink-0" title={`${article.duplicate_count} other outlets carried this`}>
                     <Layers size={11} />
                     +{article.duplicate_count}
                 </span>
@@ -91,9 +91,9 @@ const Thumb = ({ src, className, sizes }) => {
 
 /** The front page's single most prominent story. */
 export const LeadStory = ({ article }) => (
-    <article className="group relative rounded-3xl overflow-hidden border border-white/10 bg-slate-900/40">
+    <article className="group relative rounded-2xl overflow-hidden border border-rule bg-surface">
         <Link to={`/story/${article.id}`} className="block">
-            <div className="relative aspect-[16/9] md:aspect-[21/9] bg-slate-900">
+            <div className="relative aspect-[16/9] md:aspect-[21/9] bg-surface">
                 <Thumb
                     src={article.image_url}
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
@@ -107,16 +107,16 @@ export const LeadStory = ({ article }) => (
                 <div className="flex items-center gap-3 mb-3">
                     <RiskTag level={article.geo_risk_level} score={article.geo_risk_score} />
                     {article.country && (
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-300">
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-body">
                             {article.country}
                         </span>
                     )}
                 </div>
-                <h2 className="font-serif text-2xl md:text-4xl lg:text-[2.75rem] font-bold text-white leading-[1.15] tracking-tight max-w-3xl group-hover:text-cyan-200 transition-colors">
+                <h2 className="font-serif text-2xl md:text-4xl lg:text-[2.75rem] font-bold text-ink leading-[1.15] tracking-tight max-w-3xl group-hover:text-accent transition-colors">
                     {article.title}
                 </h2>
                 {article.description && (
-                    <p className="mt-3 text-[15px] text-slate-300 leading-relaxed max-w-2xl line-clamp-2 hidden sm:block">
+                    <p className="mt-3 text-[15px] text-body leading-relaxed max-w-2xl line-clamp-2 hidden sm:block">
                         {article.description}
                     </p>
                 )}
@@ -131,13 +131,13 @@ export const SecondaryStory = ({ article }) => (
     <article className="group">
         <Link to={`/story/${article.id}`} className="flex gap-4">
             {article.image_url && (
-                <div className="relative w-28 sm:w-32 aspect-[4/3] rounded-xl overflow-hidden bg-slate-900 shrink-0">
+                <div className="relative w-28 sm:w-32 aspect-[4/3] rounded-xl overflow-hidden bg-surface shrink-0">
                     <Thumb src={article.image_url} className="absolute inset-0 w-full h-full object-cover" />
                 </div>
             )}
             <div className="min-w-0 flex-grow">
                 <RiskTag level={article.geo_risk_level} className="mb-1.5" />
-                <h3 className="font-serif text-base sm:text-lg font-semibold text-white leading-snug line-clamp-3 group-hover:text-cyan-300 transition-colors">
+                <h3 className="font-serif text-base sm:text-lg font-semibold text-ink leading-snug line-clamp-3 group-hover:text-accent transition-colors">
                     {article.title}
                 </h3>
                 <Meta article={article} className="mt-2" />
@@ -148,10 +148,10 @@ export const SecondaryStory = ({ article }) => (
 
 /** The river: everything after the top of the page. */
 export const StoryCard = ({ article }) => (
-    <article className="group flex flex-col h-full rounded-2xl border border-white/[0.08] bg-white/[0.02] overflow-hidden transition-all duration-300 hover:bg-white/[0.04] hover:border-white/20">
+    <article className="group flex flex-col h-full rounded-2xl border border-rule bg-surface-sunken overflow-hidden transition-all duration-300 hover:bg-surface-sunken hover:border-rule-strong">
         <Link to={`/story/${article.id}`} className="flex flex-col h-full">
             {article.image_url && (
-                <div className="relative aspect-[16/9] bg-slate-900 shrink-0">
+                <div className="relative aspect-[16/9] bg-surface shrink-0">
                     <Thumb
                         src={article.image_url}
                         className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.04]"
@@ -162,16 +162,16 @@ export const StoryCard = ({ article }) => (
                 <div className="flex items-center gap-2.5 mb-2.5">
                     <RiskTag level={article.geo_risk_level} score={article.geo_risk_score} />
                     {article.country && (
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 truncate">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted truncate">
                             {article.country}
                         </span>
                     )}
                 </div>
-                <h3 className="font-serif text-[19px] font-semibold text-white leading-[1.3] line-clamp-3 group-hover:text-cyan-300 transition-colors">
+                <h3 className="font-serif text-[19px] font-semibold text-ink leading-[1.3] line-clamp-3 group-hover:text-accent transition-colors">
                     {article.title}
                 </h3>
                 {article.description && (
-                    <p className="mt-2.5 text-[13.5px] text-slate-400/90 leading-[1.6] line-clamp-2">
+                    <p className="mt-2.5 text-[13.5px] text-body/90 leading-[1.6] line-clamp-2">
                         {article.description}
                     </p>
                 )}
@@ -186,13 +186,13 @@ export const StoryRow = ({ article }) => (
     <article className="group">
         <Link to={`/story/${article.id}`} className="flex gap-3 py-3">
             <div className="min-w-0 flex-grow">
-                <h3 className="font-serif text-[15px] font-semibold text-white leading-snug line-clamp-2 group-hover:text-cyan-300 transition-colors">
+                <h3 className="font-serif text-[15px] font-semibold text-ink leading-snug line-clamp-2 group-hover:text-accent transition-colors">
                     {article.title}
                 </h3>
                 <Meta article={article} className="mt-1.5" />
             </div>
             {article.image_url && (
-                <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-slate-900 shrink-0">
+                <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-surface shrink-0">
                     <Thumb src={article.image_url} className="absolute inset-0 w-full h-full object-cover" />
                 </div>
             )}

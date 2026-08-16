@@ -23,11 +23,11 @@ const AskAbout = ({ question, label = 'Ask about this', className = '' }) => {
             className={
                 className
                 || 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border '
-                + 'border-white/10 text-[12px] font-semibold text-slate-400 '
-                + 'hover:text-cyan-300 hover:border-cyan-500/30 transition-colors'
+                + 'border-rule text-[12px] font-semibold text-body '
+                + 'hover:text-accent hover:border-accent transition-colors'
             }
         >
-            <Sparkles size={12} className="text-cyan-400" />
+            <Sparkles size={12} className="text-accent" />
             {label}
         </Link>
     );

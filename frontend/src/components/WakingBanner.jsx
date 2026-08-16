@@ -35,13 +35,13 @@ const WakingBanner = () => {
         <div
             role="status"
             aria-live="polite"
-            className="sticky top-[57px] z-40 bg-amber-500/10 border-b border-amber-500/20 backdrop-blur-sm"
+            className="sticky top-[57px] z-40 bg-risk-medium/10 border-b border-risk-medium/30 backdrop-blur-sm"
         >
             <div className="max-w-[1440px] mx-auto px-6 py-2.5 flex items-center gap-3">
-                <Loader2 size={14} className="text-amber-400 animate-spin shrink-0" />
-                <p className="text-[13px] text-amber-200/90">
+                <Loader2 size={14} className="text-risk-medium animate-spin shrink-0" />
+                <p className="text-[13px] text-risk-medium">
                     <span className="font-semibold">Waking the server.</span>{' '}
-                    <span className="text-amber-200/70">
+                    <span className="text-risk-medium">
                         It sleeps after a quiet spell and takes up to a minute to start. Stories
                         will appear automatically.
                     </span>

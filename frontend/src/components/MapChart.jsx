@@ -9,6 +9,7 @@ import {
     getAlertColorByLevel,
     matchesCountry,
 } from '../utils/country';
+import { token } from '../utils/palette';
 
 const geoUrl = worldTopoJson;
 
@@ -122,24 +123,23 @@ const MapChart = ({
     };
 
     return (
-        <div className="glass rounded-[2.5rem] p-5 lg:p-6 relative overflow-hidden animate-fade-in-up">
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.12),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.12),transparent_50%)]" />
+        <div className="border border-rule rounded-lg bg-surface p-5 lg:p-6 relative overflow-hidden animate-fade-in-up">
             <div className="relative z-10">
                 <div className="flex items-center justify-between mb-5 gap-4">
-                    <h2 className="text-base font-bold text-white uppercase tracking-widest">Intelligence Alert Map</h2>
+                    <h2 className="font-display text-base font-bold text-ink">Risk by country</h2>
                     {selectedCountry ? (
                         <button
                             type="button"
                             onClick={() => onCountrySelect('')}
-                            className="text-[10px] font-bold tracking-widest uppercase text-slate-400 hover:text-cyan-400 transition-colors shrink-0"
+                            className="text-[12px] text-body hover:text-accent transition-colors shrink-0"
                         >
-                            Clear Selection
+                            Clear selection
                         </button>
                     ) : (
                         // Nothing on the map says it is clickable until something
                         // is selected, so the affordance is stated outright.
-                        <span className="text-[10px] font-bold tracking-widest uppercase text-slate-600 shrink-0 hidden sm:block">
-                            Select a zone for its dossier
+                        <span className="text-[12px] text-faint shrink-0 hidden sm:block">
+                            Select a country
                         </span>
                     )}
                 </div>
@@ -207,22 +207,22 @@ const MapChart = ({
                                             onMouseLeave={() => setTooltip(null)}
                                             style={{
                                                 default: {
-                                                    fill: isSelected ? '#3b82f6' : getAlertColorByLevel(alertLevel),
-                                                    stroke: '#0f172a',
+                                                    fill: isSelected ? token('accent') : getAlertColorByLevel(alertLevel),
+                                                    stroke: token('paper'),
                                                     strokeWidth: isSelected ? 1.2 : 0.6,
                                                     outline: 'none',
                                                     transition: 'all 180ms ease-in-out',
                                                 },
                                                 hover: {
-                                                    fill: isSelected ? '#60a5fa' : '#22d3ee',
-                                                    stroke: '#38bdf8',
+                                                    fill: isSelected ? token('accent') : token('accent'),
+                                                    stroke: token('accent'),
                                                     strokeWidth: 1,
                                                     outline: 'none',
                                                     filter: 'drop-shadow(0 0 8px rgba(34, 211, 238, 0.5))',
                                                     cursor: 'pointer',
                                                 },
                                                 pressed: {
-                                                    fill: '#0ea5e9',
+                                                    fill: token('accent'),
                                                     outline: 'none',
                                                 },
                                             }}
@@ -235,34 +235,34 @@ const MapChart = ({
 
                     {tooltip && (
                         <div
-                            className="absolute z-50 px-3 py-2 rounded-xl border border-cyan-500/30 bg-slate-950/95 backdrop-blur-md pointer-events-none shadow-xl shadow-cyan-500/20"
+                            className="absolute z-50 px-3 py-2 rounded-xl border border-accent bg-surface/95 backdrop-blur-md pointer-events-none shadow-xl shadow-transparent"
                             style={{ left: tooltip.x, top: tooltip.y, width: `${TOOLTIP_WIDTH}px` }}
                         >
-                            <p className="text-xs font-bold text-white">{tooltip.countryName}</p>
-                            <p className="text-[11px] text-slate-300">
-                                Alert Level:{' '}
-                                <span className="font-semibold text-cyan-300">
+                            <p className="text-xs font-bold text-ink">{tooltip.countryName}</p>
+                            <p className="text-[11px] text-body">
+                                Risk level:{' '}
+                                <span className="font-semibold text-accent">
                                     {typeof tooltip.alertLevel === 'number' ? `${tooltip.alertLevel.toFixed(1)}%` : 'No data'}
                                 </span>
                             </p>
-                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-0.5">
+                            <p className="text-[10px] text-muted font-medium uppercase tracking-wider mt-0.5">
                                 {tooltip.totalArticles ? `${tooltip.totalArticles} reports` : 'No reports yet'}
                             </p>
                         </div>
                     )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4 mt-4 text-[10px] uppercase tracking-widest font-bold text-slate-500">
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#10b981]" /> STABLE</span>
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" /> ELEVATED</span>
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#f43f5e]" /> CRITICAL</span>
-                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#1f2937]" /> NO DATA</span>
-                    <span className="text-slate-400">Node Selected: {selectedLabel || selectedCountry || 'None'}</span>
+                <div className="flex flex-wrap items-center gap-4 mt-4 text-[11px] text-muted">
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-risk-low" /> Stable</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-risk-medium" /> Elevated</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-risk-high" /> Critical</span>
+                    <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-rule-strong" /> No data</span>
+                    <span className="text-body">{selectedLabel || selectedCountry || 'No country selected'}</span>
                     {selectedCountry && onToggleWatch && (
                         <button
                             onClick={() => onToggleWatch(selectedIso)}
                             className={`flex items-center gap-1.5 transition-colors ${
-                                isWatched?.(selectedIso) ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'
+                                isWatched?.(selectedIso) ? 'text-risk-medium' : 'text-muted hover:text-risk-medium'
                             }`}
                             title={isWatched?.(selectedIso) ? 'Remove from watchlist' : 'Add to watchlist'}
                         >

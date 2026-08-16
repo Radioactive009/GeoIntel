@@ -6,19 +6,34 @@ export default {
     ],
     theme: {
         extend: {
+            // Named by role, and resolved from the custom properties in
+            // index.css so the palette has exactly one definition. Every entry
+            // takes Tailwind's opacity modifiers (`border-rule/50`).
             colors: {
-                background: "#020617",
-                "bg-light": "#0f172a",
+                background: "rgb(var(--paper) / <alpha-value>)",
+                paper: "rgb(var(--paper) / <alpha-value>)",
+                surface: {
+                    DEFAULT: "rgb(var(--surface) / <alpha-value>)",
+                    sunken: "rgb(var(--surface-sunken) / <alpha-value>)",
+                },
+                ink: "rgb(var(--ink) / <alpha-value>)",
+                body: "rgb(var(--body) / <alpha-value>)",
+                muted: "rgb(var(--muted) / <alpha-value>)",
+                faint: "rgb(var(--faint) / <alpha-value>)",
+                rule: {
+                    DEFAULT: "rgb(var(--rule) / <alpha-value>)",
+                    strong: "rgb(var(--rule-strong) / <alpha-value>)",
+                },
                 accent: {
-                    DEFAULT: "#22d3ee",
-                    blue: "#3b82f6",
-                    indigo: "#6366f1",
+                    DEFAULT: "rgb(var(--accent) / <alpha-value>)",
+                    strong: "rgb(var(--accent-strong) / <alpha-value>)",
+                    soft: "rgb(var(--accent-soft) / <alpha-value>)",
                 },
                 risk: {
-                    high: "#f43f5e",
-                    medium: "#f59e0b",
-                    low: "#10b981",
-                }
+                    high: "rgb(var(--risk-high) / <alpha-value>)",
+                    medium: "rgb(var(--risk-medium) / <alpha-value>)",
+                    low: "rgb(var(--risk-low) / <alpha-value>)",
+                },
             },
             fontFamily: {
                 // These must match what index.html actually loads. They did
