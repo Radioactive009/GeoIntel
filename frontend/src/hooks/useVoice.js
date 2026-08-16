@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { speakText, transcribeAudio } from '../services/api';
 import { moodOf, pickVoice, prosodyFor, splitSentences } from '../lib/voices';
+import { DEFAULT_LANGUAGE, bcp47For, voicePrefixFor } from '../lib/languages';
 
 /**
  * Speech in and out.
@@ -44,6 +45,10 @@ export const useVoice = ({
     // Fired when a listening session ends, with whether anything was heard.
     onListenEnd,
     serverSpeech = false,
+    // ISO-639-1, or 'auto' to let the server detect it. Drives all three
+    // paths: what the recogniser listens for, what the transcriber is told,
+    // and which installed voice reads the answer back.
+    language = DEFAULT_LANGUAGE,
 } = {}) => {
     const [listening, setListening] = useState(false);
     const [speaking, setSpeaking] = useState(false);
@@ -80,7 +85,12 @@ export const useVoice = ({
     const onTranscriptRef = useRef(onTranscript);
     const onSpeechEndRef = useRef(onSpeechEnd);
     const onListenEndRef = useRef(onListenEnd);
+    // Read inside recognition and playback callbacks, which run between
+    // renders: a language captured at callback-creation time would be the one
+    // selected two answers ago.
+    const languageRef = useRef(language);
 
+    useEffect(() => { languageRef.current = language; }, [language]);
     useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
     useEffect(() => { onSpeechEndRef.current = onSpeechEnd; }, [onSpeechEnd]);
     useEffect(() => { onListenEndRef.current = onListenEnd; }, [onListenEnd]);
@@ -133,7 +143,11 @@ export const useVoice = ({
         const sentences = splitSentences(text);
         if (!sentences.length) return;
 
-        const voice = pickVoice(voicesRef.current);
+        const browserDefault = typeof navigator !== 'undefined' ? navigator.language : 'en-US';
+        const tag = bcp47For(languageRef.current, browserDefault);
+        // An answer to a Spanish question comes back in Spanish, and an English
+        // voice reading it is worse than no voice at all.
+        const voice = pickVoice(voicesRef.current, voicePrefixFor(languageRef.current, browserDefault));
         const mood = moodOf(text);
 
         const finish = () => {
@@ -148,6 +162,7 @@ export const useVoice = ({
             const { rate, pitch } = prosodyFor(sentence, { mood, index });
             utterance.rate = rate;
             utterance.pitch = pitch;
+            utterance.lang = tag;
             if (voice) utterance.voice = voice;
 
             if (index === 0) {
@@ -267,7 +282,12 @@ export const useVoice = ({
     // ── Listening ────────────────────────────────────────
     const startNative = useCallback(() => {
         const recognition = new Recognition();
-        recognition.lang = 'en-US';
+        // No detect mode here: the browser's recogniser has to be told what to
+        // listen for, so "Detect" leaves it on the browser's own language.
+        recognition.lang = bcp47For(
+            languageRef.current,
+            typeof navigator !== 'undefined' ? navigator.language : 'en-US',
+        );
         recognition.interimResults = true;
         recognition.continuous = false;
 
@@ -331,7 +351,7 @@ export const useVoice = ({
             }
 
             try {
-                const { data } = await transcribeAudio(blob);
+                const { data } = await transcribeAudio(blob, languageRef.current);
                 const heard = Boolean(data?.text?.trim());
                 if (heard) onTranscriptRef.current?.(data.text.trim());
                 onListenEndRef.current?.(heard);

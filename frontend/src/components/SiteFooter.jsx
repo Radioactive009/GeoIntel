@@ -13,7 +13,7 @@ import { API_URL } from '../services/api';
 const SiteFooter = () => (
     <footer className="mt-auto border-t border-white/10 bg-background">
         <div className="max-w-[1440px] mx-auto px-6 py-12">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
                 <div className="col-span-2 md:col-span-1">
                     <p className="font-display text-lg font-extrabold text-white tracking-tight">GeoIntel</p>
                     <p className="text-[13px] text-slate-500 leading-relaxed mt-2 max-w-xs">
@@ -34,6 +34,23 @@ const SiteFooter = () => (
                             ['/topic/politics', 'Politics'],
                             ['/topic/disaster', 'Disasters'],
                             ['/topic/humanitarian', 'Humanitarian'],
+                        ].map(([to, label]) => (
+                            <li key={to}>
+                                <Link to={to} className="text-slate-400 hover:text-cyan-400 transition-colors">{label}</Link>
+                            </li>
+                        ))}
+                    </ul>
+                </nav>
+
+                <nav aria-label="Study">
+                    <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-3">Study</h2>
+                    <ul className="space-y-2 text-[13px]">
+                        {[
+                            ['/study', 'Revision compilation'],
+                            ['/india', 'India & the world'],
+                            ['/glossary', 'Groupings & institutions'],
+                            ['/notes', 'Saved stories'],
+                            ['/ask', 'Ask the archive'],
                         ].map(([to, label]) => (
                             <li key={to}>
                                 <Link to={to} className="text-slate-400 hover:text-cyan-400 transition-colors">{label}</Link>

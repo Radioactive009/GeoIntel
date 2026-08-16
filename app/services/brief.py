@@ -177,9 +177,15 @@ def _compose(coverage: dict, events: list[dict], movers: list[dict], hours: int)
     return " ".join(lines)
 
 
-def build_brief(db: Session, hours: int = 24) -> dict:
-    """Everything the brief page needs, in one pass over the window."""
-    hours = max(1, min(int(hours or 24), 24 * 14))
+def build_brief(db: Session, hours: int = 24, depth: int | None = None) -> dict:
+    """
+    Everything the brief page needs, in one pass over the window.
+
+    `depth` overrides how many events are featured. The front page wants the
+    day's handful; a month-long compilation read for revision wants everything
+    that met the bar, because the point there is coverage rather than triage.
+    """
+    hours = max(1, min(int(hours or 24), 24 * 31))
     since = datetime.utcnow() - timedelta(hours=hours)
 
     grouped = _events_in(db, since)
@@ -191,7 +197,7 @@ def build_brief(db: Session, hours: int = 24) -> dict:
     # By reach first, then severity: a story ten outlets carried is the day's
     # story even if a nastier one was reported once.
     events.sort(key=lambda e: (-e["outlets"], -e["reports"], -e["risk"]))
-    events = events[:MAX_EVENTS]
+    events = events[:max(1, int(depth))] if depth else events[:MAX_EVENTS]
 
     board = alerts.compute_movers(db, hours=max(hours, 168), limit=MAX_MOVERS)
     movers = [

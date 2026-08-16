@@ -5,6 +5,9 @@ import { getEvent } from '../services/api';
 import { getAlertColor } from '../utils/country';
 import { timeAgo } from '../utils/time';
 import { StoryRow } from '../components/StoryCards';
+import AskAbout from '../components/AskAbout';
+import SaveStory from '../components/SaveStory';
+import TermChips from '../components/TermChips';
 import Seo from '../components/Seo';
 import { FramingPanel, CoveragePanel } from '../components/EventAnalytics';
 
@@ -173,7 +176,21 @@ const EventPage = () => {
                 <span className="text-[13px] text-slate-500">
                     first reported {timeAgo(event.first_seen)}
                 </span>
+                <AskAbout
+                    question={`What is the latest on this: ${event.title}`}
+                    label="Ask the archive"
+                />
+                <SaveStory item={{
+                    kind: 'event',
+                    id: event.event_key,
+                    title: event.title,
+                    country: event.countries?.[0],
+                    topic: event.topic,
+                    published: event.first_seen?.slice(0, 10),
+                }} />
             </div>
+
+            <TermChips title={event.title} className="-mt-4 mb-8" />
 
             {Object.keys(event.figures || {}).length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">

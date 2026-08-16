@@ -53,7 +53,14 @@ RSS_FEEDS = [
     {"name": "Channel News Asia", "url": "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml"},
     {"name": "Sky News World", "url": "https://feeds.skynews.com/feeds/rss/world.xml"},
     {"name": "The Hindu", "url": "https://www.thehindu.com/news/national/feeder/default.rss"},
+    {"name": "The Hindu International", "url": "https://www.thehindu.com/news/international/feeder/default.rss"},
     {"name": "Times of India World", "url": "https://timesofindia.indiatimes.com/rssfeeds/296589292.cms"},
+    {"name": "Indian Express World", "url": "https://indianexpress.com/section/world/feed/"},
+    # PIB was wanted here — it is the primary record of what the Indian
+    # government actually said, rather than a report of it. Its RSS serves
+    # Hindi from every working parameter combination (Lang is ignored, and
+    # every Regid but 3 returns nothing), and Hindi headlines would defeat a
+    # classifier and a resolver that both work on English keywords.
     {"name": "TASS", "url": "https://tass.com/rss/v2.xml"},
     {"name": "NDTV World", "url": "https://feeds.feedburner.com/ndtvnews-world-news"},
     {"name": "Jerusalem Post", "url": "https://www.jpost.com/rss/rssfeedsfrontpage.aspx"},

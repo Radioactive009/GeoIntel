@@ -102,6 +102,32 @@ limited to the site owner. Do not retry it and do not suggest workarounds.
 - Use feed_status when asked whether a refresh is done or how the last one went.
 """
 
+# Appended for readers preparing for competitive examinations — in India, the
+# civil services papers, where international relations is examined as "India
+# and its neighbourhood", "groupings and agreements involving India" and the
+# mandates of international institutions.
+#
+# It changes the shape of an answer, never its sourcing. The tools, the refusal
+# to invent, and the articles shown beside the answer all still apply: a
+# confidently wrong fact is worse for someone memorising it for an exam than
+# for a reader who is merely browsing.
+EXAM_PROMPT = """
+The reader is preparing for a competitive examination and is studying this \
+topic, not just following it. Answer accordingly:
+
+- Structure the answer: what happened, why it matters, and what it bears on. \
+Use short labelled lines rather than one block of prose.
+- Give the facts that can be cited — dates, figures, the parties involved, the \
+institutions or agreements named. Prefer specifics over adjectives.
+- Where a development touches India's interests, say how, plainly and without \
+overstating it. If it does not, do not invent a connection.
+- Name the wider theme it belongs to (energy security, maritime trade, border \
+management, multilateral reform) so it can be filed alongside related material.
+- Where informed people disagree, give both readings rather than one.
+- Still no more than three short paragraphs or eight lines. This is a study \
+note, not an essay.
+"""
+
 # Models sometimes emit retrieval markers of their own ("【3†id=141】"), which
 # are meaningless once the interface lists the sources itself.
 _CITATION_NOISE = re.compile(r"[【\[]\s*\d+\s*[†:#][^】\]]*[】\]]|【[^】]*】")
@@ -113,6 +139,30 @@ def _clean_answer(text: str | None) -> str | None:
     cleaned = _CITATION_NOISE.sub("", text)
     cleaned = re.sub(r"[ 	]{2,}", " ", cleaned)
     return cleaned.strip() or None
+
+
+# Why an answer is missing, as a machine-readable kind alongside the prose.
+#
+# The interface has to tell "come back in a minute" apart from "this server is
+# broken" — they read identically as red boxes otherwise, and only one of them
+# is worth the reader's attention. Matching on the message text would work
+# until someone reworded it, so the distinction is carried explicitly.
+#
+#   config   — the operator has to fix something; no reader action will help
+#   limit    — a budget is spent, and resets
+#   busy     — momentary; asking again shortly works
+#   upstream — the provider failed or was unreachable
+#   input    — the question itself is the problem, and rephrasing it helps
+def _failed(error: str, kind: str, sources=None, tools=None) -> dict:
+    tools = tools or []
+    return {
+        "answer": None,
+        "sources": sources or [],
+        "tools_used": tools,
+        "from_archive": bool(tools),
+        "error": error,
+        "error_kind": kind,
+    }
 
 TOOLS = [
     {
@@ -463,51 +513,77 @@ def _dispatch(db: Session, name: str, args: dict, can_admin: bool = False) -> di
     return {"error": f"Unknown tool {name!r}."}
 
 
-def transcribe(db: Session, audio: bytes, filename: str = "speech.webm") -> dict:
+def transcribe(
+    db: Session,
+    audio: bytes,
+    filename: str = "speech.webm",
+    language: str = "en",
+) -> dict:
     """
     Turn a spoken question into text.
 
     Charged against the same daily budget as answering: a caller who can spend
     transcription without limit can drain the account just as easily.
+
+    `language` is an ISO-639-1 code, or "auto" to let Whisper detect it. Naming
+    the language is worth doing where it is known — detection costs accuracy on
+    short utterances, and a spoken question is nearly always short — but
+    hard-coding English quietly made voice input English-only for the browsers
+    that reach here at all.
     """
     key = api_key()
     if not key:
-        return {"text": None, "error": "Voice input is not configured on this server."}
+        return {"text": None, "error": "Voice input is not configured on this server.",
+                "error_kind": "config"}
     if not audio:
-        return {"text": None, "error": "No audio received."}
+        return {"text": None, "error": "No audio received.", "error_kind": "input"}
     if len(audio) > MAX_AUDIO_BYTES:
-        return {"text": None, "error": "That recording is too long. Keep it under a minute."}
+        return {"text": None, "error": "That recording is too long. Keep it under a minute.",
+                "error_kind": "input"}
 
     _, used = _budget_state(db)
     if used >= DAILY_BUDGET:
-        return {"text": None, "error": "The assistant has reached today's limit."}
+        return {"text": None, "error": "The assistant has reached today's limit.",
+                "error_kind": "limit"}
+
+    form = {"model": TRANSCRIBE_MODEL, "response_format": "json"}
+    code = (language or "").strip().lower()[:5]
+    # Anything else is left off entirely, which is what asks Whisper to detect.
+    if code and code != "auto":
+        form["language"] = code
 
     try:
         response = requests.post(
             TRANSCRIBE_URL,
             headers={"Authorization": f"Bearer {key}"},
             files={"file": (filename, audio, "application/octet-stream")},
-            data={"model": TRANSCRIBE_MODEL, "response_format": "json", "language": "en"},
+            data=form,
             timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException as e:
         logger.warning("[AGENT] transcription failed: %s", e)
-        return {"text": None, "error": "Could not reach the transcription service."}
+        return {"text": None, "error": "Could not reach the transcription service.",
+                "error_kind": "upstream"}
 
     if response.status_code in (401, 403):
         logger.error("[AGENT] transcription rejected the API key (%s).", response.status_code)
-        return {"text": None, "error": "The assistant's API key is missing or invalid on this server."}
+        return {"text": None, "error": "The assistant's API key is missing or invalid on this server.",
+                "error_kind": "config"}
     if response.status_code != 200:
         logger.warning("[AGENT] transcription %s: %s", response.status_code, response.text[:160])
-        return {"text": None, "error": "Could not transcribe that."}
+        return {"text": None, "error": "Could not transcribe that.", "error_kind": "upstream"}
 
     try:
         text = (response.json().get("text") or "").strip()
     except ValueError:
-        return {"text": None, "error": "Could not transcribe that."}
+        return {"text": None, "error": "Could not transcribe that.", "error_kind": "upstream"}
 
     _record_request(db)
-    return {"text": text or None, "error": None if text else "Nothing was picked up."}
+    return {
+        "text": text or None,
+        "error": None if text else "Nothing was picked up.",
+        "error_kind": None if text else "input",
+    }
 
 
 # ─────────────────────────────────────────────────────────
@@ -518,6 +594,7 @@ def ask(
     question: str,
     history: list[dict] | None = None,
     can_admin: bool = False,
+    mode: str = "default",
 ) -> dict:
     """
     Answer a question, using the archive.
@@ -533,20 +610,20 @@ def ask(
     """
     key = api_key()
     if not key:
-        return {"answer": None, "sources": [], "tools_used": [], "from_archive": False,
-                "error": "The assistant is not configured on this server."}
+        return _failed("The assistant is not configured on this server.", "config")
 
     question = (question or "").strip()[:MAX_QUESTION_CHARS]
     if not question:
-        return {"answer": None, "sources": [], "tools_used": [], "from_archive": False,
-                "error": "Ask a question."}
+        return _failed("Ask a question.", "input")
 
     _, used = _budget_state(db)
     if used >= DAILY_BUDGET:
-        return {"answer": None, "sources": [], "tools_used": [], "from_archive": False,
-                "error": "The assistant has reached today's question limit. Try again tomorrow."}
+        return _failed(
+            "The assistant has reached today's question limit. Try again tomorrow.", "limit"
+        )
 
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    system = SYSTEM_PROMPT + (EXAM_PROMPT if mode == "exam" else "")
+    messages = [{"role": "system", "content": system}]
     for turn in (history or [])[-MAX_HISTORY_TURNS:]:
         role = turn.get("role")
         content = (turn.get("content") or "")[:2000]
@@ -574,30 +651,30 @@ def ask(
             )
         except requests.RequestException as e:
             logger.warning("[AGENT] request failed: %s", e)
-            return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
-                    "error": "The assistant is unreachable right now."}
+            return _failed("The assistant is unreachable right now.", "upstream",
+                           sources, tools_used)
 
         if response.status_code == 429:
-            return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
-                    "error": "The assistant is busy right now. Try again in a moment."}
+            return _failed("The assistant is busy right now. Try again in a moment.", "busy",
+                           sources, tools_used)
         if response.status_code in (401, 403):
             # A misconfigured key is an operator problem and needs saying so —
             # reported as "could not answer that", it looks like the question
             # was at fault and nobody goes looking at the key.
             logger.error("[AGENT] upstream rejected the API key (%s). Check GROQ_API_KEY.",
                          response.status_code)
-            return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
-                    "error": "The assistant's API key is missing or invalid on this server."}
+            return _failed("The assistant's API key is missing or invalid on this server.",
+                           "config", sources, tools_used)
         if response.status_code != 200:
             logger.warning("[AGENT] %s: %s", response.status_code, response.text[:200])
-            return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
-                    "error": "The assistant could not answer that."}
+            return _failed("The assistant could not answer that.", "upstream",
+                           sources, tools_used)
 
         try:
             message = response.json()["choices"][0]["message"]
         except (ValueError, KeyError, IndexError):
-            return {"answer": None, "sources": sources, "tools_used": tools_used, "from_archive": bool(tools_used),
-                    "error": "The assistant returned something unreadable."}
+            return _failed("The assistant returned something unreadable.", "upstream",
+                           sources, tools_used)
 
         calls = message.get("tool_calls") or []
         if not calls:
@@ -612,6 +689,7 @@ def ask(
                 # distinction a reader needs is derived here instead.
                 "from_archive": bool(tools_used),
                 "error": None,
+                "error_kind": None,
             }
 
         # Echo the assistant turn back before the results, as the API requires.
@@ -642,5 +720,7 @@ def ask(
             })
 
     _record_request(db)
-    return {"answer": None, "sources": sources[:12], "tools_used": tools_used, "from_archive": bool(tools_used),
-            "error": "That took too many lookups to answer. Try asking something narrower."}
+    return _failed(
+        "That took too many lookups to answer. Try asking something narrower.",
+        "input", sources[:12], tools_used,
+    )

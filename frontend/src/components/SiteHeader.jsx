@@ -15,6 +15,9 @@ const SECTIONS = [
     { to: '/brief', label: 'Brief' },
     { to: '/events', label: 'Events' },
     { to: '/ask', label: 'Ask' },
+    // The study hub carries the India desk, the glossary and saved notes with
+    // it, so following that audience costs one item in the masthead.
+    { to: '/study', label: 'Study' },
     { to: '/topic/conflict', label: 'Conflict' },
     { to: '/topic/security', label: 'Security' },
     { to: '/topic/diplomacy', label: 'Diplomacy' },

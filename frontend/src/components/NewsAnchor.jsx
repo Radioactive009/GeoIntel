@@ -53,6 +53,9 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+        // A canvas is inline by default, which leaves a descender's worth of
+        // gap under it inside the square frame.
+        renderer.domElement.style.display = 'block';
         mount.appendChild(renderer.domElement);
 
         // ── Lighting: key, warm fill to keep the shadow side from going dead,
@@ -83,9 +86,22 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
 
         // Taller than wide and deeper than wide, which is a head; a plain
         // sphere is a ball and no amount of detail on top fixes that.
+        const SKULL = { x: 0.95, y: 1.13, z: 1.02 };
         const skull = new THREE.Mesh(new THREE.SphereGeometry(1, 56, 56), skin());
-        skull.scale.set(0.95, 1.13, 1.02);
+        skull.scale.set(SKULL.x, SKULL.y, SKULL.z);
         head.add(skull);
+
+        // How far forward a feature has to sit to clear the face depends on how
+        // far out from the centre it is, because the face is an ellipsoid. Every
+        // feature below is placed against the surface at its own x/y instead of
+        // at a depth chosen by eye: reshaping the skull last time moved the
+        // surface past a set of hand-picked depths and sank the entire face
+        // inside the head, which is not a thing that should be able to happen
+        // twice.
+        const faceZ = (x, y) => {
+            const k = 1 - (x / SKULL.x) ** 2 - (y / SKULL.y) ** 2;
+            return k > 0 ? Math.sqrt(k) * SKULL.z : 0;
+        };
 
         // Overlapping mass at the bottom front, giving a jaw and chin instead
         // of a spherical underside.
@@ -96,8 +112,15 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
 
         // ── Hair: a cap and a swept fringe. Rounded rather than boxy, because
         //    a hard edge at this size reads as a hat ──
+        //
+        //    The cap is a full ring of azimuth, so however far down it reaches
+        //    at the back it also reaches at the front. Taken past the equator it
+        //    came down over the eyes as a helmet — invisibly, while the face was
+        //    still sunk inside the skull. It now stops above the brow and the
+        //    fringe below covers the forehead, which is where a hairline is.
+        const HAIRLINE = Math.PI * 0.36;
         const hairCap = new THREE.Mesh(
-            new THREE.SphereGeometry(1.045, 44, 44, 0, Math.PI * 2, 0, Math.PI * 0.58),
+            new THREE.SphereGeometry(1.045, 44, 44, 0, Math.PI * 2, 0, HAIRLINE),
             cloth(HAIR),
         );
         hairCap.scale.set(0.96, 1.16, 1.03);
@@ -112,8 +135,10 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
 
         [-1, 1].forEach((side) => {
             const sideburn = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 20), cloth(HAIR));
+            // Reaches up to meet the cap's edge, so no band of scalp shows
+            // between the two down the side of the head.
             sideburn.scale.set(0.5, 1.5, 0.9);
-            sideburn.position.set(side * 0.88, 0.16, 0.05);
+            sideburn.position.set(side * 0.88, 0.20, 0.05);
             head.add(sideburn);
         });
 
@@ -124,10 +149,13 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
             head.add(ear);
         });
 
-        // ── Eyes: set into the face rather than sitting on it ──
+        // ── Eyes: set into the face rather than sitting on it — the socket sits
+        //    just under the surface so the eyeball breaks through it ──
+        const EYE = { x: 0.33, y: 0.08 };
+        const BROW_Y = 0.40;
         const eyes = [-1, 1].map((side) => {
             const group = new THREE.Group();
-            group.position.set(side * 0.33, 0.08, 0.76);
+            group.position.set(side * EYE.x, EYE.y, faceZ(EYE.x, EYE.y) - 0.07);
 
             const white = new THREE.Mesh(
                 new THREE.SphereGeometry(0.165, 24, 24),
@@ -140,14 +168,18 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
                 new THREE.SphereGeometry(0.082, 20, 20),
                 new THREE.MeshStandardMaterial({ color: 0x2a1f18, roughness: 0.2 }),
             );
-            pupil.position.z = 0.11;
+            pupil.position.z = 0.09;
             group.add(pupil);
 
+            // On the head rather than in the eye group: the blink below squashes
+            // the group to a twelfth of its height, which would drag the brow
+            // down onto the eye with the lid. It sits on the forehead, which is
+            // further back than the eye, so its depth is measured there.
             const brow = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 20), cloth(HAIR));
             brow.scale.set(1.1, 0.3, 0.4);
-            brow.position.set(0, 0.32, 0.06);
+            brow.position.set(side * EYE.x, BROW_Y, faceZ(EYE.x, BROW_Y) + 0.02);
             brow.rotation.z = side * 0.1;
-            group.add(brow);
+            head.add(brow);
 
             head.add(group);
             return { group, pupil, brow };
@@ -156,9 +188,14 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
         // ── Glasses: proportionate. Oversized frames turn a presenter into a
         //    caricature, and the silhouette is doing that work already ──
         const frameMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.35, metalness: 0.45 });
+        // One flat plane clearing the eyeballs, rather than each piece pushed
+        // out to its own local surface: lenses that follow the curve of the
+        // cheek are goggles. Real frames stand off the face towards the edges,
+        // and front-on that standoff is not what the reader sees anyway.
+        const LENS_Z = faceZ(EYE.x, EYE.y) + 0.12;
         [-1, 1].forEach((side) => {
             const lens = new THREE.Mesh(new THREE.TorusGeometry(0.265, 0.03, 12, 32), frameMat);
-            lens.position.set(side * 0.33, 0.08, 0.83);
+            lens.position.set(side * EYE.x, EYE.y, LENS_Z);
             head.add(lens);
 
             const glass = new THREE.Mesh(
@@ -167,23 +204,25 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
                     color: 0xbfe6ff, transparent: true, opacity: 0.11, roughness: 0.08,
                 }),
             );
-            glass.position.set(side * 0.33, 0.08, 0.83);
+            glass.position.set(side * EYE.x, EYE.y, LENS_Z);
             head.add(glass);
 
-            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.028, 0.028), frameMat);
-            arm.position.set(side * 0.68, 0.1, 0.56);
-            arm.rotation.y = side * 0.72;
+            // Runs from the outer edge of the lens back to the ear, hugging the
+            // side of the head; the old stub sat inside the skull entirely.
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.028, 0.028), frameMat);
+            arm.position.set(side * 0.75, 0.1, 0.65);
+            arm.rotation.y = side * 1.21;
             head.add(arm);
         });
         const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.028, 0.028), frameMat);
-        bridge.position.set(0, 0.1, 0.86);
+        bridge.position.set(0, 0.1, LENS_Z);
         head.add(bridge);
 
         // A rounded wedge rather than a cone: a cone points, and a pointing
         // nose is the fastest way to make a face look like a puppet.
         const nose = new THREE.Mesh(new THREE.SphereGeometry(0.15, 24, 24), skin(SKIN_SHADE));
         nose.scale.set(0.72, 1.05, 1.15);
-        nose.position.set(0, -0.16, 0.88);
+        nose.position.set(0, -0.16, faceZ(0, -0.16) - 0.06);
         head.add(nose);
 
         // ── Mouth: scaled while speaking, which is the whole lip-sync ──
@@ -191,7 +230,7 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
             new THREE.CapsuleGeometry(0.1, 0.26, 6, 16),
             new THREE.MeshStandardMaterial({ color: 0x8c3a44, roughness: 0.5 }),
         );
-        mouth.position.set(0, -0.58, 0.79);
+        mouth.position.set(0, -0.58, faceZ(0, -0.58) + 0.025);
         mouth.rotation.z = Math.PI / 2;
         mouth.scale.set(1, 1, 0.45);
         head.add(mouth);
@@ -270,7 +309,11 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
         const resize = () => {
             const { clientWidth: w, clientHeight: h } = mount;
             if (!w || !h) return;
-            renderer.setSize(w, h, false);
+            // Let three set the canvas's CSS size as well as its buffer size.
+            // Nothing else sizes the element, so suppressing that left it
+            // displaying at its backing-store size — devicePixelRatio times too
+            // large — and the character spilled out of its box over the caption.
+            renderer.setSize(w, h);
             camera.aspect = w / h;
             camera.updateProjectionMatrix();
         };
@@ -309,12 +352,12 @@ const NewsAnchor = ({ speaking = false, listening = false, thinking = false, amp
                 head.rotation.x = -0.15 + Math.sin(t * 1.6) * 0.045;
                 eyes.forEach((eye) => {
                     eye.pupil.position.x = Math.sin(t * 1.3) * 0.045;
-                    eye.brow.position.y = 0.36;
+                    eye.brow.position.y = BROW_Y + 0.04;
                 });
             } else {
                 eyes.forEach((eye) => {
                     eye.pupil.position.x *= 0.9;
-                    eye.brow.position.y += (0.32 - eye.brow.position.y) * 0.2;
+                    eye.brow.position.y += (BROW_Y - eye.brow.position.y) * 0.2;
                 });
             }
 

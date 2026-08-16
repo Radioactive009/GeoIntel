@@ -107,6 +107,38 @@ class TestDegradesSafely:
         assert called == [], "an empty question must not reach the model"
 
 
+class TestExamMode:
+    """A study note is a different shape of answer, not a different sourcing."""
+
+    def _prompt_for(self, db, monkeypatch, **kwargs):
+        seen = {}
+
+        def capture(url, **request):
+            seen["system"] = request["json"]["messages"][0]["content"]
+            seen["tools"] = request["json"].get("tools")
+            return _answer("Answered.")
+
+        monkeypatch.setattr(agent.requests, "post", capture)
+        agent.ask(db, "What is happening in the Red Sea?", **kwargs)
+        return seen
+
+    def test_exam_mode_asks_for_a_study_note(self, db, configured, monkeypatch):
+        seen = self._prompt_for(db, monkeypatch, mode="exam")
+        assert "competitive examination" in seen["system"]
+
+    def test_the_default_is_unchanged(self, db, configured, monkeypatch):
+        assert "competitive examination" not in self._prompt_for(db, monkeypatch)["system"]
+        assert "competitive examination" not in self._prompt_for(
+            db, monkeypatch, mode="something-else")["system"]
+
+    def test_the_grounding_rules_still_apply(self, db, configured, monkeypatch):
+        """The point of the site is that answers are checkable. A study note
+        that invented its facts would be worse than none, not better."""
+        seen = self._prompt_for(db, monkeypatch, mode="exam")
+        assert "Never answer from memory" in seen["system"]
+        assert seen["tools"], "exam mode must keep the archive tools"
+
+
 class TestBudget:
     def test_spent_budget_stops_further_questions(self, db, configured, monkeypatch):
         monkeypatch.setattr(agent, "DAILY_BUDGET", 1)

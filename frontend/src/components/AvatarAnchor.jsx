@@ -73,6 +73,7 @@ const AvatarAnchor = ({
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.domElement.style.display = 'block';
         mount.appendChild(renderer.domElement);
 
         scene.add(new THREE.AmbientLight(0xffffff, 1.1));
@@ -205,7 +206,10 @@ const AvatarAnchor = ({
         const resize = () => {
             const { clientWidth: w, clientHeight: h } = mount;
             if (!w || !h) return;
-            renderer.setSize(w, h, false);
+            // updateStyle left on: nothing else gives the canvas a CSS size, so
+            // without it the element displays at devicePixelRatio times the
+            // frame and overflows onto the controls below.
+            renderer.setSize(w, h);
             camera.aspect = w / h;
             camera.updateProjectionMatrix();
         };

@@ -19,6 +19,10 @@ const EventPage = lazy(() => import('./pages/EventPage'));
 const CountryPage = lazy(() => import('./pages/CountryPage'));
 const TopicPage = lazy(() => import('./pages/TopicPage'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
+const StudyPage = lazy(() => import('./pages/StudyPage'));
+const IndiaPage = lazy(() => import('./pages/IndiaPage'));
+const GlossaryPage = lazy(() => import('./pages/GlossaryPage'));
+const NotesPage = lazy(() => import('./pages/NotesPage'));
 const AboutPage = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.AboutPage })));
 const MethodologyPage = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.MethodologyPage })));
 const SourcesPage = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.SourcesPage })));
@@ -64,6 +68,10 @@ function App() {
                             <Route path="/country/:iso" element={<CountryPage />} />
                             <Route path="/topic/:topic" element={<TopicPage />} />
                             <Route path="/search" element={<SearchPage />} />
+                            <Route path="/study" element={<StudyPage />} />
+                            <Route path="/india" element={<IndiaPage />} />
+                            <Route path="/glossary" element={<GlossaryPage />} />
+                            <Route path="/notes" element={<NotesPage />} />
                             <Route path="/about" element={<AboutPage />} />
                             <Route path="/methodology" element={<MethodologyPage />} />
                             <Route path="/sources" element={<SourcesPage />} />

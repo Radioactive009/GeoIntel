@@ -160,7 +160,10 @@ class TestGrounding:
         assert brief.build_brief(db, hours=24)["events"] == []
 
     def test_an_absurd_window_is_clamped_rather_than_obeyed(self, db):
-        assert brief.build_brief(db, hours=99999)["window_hours"] <= 24 * 14
+        # A month is the longest window worth composing: the compilation a
+        # reader revises from covers one, and beyond that the summary stops
+        # describing anything recent.
+        assert brief.build_brief(db, hours=99999)["window_hours"] <= 24 * 31
         assert brief.build_brief(db, hours=0)["window_hours"] >= 1
 
 

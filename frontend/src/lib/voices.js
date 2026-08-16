@@ -34,8 +34,18 @@ const POOR_MARKERS = [/espeak/i, /\bdavid\b/i, /\bzira\b/i, /\bmark\b/i, /pico/i
 
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
 
-export function rankVoice(voice) {
-    if (!voice || !/^en\b|^en[-_]/i.test(voice.lang || '')) return -1;
+/**
+ * Score a voice for reading an answer in `lang`.
+ *
+ * The quality markers are language-agnostic — a neural voice is a neural voice
+ * — but a voice in the wrong language is unusable however good it is, so that
+ * is a rejection rather than a penalty.
+ */
+export function rankVoice(voice, lang = 'en') {
+    const prefix = (lang || 'en').slice(0, 2).toLowerCase();
+    if (!voice) return -1;
+    const spoken = (voice.lang || '').slice(0, 2).toLowerCase();
+    if (!spoken || spoken !== prefix) return -1;
 
     let score = 10;
     QUALITY_MARKERS.forEach(([pattern, points]) => {
@@ -47,17 +57,17 @@ export function rankVoice(voice) {
     // bundled fallbacks. A weak signal, so it only breaks ties.
     if (voice.localService === false) score += 5;
     // en-GB and en-US ahead of regional variants the answer text is not in.
-    if (/^en-(GB|US)$/i.test(voice.lang)) score += 3;
+    if (prefix === 'en' && /^en-(GB|US)$/i.test(voice.lang)) score += 3;
     return score;
 }
 
-/** The best English voice available, or null to let the browser decide. */
-export function pickVoice(voices) {
+/** The best voice available for `lang`, or null to let the browser decide. */
+export function pickVoice(voices, lang = 'en') {
     if (!voices || !voices.length) return null;
     let best = null;
     let bestScore = 0;
     voices.forEach((voice) => {
-        const score = rankVoice(voice);
+        const score = rankVoice(voice, lang);
         if (score > bestScore) { best = voice; bestScore = score; }
     });
     return best;

@@ -88,6 +88,9 @@ export const getArticles = ({
     q = '',
     days = 0,
     includeDuplicates = false,
+    // With `country`, also match stories where it is the second country named
+    // — the bilateral coverage filed under the other party.
+    includeSecondary = false,
     limit = 60,
     offset = 0,
 } = {}) => {
@@ -100,6 +103,7 @@ export const getArticles = ({
     if (q) params.q = q;
     if (days) params.days = days;
     if (includeDuplicates) params.include_duplicates = true;
+    if (includeSecondary) params.include_secondary = true;
     return api.get('/articles', { params });
 };
 
@@ -143,9 +147,16 @@ export const getContested = ({ hours = 168, limit = 8 } = {}) =>
 /** One happening: its articles, outlets, and how reported figures moved. */
 export const getEvent = (key) => api.get(`/events/${key}`);
 
-/** Country pairs appearing in the same stories — the flashpoints board. */
-export const getRelations = ({ hours = 168, limit = 10 } = {}) =>
-    api.get('/relations', { params: { hours, limit } });
+/**
+ * Country pairs appearing in the same stories — the flashpoints board.
+ * `country` narrows it to one country's own pairs, which is the different
+ * question a country desk asks: who is this country in the news *with*.
+ */
+export const getRelations = ({ hours = 168, limit = 10, country = '' } = {}) => {
+    const params = { hours, limit };
+    if (country) params.country = country;
+    return api.get('/relations', { params });
+};
 
 /**
  * Aligned world snapshots for replaying the map through time.
@@ -198,15 +209,25 @@ export const setOwnerKey = (key) => {
     } catch { /* nothing to do; the key simply will not persist */ }
 };
 
-export const askAgent = (question, history = []) => {
+/**
+ * `signal` lets the caller abandon a question. The agent may spend most of a
+ * minute on tool round-trips, and without this the only way out of one is a
+ * reload — which in hands-free mode also throws away the conversation.
+ */
+export const askAgent = (question, history = [], { signal, mode = 'default' } = {}) => {
     const key = getOwnerKey();
-    return api.post('/agent/ask', { question, history }, {
+    return api.post('/agent/ask', { question, history, mode }, {
         timeout: 90000,
+        signal,
         // Absent for ordinary readers, which is what makes refreshing the feed
         // something only the owner can ask for.
         headers: key ? { 'X-API-Key': key } : undefined,
     });
 };
+
+/** True for a request the caller abandoned, which is not a failure to report. */
+export const wasAborted = (error) =>
+    error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError' || error?.name === 'AbortError';
 
 export const getAgentStatus = () => api.get('/agent/status');
 
@@ -214,9 +235,11 @@ export const getAgentStatus = () => api.get('/agent/status');
  * Transcribe recorded speech. Only used where the browser has no
  * SpeechRecognition of its own — Chrome and Edge never call this.
  */
-export const transcribeAudio = (blob) => {
+export const transcribeAudio = (blob, language = 'en') => {
     const form = new FormData();
     form.append('audio', blob, 'speech.webm');
+    // An ISO-639-1 code, or "auto" to have the server detect it.
+    form.append('language', language);
     return api.post('/agent/transcribe', form, {
         timeout: 60000,
         // Let the browser set the multipart boundary; the default JSON
@@ -243,8 +266,13 @@ export const speakText = async (text, voice) => {
     return data;
 };
 
-/** The daily brief: what to know, composed server-side from counted figures. */
-export const getBrief = (hours = 24) => api.get('/brief', { params: { hours } });
+/**
+ * The daily brief: what to know, composed server-side from counted figures.
+ * `depth` raises how many events are featured — a month-long compilation read
+ * for revision wants everything that met the bar, not a front page's five.
+ */
+export const getBrief = (hours = 24, { depth = 0 } = {}) =>
+    api.get('/brief', { params: depth ? { hours, depth } : { hours } });
 
 export const getHealth = () => api.get('/health');
 

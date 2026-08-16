@@ -119,6 +119,27 @@ class TestRelations:
         db.commit()
         assert alerts.compute_relations(db) == []
 
+    def test_one_country_sees_its_own_pairs_from_either_side(self, db, countries):
+        """A country desk asks a different question from the global board."""
+        source = models.Source(name="Wire")
+        db.add(source)
+        db.commit()
+        db.add_all([
+            # India named first in one pairing, second in the other.
+            _article("p1", countries["IN"], 60.0, source.id, secondary=countries["CN"]),
+            _article("p2", countries["US"], 60.0, source.id, secondary=countries["IN"]),
+            _article("p3", countries["UA"], 60.0, source.id, secondary=countries["US"]),
+        ])
+        db.commit()
+
+        pairs = alerts.compute_relations(db, country="IN")
+        assert {tuple(sorted(p["iso_codes"])) for p in pairs} == {("CN", "IN"), ("IN", "US")}, \
+            "matched on either side, and the unrelated pair left out"
+
+        assert alerts.compute_relations(db, country="India") == pairs, "name works as well as code"
+        assert alerts.compute_relations(db, country="ZZ") == []
+        assert len(alerts.compute_relations(db)) == 3, "unfiltered board is unchanged"
+
 
 class TestHistoryFrames:
     def test_frames_share_one_timestamp_across_countries(self, db, countries):

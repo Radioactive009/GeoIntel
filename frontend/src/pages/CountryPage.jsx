@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Rss, Star } from 'lucide-react';
 import ListingPage from './ListingPage';
+import AskAbout from '../components/AskAbout';
 import Seo from '../components/Seo';
 import Sparkline from '../components/Sparkline';
 import useWatchlist from '../hooks/useWatchlist';
@@ -82,6 +83,11 @@ const CountryPage = () => {
                 >
                     <Rss size={13} />
                 </a>
+                <AskAbout
+                    question={`What is happening in ${name} right now?`}
+                    label="Ask"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-[12px] font-bold text-slate-400 hover:text-cyan-300 hover:border-cyan-500/30 transition-all"
+                />
             </div>
         </div>
     );

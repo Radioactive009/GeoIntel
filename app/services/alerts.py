@@ -374,9 +374,15 @@ def compute_movers(db: Session, hours: int = 168, limit: int = 8) -> dict:
     }
 
 
-def compute_relations(db: Session, hours: int = 168, limit: int = 12) -> list[dict]:
+def compute_relations(
+    db: Session, hours: int = 168, limit: int = 12, country: str | None = None
+) -> list[dict]:
     """
     Country pairs that keep appearing in the same stories.
+
+    `country` narrows the board to one country's own pairs — every partner it
+    is in the news with, which is a different question from the global
+    flashpoint list and the one a reader following a single country asks.
 
     The resolver already ranks every country it finds in an article; storing
     the runner-up alongside the primary turns each article into an edge
@@ -437,6 +443,18 @@ def compute_relations(db: Session, hours: int = 168, limit: int = 12) -> list[di
         entry["avg_risk"] = round(risk_total / count, 2) if count else 0.0
         entry["status"] = risk_level(entry["avg_risk"])
         results.append(entry)
+
+    wanted = (country or "").strip()
+    if wanted:
+        # Matched on either side, since a pair has no direction: India-China
+        # and China-India are the same edge and were merged above.
+        needle = wanted.upper()
+        lowered = wanted.casefold()
+        results = [
+            row for row in results
+            if needle in row["iso_codes"]
+            or any(name.casefold() == lowered for name in row["countries"])
+        ]
 
     results.sort(key=lambda r: (-r["articles"], -r["avg_risk"]))
     return results[:limit]

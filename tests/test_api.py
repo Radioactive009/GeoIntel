@@ -55,6 +55,24 @@ class TestArticleFilters:
         by_name = client.get("/articles", params={"country": "India"}).json()["total"]
         assert by_iso == by_name == 1
 
+    def test_the_second_country_named_is_findable_on_request(self, client, feed):
+        """A story filed under Ukraine but also about the US is US coverage.
+
+        Off by default, because the feed's own country columns should keep
+        meaning "this story is about here"; on, because a country desk that
+        misses every bilateral story filed under the other party is useless.
+        """
+        assert client.get("/articles", params={"country": "US"}).json()["total"] == 0
+        widened = client.get(
+            "/articles", params={"country": "US", "include_secondary": True},
+        ).json()
+        assert widened["total"] == 1
+        assert widened["items"][0]["url"] == "a3"
+
+    def test_widening_does_not_disturb_the_primary_match(self, client, feed):
+        for params in ({"country": "IN"}, {"country": "IN", "include_secondary": True}):
+            assert client.get("/articles", params=params).json()["total"] == 1
+
     def test_like_wildcards_are_escaped(self, client, feed):
         """?q=100% must not behave as "100 followed by anything"."""
         hits = client.get("/articles", params={"q": "100%"}).json()["items"]

@@ -21,7 +21,7 @@ from html import escape
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from fastapi import (
-    Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile,
+    Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -531,6 +531,13 @@ def get_articles(
         default=False,
         description="Include syndicated re-reports of a story already in the feed",
     ),
+    include_secondary: bool = Query(
+        default=False,
+        description=(
+            "With `country`, also match stories where it is the second country "
+            "named — the bilateral coverage filed under the other party"
+        ),
+    ),
     limit: int = Query(default=60, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -552,7 +559,29 @@ def get_articles(
     country_term = (country or "").strip()
     region_term = (region or "").strip()
 
-    if country_term or region_term:
+    if country_term and include_secondary:
+        # Matched by id against both columns rather than through the join,
+        # because a story can name this country second — an India-China border
+        # report filed under China is about India too, and asking only the
+        # primary column hides exactly the bilateral coverage a country desk
+        # exists to show.
+        matching = (
+            db.query(models.Country.id)
+            .filter(
+                (models.Country.iso_code == country_term.upper())
+                | (models.Country.name.ilike(_like_escape(country_term), escape="\\"))
+            )
+            .scalar_subquery()
+        )
+        query = query.filter(
+            models.Article.country_id.in_(matching)
+            | models.Article.country_id_secondary.in_(matching)
+        )
+        if region_term:
+            query = query.join(models.Article.country_rel).filter(
+                models.Country.region == region_term
+            )
+    elif country_term or region_term:
         query = query.join(models.Article.country_rel)
         if country_term:
             query = query.filter(
@@ -916,6 +945,7 @@ def agent_ask(
         return {
             "answer": None, "sources": [], "tools_used": [],
             "error": "You have asked a lot in a short time. Give it a few minutes.",
+            "error_kind": "busy",
         }
 
     return agent.ask(
@@ -926,6 +956,7 @@ def agent_ask(
         # site's metered provider quota, so a reader can ask for it and be told
         # no, rather than the whole question being refused.
         can_admin=is_admin(x_api_key),
+        mode=payload.mode,
     )
 
 
@@ -933,6 +964,7 @@ def agent_ask(
 async def agent_transcribe(
     request: Request,
     audio: UploadFile = File(...),
+    language: str = Form(default="en"),
     db: Session = Depends(get_db),
 ):
     """
@@ -940,13 +972,16 @@ async def agent_transcribe(
 
     Chrome and Edge transcribe locally and never call this; Safari and Firefox
     have no SpeechRecognition, so their audio comes here.
+
+    `language` is an ISO-639-1 code, or "auto" to have it detected.
     """
     caller = request.client.host if request.client else "unknown"
     if agent.rate_limited(caller):
-        return {"text": None, "error": "You have asked a lot in a short time. Give it a few minutes."}
+        return {"text": None, "error": "You have asked a lot in a short time. Give it a few minutes.",
+                "error_kind": "busy"}
 
     payload = await audio.read()
-    return agent.transcribe(db, payload, audio.filename or "speech.webm")
+    return agent.transcribe(db, payload, audio.filename or "speech.webm", language)
 
 
 @app.post("/agent/speak")
@@ -1001,7 +1036,14 @@ def agent_status(db: Session = Depends(get_db)):
 
 @app.get("/brief", response_model=schemas.BriefResponse)
 def daily_brief(
-    hours: int = Query(default=24, ge=1, le=24 * 14),
+    hours: int = Query(default=24, ge=1, le=24 * 31),
+    depth: int = Query(
+        default=0, ge=0, le=40,
+        description=(
+            "How many events to feature. 0 keeps the front-page count; a "
+            "revision compilation over a month wants far more than a day's five"
+        ),
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -1012,7 +1054,7 @@ def daily_brief(
     figure in it would be indistinguishable from a real one. It also costs
     nothing and needs no key, so it works on any deployment.
     """
-    return brief.build_brief(db, hours=hours)
+    return brief.build_brief(db, hours=hours, depth=depth or None)
 
 
 @app.get("/contested", response_model=schemas.ContestedResponse)
@@ -1052,6 +1094,10 @@ def contested(
 def relations(
     hours: int = Query(default=168, ge=1, le=24 * 90),
     limit: int = Query(default=12, ge=1, le=50),
+    country: str | None = Query(
+        default=None,
+        description="Narrow to one country's own pairs, by ISO code or name",
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -1062,7 +1108,7 @@ def relations(
     """
     return {
         "window_hours": hours,
-        "pairs": alerts.compute_relations(db, hours=hours, limit=limit),
+        "pairs": alerts.compute_relations(db, hours=hours, limit=limit, country=country),
     }
 
 

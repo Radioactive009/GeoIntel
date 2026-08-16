@@ -6,6 +6,9 @@ import { getAlertColor, ALERT_STATUS_LABEL } from '../utils/country';
 import { timeAgo } from '../utils/time';
 import { StoryRow } from '../components/StoryCards';
 import { StoryRowSkeleton } from '../components/Skeleton';
+import AskAbout from '../components/AskAbout';
+import SaveStory from '../components/SaveStory';
+import TermChips from '../components/TermChips';
 import Seo from '../components/Seo';
 
 const EVENT_LABELS = {
@@ -156,7 +159,25 @@ const StoryPage = () => {
                                 {article.country_secondary}
                             </Link>
                         )}
+                        <AskAbout
+                            question={`What else has been reported about this: ${article.title}`}
+                            label="Ask the archive"
+                        />
+                        <SaveStory item={{
+                            id: article.id,
+                            title: article.title,
+                            source: article.source?.name,
+                            country: article.country,
+                            topic: article.event_type,
+                            published: article.published_at?.slice(0, 10),
+                        }} />
                     </div>
+
+                    <TermChips
+                        title={article.title}
+                        description={article.description}
+                        className="mt-5"
+                    />
 
                     {article.image_url && (
                         <figure className="mt-8">

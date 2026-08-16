@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -242,6 +242,9 @@ class AgentQuestion(BaseModel):
     question: str
     # Prior turns, so a follow-up ("and Ukraine?") has something to refer to.
     history: list[AgentTurn] = []
+    # "exam" asks for a study note rather than a reply: structured, specific,
+    # and explicit about what a development bears on. Sourcing is unchanged.
+    mode: Literal["default", "exam"] = "default"
 
 
 class SpeechRequest(BaseModel):
@@ -274,6 +277,9 @@ class AgentAnswer(BaseModel):
     # this site's articles. Derived from whether a tool ran.
     from_archive: bool = False
     error: Optional[str] = None
+    # Why the answer is missing, for interfaces that need to tell a momentary
+    # limit apart from a broken server: config | limit | busy | upstream | input.
+    error_kind: Optional[str] = None
 
 
 # ---------- RELATIONS ----------

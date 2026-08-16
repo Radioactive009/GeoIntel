@@ -4,75 +4,91 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Palette ───────────────────────────────────────────────
+   One place, named by role rather than by colour, so a component asks for
+   "the rule colour" instead of "white at ten percent" — which is what made
+   the previous scheme unchangeable without editing 172 call sites.
+
+   Channels rather than hex, so Tailwind can apply its own opacity to them
+   (`text-muted/70`).
+
+   The scheme is a publication's, not a dashboard's: paper ground, near-black
+   text, hairline rules, and a single ink-blue accent reserved for things you
+   can click. Saturation is spent almost entirely on the risk scale, so that
+   red genuinely means something when it appears. */
 :root {
-  color-scheme: dark;
-  --bg-deep: #020617;
-  --bg-dark: #0f172a;
-  --accent-cyan: #22d3ee;
-  --accent-blue: #3b82f6;
-  --accent-indigo: #6366f1;
+  color-scheme: light;
+
+  --paper: 251 251 249;            /* page ground, faintly warm */
+  --surface: 255 255 255;          /* raised: cards, the composer */
+  --surface-sunken: 244 243 240;   /* recessed: fills, empty states */
+
+  --ink: 20 23 26;                 /* headlines and primary text */
+  --body: 44 50 56;                /* running text */
+  --muted: 90 97 104;              /* metadata, bylines, counts */
+  --faint: 122 129 137;            /* the least important thing on the page */
+
+  --rule: 229 228 224;             /* hairlines */
+  --rule-strong: 209 208 202;      /* a rule that has to be seen */
+
+  --accent: 31 58 95;              /* ink blue: links and active state only */
+  --accent-strong: 20 40 68;
+  --accent-soft: 232 237 243;      /* the wash behind an active control */
+
+  /* Print-weight rather than screen-neon: these have to read as ink on
+     paper, and they are the only saturated colours in the design. */
+  --risk-high: 180 35 24;
+  --risk-medium: 181 71 8;
+  --risk-low: 6 118 71;
+
   font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 body {
   margin: 0;
   font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: var(--bg-deep);
-  color: #94a3b8;
+  background-color: rgb(var(--paper));
+  color: rgb(var(--body));
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* ── Premium Mesh Background ────────────────────────────── */
 .app-bg {
   min-height: 100vh;
-  background-color: var(--bg-deep);
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(34, 211, 238, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(34, 211, 238, 0.05) 0px, transparent 50%);
-  background-attachment: fixed;
+  background-color: rgb(var(--paper));
 }
 
-/* ── Refined Glassmorphism ──────────────────────────────── */
-.glass {
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.2);
+/* ── Surfaces ──────────────────────────────────────────────
+   The glass panels are gone. Frosted translucency reads as an application
+   chrome; a publication separates things with a rule and a change of ground,
+   which is also what survives being printed. */
+.glass,
+.glass-card {
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--rule));
 }
 
 .glass-strong {
-  background: rgba(2, 6, 23, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgb(var(--paper) / 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgb(var(--rule));
 }
 
 .glass-card {
-  background: rgba(30, 41, 59, 0.3);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.2s ease;
 }
 
 .glass-card:hover {
-  background: rgba(30, 41, 59, 0.45);
-  border: 1px solid rgba(34, 211, 238, 0.15);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.4);
+  border-color: rgb(var(--rule-strong));
 }
 
-/* ── Glow & Accents ────────────────────────────────────── */
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.1);
-}
+.glow-cyan { box-shadow: none; }
 
 .border-glow {
-  border: 1px solid rgba(34, 211, 238, 0.2);
+  border: 1px solid rgb(var(--rule-strong));
 }
 
 /* ── Interactive Elements ───────────────────────────────── */
@@ -210,4 +226,55 @@ body {
   background-size: 200% 100%;
   animation: cloud-drift var(--cloud-speed, 45s) linear infinite;
   will-change: background-position;
+}
+
+
+/* ── Printing ──────────────────────────────────────────────
+   The revision compilation is meant to be worked through on paper, and a dark
+   interface prints as a solid black page or, with backgrounds off, as pale
+   grey text on white. Everything is forced back to ink on paper, and the
+   furniture that has no meaning off-screen is dropped. */
+@media print {
+  header.sticky,
+  footer,
+  nav[aria-label="Sections"] {
+    display: none !important;
+  }
+
+  html, body, #root, .bg-background {
+    background: #fff !important;
+  }
+
+  /* Tailwind's colour utilities are far too specific to override one by one,
+     so text is reset wholesale and the few things that must stay distinct are
+     restored below. */
+  * {
+    color: #111 !important;
+    border-color: #d4d4d8 !important;
+    box-shadow: none !important;
+  }
+
+  a {
+    color: #111 !important;
+    text-decoration: none;
+  }
+
+  /* A printed page cannot be clicked, so the destination has to be legible. */
+  main a[href^="/"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.75em;
+    color: #6b7280 !important;
+  }
+
+  .tabular-nums, .text-slate-500, .text-slate-600 {
+    color: #52525b !important;
+  }
+
+  section {
+    break-inside: avoid;
+  }
+
+  h1, h2, h3 {
+    break-after: avoid;
+  }
 }
