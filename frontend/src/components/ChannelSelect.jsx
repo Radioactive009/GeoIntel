@@ -83,7 +83,7 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
     useEffect(() => {
         if (!open || !listRef.current) return;
         const el = listRef.current.querySelector(`[data-idx="${cursor}"]`);
-        el?.scrollIntoView({ block: 'nearest' });
+        el?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     }, [cursor, open]);
 
     const commit = (channel) => {
@@ -121,7 +121,7 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                 onClick={() => setOpen((o) => !o)}
                 aria-haspopup="listbox"
                 aria-expanded={open}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all duration-300 text-left group ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-smooth duration-300 text-left group ${
                     open
                         ? 'bg-surface border-accent shadow-lg shadow-transparent'
                         : 'bg-surface border-rule hover:border-rule-strong'
@@ -149,7 +149,7 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
 
                 <ChevronDown
                     size={16}
-                    className={`shrink-0 text-muted group-hover:text-accent transition-all duration-300 ${
+                    className={`shrink-0 text-muted group-hover:text-accent transition-smooth duration-300 ${
                         open ? 'rotate-180 text-accent' : ''
                     }`}
                 />

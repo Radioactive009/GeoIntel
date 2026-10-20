@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Seo from '../components/Seo';
-import { getSources, getStats } from '../services/api';
+import { getOutletFraming, getSources, getStats } from '../services/api';
 
 /**
  * Standing pages.
@@ -134,11 +134,20 @@ export const MethodologyPage = () => (
 
         <H2>4. How a country's level is produced</H2>
         <P>
-            A country's level is the weighted mean of its recent stories. Two adjustments
+            A country's level is the share of its recent coverage that scored as high-risk —
+            so 40% means two of every five reports about it were severe ones. Two adjustments
             matter. Outlets are weighted, so one alarming report from an aggregator moves a
             national level less than a wire report does. And a country with very few stories is
-            pulled toward the global average, because a single alarming article is not evidence
+            pulled toward the global share, because three alarming articles are not evidence
             of a national threat level.
+        </P>
+        <P>
+            This was the weighted mean of its stories, and the mean hid what it was meant to
+            show. Most reporting about anywhere is unremarkable, so averaging pulled every
+            country toward the middle: across 201 countries the levels spanned only 34 to 64,
+            none could ever reach the critical band, and the map rendered as a single colour.
+            A country whose coverage is routine apart from three catastrophes is genuinely more
+            exposed than one with none, and the average said otherwise.
         </P>
         <P>
             Duplicate reports of one event are counted once. Otherwise a country's level would
@@ -166,16 +175,42 @@ export const MethodologyPage = () => (
     </Page>
 );
 
+/**
+ * How an outlet frames, as a bar either side of the room's consensus.
+ *
+ * Signed, because the direction is the whole point: left of centre means it
+ * consistently reads shared events as calmer than the outlets beside it.
+ */
+const LeanBar = ({ divergence, max = 30 }) => {
+    const clamped = Math.max(-max, Math.min(max, divergence));
+    const width = `${(Math.abs(clamped) / max) * 50}%`;
+    const grave = clamped > 0;
+    return (
+        <div className="relative h-1.5 w-full rounded-full bg-surface-sunken" aria-hidden="true">
+            <div className="absolute inset-y-0 left-1/2 w-px bg-rule-strong" />
+            <div
+                className={`absolute inset-y-0 rounded-full ${grave ? 'bg-risk-high/70' : 'bg-accent/70'}`}
+                style={grave ? { left: '50%', width } : { right: '50%', width }}
+            />
+        </div>
+    );
+};
+
 export const SourcesPage = () => {
     const [sources, setSources] = useState([]);
     const [stats, setStats] = useState(null);
+    const [profiles, setProfiles] = useState([]);
 
     useEffect(() => {
-        Promise.all([getSources().catch(() => null), getStats().catch(() => null)])
-            .then(([sourceRes, statRes]) => {
-                setSources(sourceRes?.data || []);
-                setStats(statRes?.data || null);
-            });
+        Promise.all([
+            getSources().catch(() => null),
+            getStats().catch(() => null),
+            getOutletFraming({ hours: 720, limit: 24 }).catch(() => null),
+        ]).then(([sourceRes, statRes, framingRes]) => {
+            setSources(sourceRes?.data || []);
+            setStats(statRes?.data || null);
+            setProfiles(framingRes?.data?.outlets || []);
+        });
     }, []);
 
     return (
@@ -198,7 +233,60 @@ export const SourcesPage = () => {
                 </P>
             )}
 
-            <div className="mt-8 columns-2 md:columns-3 gap-x-6">
+            {profiles.length > 0 && (
+                <>
+                    <H2>How they frame</H2>
+                    <P>
+                        When several outlets cover the same happening, each one&apos;s reporting is
+                        scored for severity and compared against the others covering{' '}
+                        <em>that same happening</em>. Do it across a month and a pattern appears:
+                        some outlets consistently read a shared event as graver than the room, and
+                        some consistently read it as calmer.
+                    </P>
+                    <P>
+                        Because the comparison is only ever within one event, this is not a measure
+                        of which outlets cover grim subjects. A wire that reports disasters and a
+                        paper that reports elections are never set against each other.
+                    </P>
+
+                    <div className="mt-8 space-y-4">
+                        {profiles.map((outlet) => (
+                            <div key={outlet.source} className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-x-6 gap-y-2 items-center pb-4 border-b border-rule last:border-0">
+                                <div className="min-w-0">
+                                    <p className="text-[14px] font-semibold text-ink">{outlet.source}</p>
+                                    <p className="text-[11px] text-muted mt-0.5">
+                                        {outlet.events} shared events · {outlet.reports} reports
+                                        {outlet.by_topic.length > 0 && (
+                                            <>
+                                                {' · '}
+                                                {outlet.by_topic
+                                                    .map((t) => `${t.topic} ${t.divergence > 0 ? '+' : ''}${t.divergence}`)
+                                                    .join(', ')}
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
+                                <div className="w-full sm:w-56">
+                                    <LeanBar divergence={outlet.divergence} />
+                                    <p className="mt-1 text-[11px] text-muted tabular-nums text-right">
+                                        {outlet.divergence > 0 ? '+' : ''}{outlet.divergence} vs consensus
+                                        <span className="text-faint"> · ±{outlet.consistency}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <P>
+                        The figure after ± is how much that lean varies between events. A large
+                        lean with a large variation is one or two loud stories rather than a
+                        habit, and is worth less than a small consistent one. Outlets appear here
+                        only once they have been compared on at least eight shared events.
+                    </P>
+                </>
+            )}
+
+            <H2>Every publication</H2>
+            <div className="mt-6 columns-2 md:columns-3 gap-x-6">
                 {sources.map((source) => (
                     <p key={source.id} className="text-[13px] text-body break-inside-avoid py-1">
                         {source.name}

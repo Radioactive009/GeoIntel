@@ -149,7 +149,7 @@ const CopyAnswer = ({ turn }) => {
 
 const SUGGESTION_CLASS =
     'text-left px-4 py-3 rounded-2xl border border-rule bg-surface-sunken text-[13px] '
-    + 'text-body hover:border-accent hover:text-ink transition-all';
+    + 'text-body hover:border-accent hover:text-ink transition-smooth';
 
 const AskPage = () => {
     // Restored from this browser, so a stray reload does not throw away a
@@ -420,7 +420,7 @@ const AskPage = () => {
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                     <button
                         onClick={() => setVoiceMode((on) => !on)}
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-all ${
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-smooth ${
                             voiceMode
                                 ? 'border-accent bg-accent-soft text-accent'
                                 : 'border-rule text-body hover:text-ink hover:border-rule-strong'
@@ -433,7 +433,7 @@ const AskPage = () => {
                         onClick={() => setMode((m) => (m === 'exam' ? 'default' : 'exam'))}
                         aria-pressed={mode === 'exam'}
                         title="Structured answers with the facts that can be cited"
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-all ${
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-smooth ${
                             mode === 'exam'
                                 ? 'border-accent bg-accent-soft text-accent'
                                 : 'border-rule text-body hover:text-ink hover:border-rule-strong'
@@ -445,7 +445,7 @@ const AskPage = () => {
                     {turns.length > 0 && (
                         <button
                             onClick={clearThread}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-rule text-[13px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-all"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-rule text-[13px] font-semibold text-body hover:text-ink hover:border-rule-strong transition-smooth"
                         >
                             <Trash2 size={13} />
                             Clear
@@ -530,10 +530,10 @@ const AskPage = () => {
                                 (handsFree ? conversing : voice.listening)
                                     ? 'Stop' : 'Start talking'
                             }
-                            className={`p-4 rounded-full transition-all disabled:opacity-30 ${
+                            className={`p-4 rounded-full transition-smooth disabled:opacity-30 ${
                                 (handsFree ? conversing : voice.listening)
-                                    ? 'bg-risk-high text-ink scale-110 shadow-lg shadow-transparent'
-                                    : 'bg-accent text-ink hover:bg-accent'
+                                    ? 'bg-risk-high text-paper scale-110 shadow-lg shadow-transparent'
+                                    : 'bg-accent text-paper hover:bg-accent-strong'
                             }`}
                         >
                             {(handsFree ? conversing : voice.listening)
@@ -667,7 +667,7 @@ const AskPage = () => {
                             <button
                                 key={question}
                                 onClick={() => send(question)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-rule bg-surface-sunken text-[12px] text-body hover:border-accent hover:text-ink transition-all"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-rule bg-surface-sunken text-[12px] text-body hover:border-accent hover:text-ink transition-smooth"
                             >
                                 <CornerDownRight size={11} />
                                 {question}
@@ -707,7 +707,7 @@ const AskPage = () => {
                             type="submit"
                             disabled={unavailable || !draft.trim()}
                             aria-label="Send question"
-                            className="p-2.5 rounded-xl bg-accent text-ink disabled:opacity-25 disabled:pointer-events-none hover:bg-accent transition-colors"
+                            className="p-2.5 rounded-xl bg-accent text-paper disabled:opacity-25 disabled:pointer-events-none hover:bg-accent-strong transition-colors"
                         >
                             <Send size={16} />
                         </button>

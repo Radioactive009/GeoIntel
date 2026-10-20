@@ -77,7 +77,7 @@ const OwnerKey = () => {
                 />
                 <button
                     type="submit"
-                    className="px-3 py-2 rounded-lg bg-accent text-ink text-[13px] font-semibold hover:bg-accent"
+                    className="px-3 py-2 rounded-lg bg-accent text-paper text-[13px] font-semibold hover:bg-accent-strong"
                 >
                     Save
                 </button>

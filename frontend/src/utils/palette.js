@@ -44,9 +44,16 @@ export const riskColor = (status) => {
     return token('risk-low');
 };
 
+// A country's level is the share of its coverage that is high-risk, not a
+// mean severity, so it bands far lower — these must track
+// COUNTRY_HIGH_THRESHOLD / COUNTRY_MEDIUM_THRESHOLD in alerts.py. Banding a
+// share at the old 70/40 put every country on earth in one colour.
+export const COUNTRY_HIGH = 35;
+export const COUNTRY_MEDIUM = 15;
+
 export const riskColorByLevel = (level) => {
     if (typeof level !== 'number') return token('rule-strong');   // no data
-    if (level >= 70) return token('risk-high');
-    if (level >= 40) return token('risk-medium');
+    if (level >= COUNTRY_HIGH) return token('risk-high');
+    if (level >= COUNTRY_MEDIUM) return token('risk-medium');
     return token('risk-low');
 };

@@ -110,7 +110,7 @@ const ListingPage = ({ title, standfirst, filters, emptyMessage, headerExtra, pr
                             <button
                                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                                 disabled={page === 1}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-rule text-[13px] font-semibold text-body hover:border-accent disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-rule text-[13px] font-semibold text-body hover:border-accent disabled:opacity-30 disabled:pointer-events-none transition-smooth"
                             >
                                 <ChevronLeft size={15} /> Newer
                             </button>
@@ -120,7 +120,7 @@ const ListingPage = ({ title, standfirst, filters, emptyMessage, headerExtra, pr
                             <button
                                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={page === totalPages}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-rule text-[13px] font-semibold text-body hover:border-accent disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-rule text-[13px] font-semibold text-body hover:border-accent disabled:opacity-30 disabled:pointer-events-none transition-smooth"
                             >
                                 Older <ChevronRight size={15} />
                             </button>

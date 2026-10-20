@@ -79,8 +79,8 @@ const ArticleCard = ({ article, index }) => {
 
     return (
         <div
-            className="group glass-card rounded-2xl overflow-hidden flex flex-col h-full relative transition-all duration-500 hover:shadow-2xl hover:shadow-transparent hover:-translate-y-1 animate-fade-in-up"
-            style={{ animationDelay: `${index * 50}ms` }}
+            className="group glass-card rounded-2xl overflow-hidden flex flex-col h-full relative transition-smooth duration-500 hover:shadow-2xl hover:shadow-transparent hover:-translate-y-1 animate-fade-in-up"
+            style={{ animationDelay: `${Math.min(index, 5) * 45}ms` }}
         >
             {/* Alert Status Bar */}
             <div className={`h-1 w-full bg-gradient-to-r ${alert.gradient}`} />
@@ -178,7 +178,7 @@ const ArticleCard = ({ article, index }) => {
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-2 rounded-xl bg-surface-sunken border border-rule text-accent hover:bg-accent-soft hover:border-accent hover:scale-110 active:scale-95 transition-all"
+                        className="p-2 rounded-xl bg-surface-sunken border border-rule text-accent hover:bg-accent-soft hover:border-accent hover:scale-110 active:scale-95 transition-smooth"
                         title="View Full Intel Report"
                     >
                         <ExternalLink size={14} />

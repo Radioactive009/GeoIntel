@@ -80,7 +80,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
     };
 
     return (
-        <div className="glass rounded-2xl p-6 lg:p-8 animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+        <div className="glass rounded-2xl p-6 lg:p-8 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
             <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-risk-high/10 border border-risk-high/30">
@@ -100,7 +100,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setMuted((m) => !m)}
-                            className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-all"
+                            className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-smooth"
                             title={muted ? 'Unmute' : 'Mute'}
                         >
                             {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -109,7 +109,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
                             href={`https://www.youtube.com/watch?v=${active.live_video_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-all"
+                            className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-smooth"
                             title="Open on YouTube"
                         >
                             <ExternalLink size={14} />
@@ -157,7 +157,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
                                 onClick={() => setStarted(true)}
                                 className="absolute inset-0 w-full h-full flex flex-col items-center justify-center gap-4 group bg-gradient-to-br from-surface to-surface"
                             >
-                                <div className="p-5 rounded-full bg-risk-high/10 border border-risk-high/30 group-hover:bg-risk-high/10 group-hover:scale-110 transition-all">
+                                <div className="p-5 rounded-full bg-risk-high/10 border border-risk-high/30 group-hover:bg-risk-high/10 group-hover:scale-110 transition-smooth">
                                     <Play size={26} className="text-risk-high translate-x-0.5" fill="currentColor" />
                                 </div>
                                 <div className="text-center px-6">
@@ -171,7 +171,7 @@ const LiveBroadcast = ({ channels = [], selectedCountry, selectedLabel, loading 
 
                         <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-risk-high/90 backdrop-blur-sm pointer-events-none">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                            <span className="text-[9px] font-extrabold text-ink uppercase tracking-widest">Live</span>
+                            <span className="text-[9px] font-extrabold text-paper uppercase tracking-widest">Live</span>
                         </div>
                     </div>
 

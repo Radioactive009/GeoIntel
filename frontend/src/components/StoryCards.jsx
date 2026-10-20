@@ -148,7 +148,7 @@ export const SecondaryStory = ({ article }) => (
 
 /** The river: everything after the top of the page. */
 export const StoryCard = ({ article }) => (
-    <article className="group flex flex-col h-full rounded-2xl border border-rule bg-surface-sunken overflow-hidden transition-all duration-300 hover:bg-surface-sunken hover:border-rule-strong">
+    <article className="group flex flex-col h-full rounded-2xl border border-rule bg-surface-sunken overflow-hidden transition-smooth duration-300 hover:bg-surface-sunken hover:border-rule-strong">
         <Link to={`/story/${article.id}`} className="flex flex-col h-full">
             {article.image_url && (
                 <div className="relative aspect-[16/9] bg-surface shrink-0">

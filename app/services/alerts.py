@@ -30,8 +30,23 @@ from .. import models
 
 logger = logging.getLogger(__name__)
 
+# Bands for a single article's severity, on the 0-100 scale the risk engine
+# produces. Used for individual stories and for country *pairs*, both of which
+# are averages of that same scale.
 HIGH_RISK_THRESHOLD = 70
 MEDIUM_RISK_THRESHOLD = 40
+
+# Bands for a country, which is no longer measured on that scale — see
+# compute_alert_status. A country's level is the share of its coverage that is
+# high-risk, so the numbers are far lower and mean something different.
+#
+# Chosen against the live distribution rather than picked round: the share runs
+# from about 2 to 57 across 201 countries, and these put roughly two thirds of
+# the world in "low", a third in "elevated" and a handful in "critical" — which
+# is the shape a reader expects from a risk map and what the previous scoring
+# could not produce at all.
+COUNTRY_HIGH_THRESHOLD = max(0.0, float(os.getenv("COUNTRY_HIGH_THRESHOLD", "35")))
+COUNTRY_MEDIUM_THRESHOLD = max(0.0, float(os.getenv("COUNTRY_MEDIUM_THRESHOLD", "15")))
 
 # Pseudo-count for the alert average. A country with a single alarming article
 # would otherwise top the global ranking on a sample of one; each country's
@@ -70,6 +85,7 @@ MIN_BASELINE_STDEV = 3.0
 # ALERT LEVELS
 # ─────────────────────────────────────────────────────────
 def risk_level(score: float) -> str:
+    """Band a severity score — one article, or the mean of a pair's coverage."""
     if score >= HIGH_RISK_THRESHOLD:
         return "high"
     if score >= MEDIUM_RISK_THRESHOLD:
@@ -77,9 +93,36 @@ def risk_level(score: float) -> str:
     return "low"
 
 
+def country_risk_level(share: float) -> str:
+    """Band a country, whose level is a share of coverage rather than a mean."""
+    if share >= COUNTRY_HIGH_THRESHOLD:
+        return "high"
+    if share >= COUNTRY_MEDIUM_THRESHOLD:
+        return "medium"
+    return "low"
+
+
 def compute_alert_status(db: Session, since: datetime | None = None) -> list[dict]:
     """
-    Weighted geopolitical alert level per country.
+    Geopolitical alert level per country: how much of its recent coverage is
+    high-risk reporting, as a percentage.
+
+    This was the weighted *mean* severity of a country's stories, and the mean
+    destroyed the signal. Most coverage of anywhere is unremarkable, so
+    averaging pulled every country toward the middle of the scale: across 201
+    countries the scores spanned only 34 to 64, no country could ever cross the
+    "critical" band at 70, and 175 of them landed in a single band. The map was
+    one flat colour and the legend had a swatch that could not light up.
+
+    Measuring prevalence instead of the average keeps the tail that matters. A
+    country whose reporting is routine except for three catastrophic stories is
+    genuinely more dangerous than one with none, and the mean said otherwise.
+    The same data now spans roughly 2 to 57 and orders sensibly — Yemen, North
+    Korea, Iran, Ukraine at the top; small quiet states at the bottom.
+
+    It is also explicable, which the old number was not: "56% of this country's
+    coverage is high-risk reporting" means something a reader can check, where
+    "the mean of an opaque 0-100 score is 43" does not.
 
     Computed by the database in a single aggregate query; this used to load
     every article into Python on each request.
@@ -95,6 +138,13 @@ def compute_alert_status(db: Session, since: datetime | None = None) -> list[dic
         models.Article.geo_risk_score,
         func.abs(func.coalesce(models.Article.sentiment_score, 0.0)) * 100,
     )
+    # Banded by the stored level where there is one, and by the score itself
+    # otherwise, so rows written before the column existed still count.
+    is_high = case(
+        (models.Article.geo_risk_level == "high", 1.0),
+        (models.Article.geo_risk_level.is_(None) & (risk_expr >= HIGH_RISK_THRESHOLD), 1.0),
+        else_=0.0,
+    )
     high_expr = case((models.Article.geo_risk_level == "high", 1), else_=0)
 
     # Duplicate reports of one event are coverage volume, not extra risk —
@@ -108,14 +158,18 @@ def compute_alert_status(db: Session, since: datetime | None = None) -> list[dic
     if since is not None:
         join_condition = and_(join_condition, models.Article.published_at >= since)
 
-    # Weighted mean rather than a plain average: one alarmist headline from a
+    # Weighted rather than a plain proportion: one alarmist headline from a
     # low-confidence aggregator should not move a national threat level as far
     # as a wire report. Sources predating the column, and articles with no
     # source, fall back to the neutral 1.0.
     weight_expr = func.coalesce(models.Source.reliability, 1.0)
-    weighted_risk = func.sum(risk_expr * weight_expr) / func.nullif(
+    total_weight = func.nullif(
         func.sum(case((models.Article.id.isnot(None), weight_expr), else_=0.0)), 0.0
     )
+    high_share = 100.0 * func.sum(is_high * weight_expr) / total_weight
+    # Kept alongside it: the old mean still describes how severe the typical
+    # report is, which is a different and still useful question.
+    weighted_risk = func.sum(risk_expr * weight_expr) / total_weight
 
     rows = (
         db.query(
@@ -124,6 +178,7 @@ def compute_alert_status(db: Session, since: datetime | None = None) -> list[dic
             models.Country.iso_code,
             models.Country.region,
             func.count(models.Article.id).label("total"),
+            high_share.label("high_share"),
             weighted_risk.label("avg_risk"),
             func.sum(high_expr).label("high_count"),
         )
@@ -138,23 +193,26 @@ def compute_alert_status(db: Session, since: datetime | None = None) -> list[dic
         .all()
     )
 
-    # Corpus-wide mean, weighted by article count, used as the shrinkage prior.
-    scored = [(int(t or 0), float(a)) for *_, t, a, _ in rows if t and a is not None]
+    # Corpus-wide share, weighted by article count, used as the shrinkage prior.
+    scored = [(int(t or 0), float(h)) for *_, t, h, _, _ in rows if t and h is not None]
     total_articles = sum(t for t, _ in scored)
-    global_mean = (
-        sum(t * a for t, a in scored) / total_articles if total_articles else 0.0
+    global_share = (
+        sum(t * h for t, h in scored) / total_articles if total_articles else 0.0
     )
 
     results = []
-    for country_id, name, iso_code, region, total, avg_risk, high_count in rows:
+    for country_id, name, iso_code, region, total, share, avg_risk, high_count in rows:
         total = int(total or 0)
-        raw_score = float(avg_risk) if total and avg_risk is not None else 0.0
+        raw_share = float(share) if total and share is not None else 0.0
+        severity = float(avg_risk) if total and avg_risk is not None else 0.0
 
         if total:
-            # Bayesian shrinkage: a mean over one article is not evidence of a
-            # national threat level, so pull it toward the global mean.
+            # Bayesian shrinkage: three high-risk stories out of three is not
+            # evidence that a country is the most dangerous on earth, so a
+            # small sample is pulled toward the global share until it has
+            # enough reports behind it to stand on its own.
             score = (
-                (total * raw_score + ALERT_CONFIDENCE_WEIGHT * global_mean)
+                (total * raw_share + ALERT_CONFIDENCE_WEIGHT * global_share)
                 / (total + ALERT_CONFIDENCE_WEIGHT)
             )
         else:
@@ -169,8 +227,12 @@ def compute_alert_status(db: Session, since: datetime | None = None) -> list[dic
             "total_articles": total,
             "critical_alerts": int(high_count or 0),
             "alert_level": score,
-            "raw_alert_level": round(raw_score, 2),
-            "alert_status": risk_level(score),
+            "raw_alert_level": round(raw_share, 2),
+            # How severe the typical report is, on the article scale. Reported
+            # separately because it answers a different question from how often
+            # the coverage turns severe.
+            "severity_mean": round(severity, 2),
+            "alert_status": country_risk_level(score),
         })
 
     results.sort(key=lambda r: r["alert_level"], reverse=True)

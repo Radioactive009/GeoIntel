@@ -240,7 +240,7 @@ const MapChart = ({
                         >
                             <p className="text-xs font-bold text-ink">{tooltip.countryName}</p>
                             <p className="text-[11px] text-body">
-                                Risk level:{' '}
+                                High-risk share:{' '}
                                 <span className="font-semibold text-accent">
                                     {typeof tooltip.alertLevel === 'number' ? `${tooltip.alertLevel.toFixed(1)}%` : 'No data'}
                                 </span>

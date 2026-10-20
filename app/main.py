@@ -33,7 +33,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import agent, alerts, brief, channels, events, framing, ingest, speech
+from .services import agent, alerts, brief, channels, events, framing, ingest, search, speech
 
 # =========================================================
 # LOGGING / ENV
@@ -605,13 +605,24 @@ def get_articles(
         # column existed, whose flag is NULL.
         query = query.filter(models.Article.is_duplicate.isnot(True))
 
+    # Relevance ranking where the full-text index exists, substring matching
+    # where it does not. Ranked ids are resolved first and the rest of the
+    # filters still apply on top, so a search combined with a country or topic
+    # filter narrows rather than ignoring one of them.
     q_term = (q or "").strip()
+    ranked: list[int] | None = None
     if q_term:
-        pattern = f"%{_like_escape(q_term)}%"
-        query = query.filter(
-            models.Article.title.ilike(pattern, escape="\\")
-            | models.Article.description.ilike(pattern, escape="\\")
-        )
+        ranked = search.ranked_ids(db, q_term)
+        if ranked is not None:
+            if not ranked:
+                return {"items": [], "total": 0, "limit": limit, "offset": offset}
+            query = query.filter(models.Article.id.in_(ranked))
+        else:
+            pattern = f"%{_like_escape(q_term)}%"
+            query = query.filter(
+                models.Article.title.ilike(pattern, escape="\\")
+                | models.Article.description.ilike(pattern, escape="\\")
+            )
 
     if days:
         query = query.filter(
@@ -619,12 +630,22 @@ def get_articles(
         )
 
     total = query.with_entities(func.count(models.Article.id)).order_by(None).scalar() or 0
-    items = (
-        query.order_by(models.Article.published_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+
+    if ranked:
+        # Ordered by relevance rather than recency: the newest article merely
+        # containing a word is rarely the one most about it. Sorted in Python
+        # because the rank lives in the id list, not in a column.
+        position = {article_id: i for i, article_id in enumerate(ranked)}
+        matched = query.order_by(None).all()
+        matched.sort(key=lambda a: position.get(a.id, len(position)))
+        items = matched[offset:offset + limit]
+    else:
+        items = (
+            query.order_by(models.Article.published_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
     # How many outlets carried each story on this page. One extra grouped
     # query for the whole page rather than a correlated subquery per row.
@@ -1087,6 +1108,49 @@ def contested(
     return {
         "window_hours": hours,
         "events": framing.contested_events(grouped, limit=limit),
+    }
+
+
+@app.get("/outlet-framing", response_model=schemas.OutletProfilesResponse)
+def outlet_framing_profiles(
+    hours: int = Query(default=24 * 30, ge=1, le=24 * 90),
+    limit: int = Query(default=40, ge=1, le=100),
+    min_events: int = Query(
+        default=framing.MIN_EVENTS_FOR_PROFILE, ge=2, le=50,
+        description="How many shared events an outlet needs before it is profiled",
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    How each outlet frames, measured across every event it shared with others.
+
+    The per-event comparison already existed and was discarded after rendering
+    one panel. Aggregated it says something much stronger, and something no
+    amount of reading individual stories would tell you: whether an outlet
+    consistently reads events as graver or calmer than the room it is in.
+
+    Only ever a within-event comparison, so this does not measure which outlets
+    cover grim subjects — an outlet is compared solely against others covering
+    the same happening.
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+    rows = (
+        db.query(models.Article)
+        .options(joinedload(models.Article.source))
+        .filter(
+            models.Article.event_key.isnot(None),
+            models.Article.published_at >= since,
+            models.Article.geo_risk_score.isnot(None),
+        )
+        .all()
+    )
+    grouped: dict[str, list[models.Article]] = {}
+    for article in rows:
+        grouped.setdefault(article.event_key, []).append(article)
+
+    return {
+        "window_hours": hours,
+        "outlets": framing.outlet_profiles(grouped, limit=limit, min_events=min_events),
     }
 
 

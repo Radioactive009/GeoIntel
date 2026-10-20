@@ -90,7 +90,7 @@ const EventPage = () => {
         let cancelled = false;
         setLoading(true);
         setMissing(false);
-        window.scrollTo(0, 0);
+        window.scrollTo({ top: 0, behavior: 'instant' });
         getEvent(key)
             .then((res) => { if (!cancelled) setEvent(res.data); })
             .catch((err) => {

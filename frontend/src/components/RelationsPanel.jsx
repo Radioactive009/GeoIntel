@@ -30,7 +30,7 @@ const RelationsPanel = ({ pairs = [], onSelect }) => {
     const busiest = Math.max(...pairs.map((p) => p.articles), 1);
 
     return (
-        <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
+        <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-surface-sunken border border-rule">
@@ -81,7 +81,7 @@ const RelationsPanel = ({ pairs = [], onSelect }) => {
                                 <div className="flex items-center gap-2 mt-1.5">
                                     <div className="flex-grow h-1 rounded-full bg-surface-sunken overflow-hidden">
                                         <div
-                                            className="h-full rounded-full transition-all duration-1000"
+                                            className="h-full rounded-full transition-smooth duration-500"
                                             style={{ width: `${(pair.articles / busiest) * 100}%`, background: color }}
                                         />
                                     </div>

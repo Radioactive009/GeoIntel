@@ -65,7 +65,7 @@ const Sidebar = ({
     const highShare = total > 0 ? Math.round((highCount / total) * 100) : 0;
 
     return (
-        <aside className="w-full lg:w-72 flex-shrink-0 transition-all duration-500">
+        <aside className="w-full lg:w-72 flex-shrink-0 transition-smooth duration-500">
             <div className="glass rounded-2xl p-6 sticky top-24 space-y-8 animate-fade-in-up">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -128,9 +128,9 @@ const Sidebar = ({
                                 <button
                                     key={range.id}
                                     onClick={() => onDaysChange(range.id)}
-                                    className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                                    className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-bold transition-smooth ${
                                         selectedDays === range.id
-                                            ? 'bg-accent text-ink shadow-lg shadow-transparent'
+                                            ? 'bg-accent text-paper shadow-lg shadow-transparent'
                                             : 'text-muted hover:text-body'
                                     }`}
                                 >
@@ -203,33 +203,33 @@ const Sidebar = ({
                     </div>
                 </div>
 
-                {/* System Info — real pipeline numbers, not a hardcoded bar */}
-                <div className="pt-6 border-t border-rule">
-                    <div className="p-4 rounded-2xl bg-surface border border-rule space-y-3">
-                        <div className="flex items-center gap-3">
-                            <div className="p-1.5 rounded-lg bg-risk-low">
-                                <Cpu size={14} className="text-risk-low" />
-                            </div>
-                            <span className="text-[11px] font-bold text-body uppercase tracking-widest leading-none">Scoring</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-muted">Method</span>
-                            <span className="text-[10px] font-bold text-risk-low">Keywords + sentiment</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-muted">Stories scored</span>
-                            <span className="text-[10px] font-bold text-body tabular-nums">{total}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-muted">Share high risk</span>
-                            <span className="text-[10px] font-bold text-risk-high tabular-nums">{highShare}%</span>
-                        </div>
-                        <div className="w-full h-1 bg-surface-sunken rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-risk-low to-risk-high transition-all duration-1000 ease-out"
-                                style={{ width: `${Math.max(highShare, 2)}%` }}
-                            />
-                        </div>
+                {/* System Info — real pipeline numbers, not a hardcoded bar.
+                    Flat rather than a panel: this already sits inside the
+                    sidebar card and under a rule, so a second bordered box
+                    only stacked its own padding on top of the card's and left
+                    a block of dead space under the bar. */}
+                <div className="pt-5 border-t border-rule space-y-2.5">
+                    <div className="flex items-center gap-2.5">
+                        <Cpu size={13} className="text-risk-low" />
+                        <span className="text-[11px] font-bold text-body uppercase tracking-widest leading-none">Scoring</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-muted">Method</span>
+                        <span className="text-[10px] font-bold text-risk-low">Keywords + sentiment</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-muted">Stories scored</span>
+                        <span className="text-[10px] font-bold text-body tabular-nums">{total}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-muted">Share high risk</span>
+                        <span className="text-[10px] font-bold text-risk-high tabular-nums">{highShare}%</span>
+                    </div>
+                    <div className="w-full h-1 bg-surface-sunken rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-gradient-to-r from-risk-low to-risk-high transition-smooth duration-500 ease-out"
+                            style={{ width: `${Math.max(highShare, 2)}%` }}
+                        />
                     </div>
                 </div>
             </div>

@@ -74,9 +74,9 @@ const EventsPage = () => {
                         <button
                             key={w.hours}
                             onClick={() => setHours(w.hours)}
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-smooth ${
                                 hours === w.hours
-                                    ? 'bg-accent text-ink'
+                                    ? 'bg-accent text-paper'
                                     : 'text-muted hover:text-body'
                             }`}
                         >
@@ -190,7 +190,7 @@ const EventsPage = () => {
                                         {/* Reach relative to the biggest event in the window. */}
                                         <div className="mt-2.5 h-1 rounded-full bg-surface-sunken overflow-hidden max-w-md">
                                             <div
-                                                className="h-full rounded-full transition-all duration-700"
+                                                className="h-full rounded-full transition-smooth duration-700"
                                                 style={{ width: `${(event.article_count / busiest) * 100}%`, background: color }}
                                             />
                                         </div>

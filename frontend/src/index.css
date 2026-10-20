@@ -121,7 +121,7 @@ body {
 
 /* ── Interactive Elements ───────────────────────────────── */
 .btn-primary {
-  @apply bg-accent text-white font-semibold py-2 px-4 rounded-md
+  @apply bg-accent text-paper font-semibold py-2 px-4 rounded-md
          hover:bg-accent-strong transition-colors duration-150;
 }
 
@@ -191,13 +191,13 @@ body {
 }
 
 .animate-fade-in {
-  animation: fade-in 0.6s ease-out forwards;
+  animation: fade-in var(--slow) var(--ease) forwards;
 }
 
 @keyframes fade-in-up {
   from { 
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(8px);
   }
   to { 
     opacity: 1;
@@ -206,7 +206,7 @@ body {
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.5s ease-out forwards;
+  animation: fade-in-up var(--slow) var(--ease) forwards;
 }
 
 /* Country dossier entering beside the map. */
@@ -222,12 +222,59 @@ body {
 }
 
 .animate-slide-in-left {
-  animation: slide-in-left 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: slide-in-left var(--slow) var(--ease) forwards;
+}
+
+/* ── Motion ────────────────────────────────────────────────
+   One scale and one curve. Durations ranged from 150ms to a full second and
+   easings were whatever Tailwind's default happened to be, so two things
+   moving next to each other never agreed with one another — which is most of
+   what reads as "not smooth". */
+:root {
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);   /* quick out, settled landing */
+  --fast: 140ms;                          /* colour on hover */
+  --base: 220ms;                          /* the default for anything visible */
+  --slow: 380ms;                          /* entrances, layout reveals */
+}
+
+/*
+ * `transition-all` was on 40 elements. It animates *every* animatable
+ * property, including width, height, padding and margin — so a hover could
+ * trigger a re-layout of the whole subtree rather than a repaint. This is
+ * the same convenience without the layout properties.
+ */
+.transition-smooth {
+  transition-property: color, background-color, border-color, text-decoration-color,
+    fill, stroke, box-shadow, transform, opacity, filter;
+  transition-timing-function: var(--ease);
+  transition-duration: var(--base);
+}
+
+/* Anchor targets clear the sticky masthead instead of hiding behind it. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 6rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Nothing moves, everything still arrives. Entrances that animate opacity
+     from 0 must still finish, or a reader who asked for less motion gets an
+     invisible page rather than a still one. */
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-fade-in,
+  .animate-fade-in-up,
   .animate-slide-in-left {
-    animation: fade-in 0.2s ease-out forwards;
+    animation: fade-in 0.01ms ease-out forwards;
   }
 }
 

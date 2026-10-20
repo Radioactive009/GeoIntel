@@ -31,6 +31,7 @@ _RECLASSIFY_KEY = "migration_topics_v2"
 _EVENTS_BACKFILL_KEY = "migration_event_groups"
 _TONE_BACKFILL_KEY = "migration_tone_v1"
 _ENTITY_DECODE_KEY = "migration_decode_entities_v1"
+_SHARE_SCORING_RESET_KEY = "migration_share_scoring_v1"
 
 ARTICLE_COLUMNS = {
     "sentiment_score": "FLOAT",
@@ -453,6 +454,92 @@ def _backfill_tone(conn) -> None:
                 len(updates), dict(collections.Counter(u["tone"] for u in updates)))
 
 
+def _build_search_index(conn) -> None:
+    """
+    Create and populate the FTS5 index over article text, and keep it synced.
+
+    SQLite only — Postgres deployments keep the LIKE search, which the search
+    service falls back to when this table is absent.
+
+    External content (`content='articles'`) means the index stores terms and
+    not another copy of every headline and summary, so the file grows by the
+    vocabulary rather than by the corpus. Triggers keep it in step with writes;
+    without them the index would silently rot as new articles arrived and
+    search would quietly stop finding today's news.
+
+    Rebuilt rather than flagged-once: `INSERT INTO fts(fts) VALUES('rebuild')`
+    is idempotent and cheap enough at this corpus size, and it repairs an index
+    that drifted for any reason.
+    """
+    if conn.dialect.name != "sqlite":
+        return
+    if "articles" not in inspect(conn).get_table_names():
+        return
+
+    conn.execute(text(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5("
+        "  title, description, content='articles', content_rowid='id',"
+        "  tokenize='unicode61 remove_diacritics 2'"
+        ")"
+    ))
+
+    for ddl in (
+        "CREATE TRIGGER IF NOT EXISTS articles_fts_ai AFTER INSERT ON articles BEGIN"
+        "  INSERT INTO articles_fts(rowid, title, description)"
+        "  VALUES (new.id, new.title, new.description); END",
+        "CREATE TRIGGER IF NOT EXISTS articles_fts_ad AFTER DELETE ON articles BEGIN"
+        "  INSERT INTO articles_fts(articles_fts, rowid, title, description)"
+        "  VALUES ('delete', old.id, old.title, old.description); END",
+        "CREATE TRIGGER IF NOT EXISTS articles_fts_au AFTER UPDATE ON articles BEGIN"
+        "  INSERT INTO articles_fts(articles_fts, rowid, title, description)"
+        "  VALUES ('delete', old.id, old.title, old.description);"
+        "  INSERT INTO articles_fts(rowid, title, description)"
+        "  VALUES (new.id, new.title, new.description); END",
+    ):
+        conn.execute(text(ddl))
+
+    stored = conn.execute(text("SELECT COUNT(*) FROM articles")).scalar() or 0
+
+    # Counted from the shadow table, not from the index itself. An
+    # external-content FTS table reads COUNT(*) through to `articles`, so
+    # `SELECT COUNT(*) FROM articles_fts` returns the article count whether or
+    # not a single term has been indexed — a check against it is vacuous, and
+    # it left the index empty while reporting itself complete. Every search
+    # returned nothing.
+    try:
+        indexed = conn.execute(text("SELECT COUNT(*) FROM articles_fts_docsize")).scalar() or 0
+    except Exception:
+        indexed = -1        # shadow table unavailable: rebuild rather than guess
+
+    if indexed != stored:
+        conn.execute(text("INSERT INTO articles_fts(articles_fts) VALUES('rebuild')"))
+        logger.info("[MIGRATE] Rebuilt the search index over %s articles", stored)
+
+
+def _reset_history_for_share_scoring(conn) -> None:
+    """
+    Drop risk snapshots captured under the old mean-severity scoring.
+
+    A country's level is now the share of its coverage that is high-risk, which
+    runs roughly 2-57 where the old mean ran 34-64. The two are not comparable,
+    and compute_movers measures each country against its own recent baseline —
+    so a series with both in it would read the changeover as a huge, entirely
+    fictional de-escalation everywhere, and every z-score would be wrong until
+    the old rows aged out.
+    """
+    if _flag(conn, _SHARE_SCORING_RESET_KEY):
+        return
+    if "country_risk_history" not in inspect(conn).get_table_names():
+        return
+    deleted = conn.execute(text("DELETE FROM country_risk_history")).rowcount or 0
+    _set_flag(conn, _SHARE_SCORING_RESET_KEY)
+    if deleted:
+        logger.info(
+            "[MIGRATE] Cleared %s risk snapshots on the old severity-mean scale; "
+            "history rebuilds from the next ingest cycle", deleted,
+        )
+
+
 def _decode_stored_entities(conn) -> None:
     """
     Turn "Romania&#039;s" back into "Romania's" in what is already stored.
@@ -569,6 +656,8 @@ def run_migrations(engine: Engine) -> None:
         _backfill_event_groups,
         _backfill_tone,
         _decode_stored_entities,
+        _reset_history_for_share_scoring,
+        _build_search_index,
     ):
         try:
             with engine.begin() as conn:

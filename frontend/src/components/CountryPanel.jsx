@@ -132,7 +132,7 @@ const CountryPanel = ({
 
                     <div className="h-1.5 rounded-full bg-surface-sunken overflow-hidden">
                         <div
-                            className="h-full rounded-full transition-all duration-1000 ease-out"
+                            className="h-full rounded-full transition-smooth duration-500 ease-out"
                             style={{ width: `${Math.min(100, Math.max(0, level))}%`, background: color }}
                         />
                     </div>
@@ -216,7 +216,7 @@ const CountryPanel = ({
                 {articles.length > 0 && (
                     <button
                         onClick={onViewAll}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-surface-sunken border border-rule text-[10px] font-extrabold uppercase tracking-widest text-body hover:text-accent hover:border-accent transition-all active:scale-[0.98]"
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-surface-sunken border border-rule text-[10px] font-extrabold uppercase tracking-widest text-body hover:text-accent hover:border-accent transition-smooth active:scale-[0.98]"
                     >
                         View all reports
                         <ArrowDown size={13} />

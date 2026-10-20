@@ -58,7 +58,7 @@ const TimeScrubber = ({ frames = [], index, onIndexChange, playing, onPlayingCha
                     if (!playing && atLive) onIndexChange(0);
                     onPlayingChange(!playing);
                 }}
-                className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-all active:scale-95 shrink-0"
+                className="p-2 rounded-xl glass border border-rule text-body hover:text-accent hover:border-accent transition-smooth active:scale-95 shrink-0"
                 title={playing ? 'Pause' : 'Replay history'}
                 aria-label={playing ? 'Pause replay' : 'Replay history'}
             >

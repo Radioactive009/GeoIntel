@@ -65,7 +65,7 @@ class TestSourceReliability:
         db.add_all([wire, blog])
         db.commit()
 
-        # Same two scores, opposite attributions.
+        # One calm wire report and one alarming one from a weak aggregator.
         db.add_all([
             _article("w", countries["IN"], 20.0, wire.id),
             _article("b", countries["IN"], 100.0, blog.id),
@@ -73,10 +73,75 @@ class TestSourceReliability:
         db.commit()
         india = next(r for r in alerts.compute_alert_status(db) if r["iso_code"] == "IN")
 
-        unweighted_mean = 60.0
-        assert india["raw_alert_level"] < unweighted_mean, (
-            "the wire report should pull the average below a plain mean"
+        unweighted_share = 50.0        # one of two reports is high-risk
+        assert india["raw_alert_level"] < unweighted_share, (
+            "the trusted wire report should carry more of the share than the blog"
         )
+
+
+class TestCountryScoring:
+    """A country's level is the share of its coverage that is high-risk.
+
+    It was the weighted mean, and a mean over mostly-unremarkable coverage
+    pulled every country to the middle of the scale: nothing could reach the
+    critical band and the map rendered as one colour.
+    """
+
+    def _score(self, db, iso):
+        return next(r for r in alerts.compute_alert_status(db) if r["iso_code"] == iso)
+
+    def test_a_severe_tail_outranks_uniform_mediocrity(self, db, countries):
+        """The property the mean destroyed, and the whole reason for the change."""
+        source = models.Source(name="Wire")
+        db.add(source)
+        db.commit()
+        # India: mostly calm, but a quarter of it is catastrophic.
+        db.add_all([_article(f"in-calm-{i}", countries["IN"], 10.0, source.id) for i in range(9)])
+        db.add_all([_article(f"in-bad-{i}", countries["IN"], 95.0, source.id) for i in range(3)])
+        # Ukraine: every report middling, none of it severe.
+        db.add_all([_article(f"ua-{i}", countries["UA"], 55.0, source.id) for i in range(12)])
+        db.commit()
+
+        india = self._score(db, "IN")
+        ukraine = self._score(db, "UA")
+
+        assert india["alert_level"] > ukraine["alert_level"], (
+            "a country with genuinely severe coverage must outrank one with none, "
+            "which averaging the two got exactly backwards"
+        )
+        assert ukraine["alert_level"] == 0.0 or ukraine["raw_alert_level"] == 0.0
+        # The mean is still reported, and still says Ukraine reads worse on average.
+        assert ukraine["severity_mean"] > india["severity_mean"]
+
+    def test_the_level_is_a_readable_percentage(self, db, countries):
+        source = models.Source(name="Wire")
+        db.add(source)
+        db.commit()
+        db.add_all([_article(f"h{i}", countries["IN"], 90.0, source.id) for i in range(5)])
+        db.add_all([_article(f"l{i}", countries["IN"], 10.0, source.id) for i in range(5)])
+        db.commit()
+        assert self._score(db, "IN")["raw_alert_level"] == 50.0, "5 of 10 reports are high-risk"
+
+    def test_a_small_sample_is_pulled_toward_the_global_share(self, db, countries):
+        """Three alarming reports is not evidence of the worst place on earth."""
+        source = models.Source(name="Wire")
+        db.add(source)
+        db.commit()
+        db.add_all([_article(f"in{i}", countries["IN"], 95.0, source.id) for i in range(3)])
+        db.add_all([_article(f"ua{i}", countries["UA"], 10.0, source.id) for i in range(60)])
+        db.commit()
+
+        india = self._score(db, "IN")
+        assert india["raw_alert_level"] == 100.0
+        assert india["alert_level"] < 100.0, "a sample of three must not score a flat 100"
+
+    def test_bands_are_on_the_share_scale_not_the_severity_scale(self):
+        assert alerts.country_risk_level(40) == "high"
+        assert alerts.country_risk_level(20) == "medium"
+        assert alerts.country_risk_level(5) == "low"
+        # A pair or a single article is still banded on the 0-100 severity scale.
+        assert alerts.risk_level(40) == "medium"
+        assert alerts.risk_level(75) == "high"
 
 
 class TestDuplicatesExcluded:

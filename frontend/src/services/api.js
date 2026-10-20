@@ -144,6 +144,17 @@ export const getEvents = ({ hours = 168, limit = 20, minArticles = 3, country = 
 export const getContested = ({ hours = 168, limit = 8 } = {}) =>
     api.get('/contested', { params: { hours, limit } });
 
+/**
+ * How each outlet frames, aggregated across every event it shared with others.
+ * Only ever a within-event comparison, so it measures stance rather than which
+ * outlets happen to cover grim subjects.
+ */
+export const getOutletFraming = ({ hours = 720, limit = 40, minEvents = 0 } = {}) => {
+    const params = { hours, limit };
+    if (minEvents) params.min_events = minEvents;
+    return api.get('/outlet-framing', { params });
+};
+
 /** One happening: its articles, outlets, and how reported figures moved. */
 export const getEvent = (key) => api.get(`/events/${key}`);
 

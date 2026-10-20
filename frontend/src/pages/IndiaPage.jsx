@@ -103,7 +103,7 @@ const IndiaPage = () => {
             {standing && (
                 <div className="mt-6 flex flex-wrap items-center gap-x-10 gap-y-4 p-5 rounded-2xl bg-surface border border-rule">
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Risk level</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">High-risk share</p>
                         <p className="text-3xl font-black tabular-nums leading-none" style={{ color }}>
                             {standing.alert_level.toFixed(1)}<span className="text-base opacity-60">%</span>
                         </p>

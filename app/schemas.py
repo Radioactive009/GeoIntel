@@ -166,6 +166,32 @@ class ContestedResponse(BaseModel):
     events: list[ContestedEvent]
 
 
+class OutletTopicLean(BaseModel):
+    topic: str
+    divergence: float
+    events: int
+
+
+class OutletProfile(BaseModel):
+    source: str
+    # Events this outlet shared with enough others to be compared on.
+    events: int
+    reports: int
+    # Positive: reads shared events as more severe than the outlets beside it.
+    divergence: float
+    # How consistent that lean is across events; a big lean with a big spread
+    # is one or two loud stories rather than a pattern.
+    consistency: float = 0.0
+    # The outlet's own variance within an event, averaged — its noise floor.
+    self_spread: float = 0.0
+    by_topic: list[OutletTopicLean] = []
+
+
+class OutletProfilesResponse(BaseModel):
+    window_hours: int
+    outlets: list[OutletProfile]
+
+
 class EventDetail(EventSummary):
     articles: list[ArticleResponse] = []
     outlets: list[str] = []
@@ -320,10 +346,14 @@ class AlertResponse(BaseModel):
     region: Optional[str] = None
     total_articles: int
     critical_alerts: int
-    # Sample-size adjusted score used for ranking and map colour.
+    # Percentage of this country's recent coverage that is high-risk reporting,
+    # adjusted for sample size. Used for ranking and map colour.
     alert_level: float
-    # Unadjusted mean, exposed so the adjustment stays inspectable.
+    # The same share before the adjustment, so it stays inspectable.
     raw_alert_level: float = 0.0
+    # Mean severity of its coverage on the 0-100 article scale — how bad the
+    # typical report is, as against how often reports are bad.
+    severity_mean: float = 0.0
     alert_status: str
 
 

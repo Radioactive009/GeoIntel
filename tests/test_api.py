@@ -326,3 +326,88 @@ class TestNewEndpoints:
     ])
     def test_read_endpoints_respond(self, client, feed, path):
         assert client.get(path).status_code == 200
+
+
+class TestFullTextSearch:
+    """Search was `ILIKE '%term%'` ordered by date, so it could not rank, could
+    not match a stem, and scanned the table for every query."""
+
+    def test_the_index_exists_so_the_rest_of_these_mean_something(self, client, feed, db):
+        from app.services import search
+        assert search.is_available(db), (
+            "the FTS index should be built by migrations on SQLite; without it "
+            "every search test below silently exercises the LIKE fallback"
+        )
+
+    def test_a_stem_finds_its_plural(self, client, db):
+        from app import models
+        source = models.Source(name="Wire")
+        db.add(source)
+        db.commit()
+        db.add(models.Article(
+            url="s1", title="New sanctions imposed on the shipping sector",
+            description="Measures follow the summit", source_id=source.id,
+            is_duplicate=False, published_at=datetime.utcnow(),
+        ))
+        db.commit()
+        # The old substring search could not do this: "sanction" is not a
+        # substring boundary of anything useful, and "sanctions" was required.
+        assert client.get("/articles", params={"q": "sanction"}).json()["total"] == 1
+
+    def test_relevance_beats_recency(self, client, db):
+        from app import models
+        source = models.Source(name="Wire")
+        db.add(source)
+        db.commit()
+        db.add_all([
+            # Newer, but only mentions the term in passing.
+            models.Article(
+                url="passing", title="Weather forecast for the weekend",
+                description="Unrelated to the tariff debate entirely",
+                source_id=source.id, is_duplicate=False,
+                published_at=datetime.utcnow(),
+            ),
+            # Older, but squarely about it.
+            models.Article(
+                url="about-it", title="Tariff ruling reshapes trade policy",
+                description="The tariff decision lands", source_id=source.id,
+                is_duplicate=False,
+                published_at=datetime.utcnow() - timedelta(days=5),
+            ),
+        ])
+        db.commit()
+
+        items = client.get("/articles", params={"q": "tariff"}).json()["items"]
+        assert [i["url"] for i in items][0] == "about-it", (
+            "the article the query is about must outrank the newer passing mention"
+        )
+
+    def test_punctuation_is_literal_not_query_syntax(self, client, feed):
+        """A reader typing a hyphen means a hyphen; FTS5 reads it as NOT."""
+        for term in ("Israel-Palestine", "100%", '"', "-", "AND OR"):
+            response = client.get("/articles", params={"q": term})
+            assert response.status_code == 200, f"{term!r} should not 500"
+
+    def test_search_still_narrows_with_other_filters(self, client, feed):
+        both = client.get("/articles", params={"q": "India", "event_type": "diplomacy"})
+        assert both.json()["total"] == 1
+        neither = client.get("/articles", params={"q": "India", "event_type": "disaster"})
+        assert neither.json()["total"] == 0, "a filter must still apply on top of a search"
+
+
+class TestSearchQueryBuilding:
+    def test_words_become_prefix_matches(self):
+        from app.services.search import to_match_query
+        assert to_match_query("sanctions") == '"sanctions"*'
+        assert to_match_query("red sea") == '"red"* AND "sea"*'
+
+    def test_quoted_runs_stay_phrases(self):
+        from app.services.search import to_match_query
+        assert '"red sea"' in to_match_query('"red sea"')
+
+    def test_syntax_characters_are_stripped(self):
+        from app.services.search import to_match_query
+        assert to_match_query("-NOT") == '"NOT"*'
+        assert to_match_query("a") == "", "a single character matches nearly everything"
+        assert to_match_query("") == ""
+        assert to_match_query("   ") == ""

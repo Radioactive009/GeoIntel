@@ -11,7 +11,7 @@ const MoverRow = ({ mover, series, rising, onSelect }) => {
     return (
         <button
             onClick={() => onSelect(mover.country)}
-            className="w-full text-left flex items-center gap-3 p-3 rounded-2xl bg-surface border border-rule hover:border-rule transition-all hover:translate-x-1"
+            className="w-full text-left flex items-center gap-3 p-3 rounded-2xl bg-surface border border-rule hover:border-rule transition-smooth hover:translate-x-1"
         >
             <span className="text-xl leading-none shrink-0">{getFlagEmoji(mover.iso_code)}</span>
 
@@ -55,7 +55,7 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
     const hasData = rising.length > 0 || falling.length > 0;
 
     return (
-        <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '450ms' }}>
+        <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '180ms' }}>
             <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                     <div className="p-2 rounded-xl bg-risk-high/10 border border-risk-high/30">
@@ -71,9 +71,9 @@ const EscalationPanel = ({ movers, series = {}, windowHours, onWindowChange, onS
                         <button
                             key={h}
                             onClick={() => onWindowChange(h)}
-                            className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-all ${
+                            className={`px-2.5 py-1 rounded-lg text-[9px] font-bold transition-smooth ${
                                 windowHours === h
-                                    ? 'bg-accent text-ink shadow-lg shadow-transparent'
+                                    ? 'bg-accent text-paper shadow-lg shadow-transparent'
                                     : 'text-muted hover:text-body'
                             }`}
                         >

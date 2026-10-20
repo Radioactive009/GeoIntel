@@ -39,7 +39,7 @@ const StoryPage = () => {
         let cancelled = false;
         setLoading(true);
         setNotFound(false);
-        window.scrollTo(0, 0);
+        window.scrollTo({ top: 0, behavior: 'instant' });
 
         getArticle(id)
             .then((res) => { if (!cancelled) setArticle(res.data); })
@@ -54,12 +54,30 @@ const StoryPage = () => {
     }, [id]);
 
     if (loading) {
+        // Shaped like the article it stands in for — same container, same two
+        // columns, comparable height. A narrow single-column skeleton meant
+        // the page jumped sideways and grew by a screenful when the story
+        // arrived, taking the footer with it.
         return (
-            <div className="max-w-3xl mx-auto px-6 py-12 space-y-6">
-                <div className="h-3 w-24 bg-surface-sunken rounded animate-pulse" />
-                <div className="h-10 w-full bg-surface-sunken rounded animate-pulse" />
-                <div className="h-10 w-2/3 bg-surface-sunken rounded animate-pulse" />
-                <div className="aspect-[16/9] bg-surface-sunken rounded-2xl animate-pulse" />
+            <div className="max-w-6xl mx-auto px-6 py-8 lg:py-12">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                    <div className="lg:col-span-2 space-y-5">
+                        <div className="h-3 w-28 bg-surface-sunken rounded animate-pulse" />
+                        <div className="h-9 w-full bg-surface-sunken rounded animate-pulse" />
+                        <div className="h-9 w-4/5 bg-surface-sunken rounded animate-pulse" />
+                        <div className="h-4 w-56 bg-surface-sunken rounded animate-pulse" />
+                        <div className="aspect-[16/9] w-full bg-surface-sunken rounded-2xl animate-pulse" />
+                        <div className="h-5 w-full bg-surface-sunken rounded animate-pulse" />
+                        <div className="h-5 w-11/12 bg-surface-sunken rounded animate-pulse" />
+                        <div className="h-32 w-full bg-surface-sunken rounded-2xl animate-pulse" />
+                    </div>
+                    <div className="space-y-4">
+                        <div className="h-3 w-32 bg-surface-sunken rounded animate-pulse" />
+                        {[0, 1, 2, 3, 4].map((i) => (
+                            <div key={i} className="h-16 w-full bg-surface-sunken rounded animate-pulse" />
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }
@@ -181,12 +199,20 @@ const StoryPage = () => {
 
                     {article.image_url && (
                         <figure className="mt-8">
-                            <img
-                                src={article.image_url}
-                                alt=""
-                                referrerPolicy="no-referrer"
-                                className="w-full rounded-2xl border border-rule"
-                            />
+                            {/* The space is reserved before the image arrives.
+                                Without it the picture dropped in at whatever
+                                height it happened to be and shoved the summary,
+                                the source panel and the footer down the page —
+                                the single largest jump on the site. */}
+                            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-rule bg-surface-sunken">
+                                <img
+                                    src={article.image_url}
+                                    alt=""
+                                    decoding="async"
+                                    referrerPolicy="no-referrer"
+                                    className="absolute inset-0 w-full h-full object-cover"
+                                />
+                            </div>
                             <figcaption className="mt-2 text-[11px] text-faint">
                                 Image: {article.source?.name || 'source publication'}
                             </figcaption>

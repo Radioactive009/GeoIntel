@@ -162,7 +162,7 @@ const SiteHeader = () => {
                 </div>
             </div>
 
-            <div className={`lg:hidden overflow-hidden transition-all duration-300 ${menuOpen ? 'max-h-[32rem] border-t border-rule' : 'max-h-0'}`}>
+            <div className={`lg:hidden overflow-hidden transition-smooth duration-300 ${menuOpen ? 'max-h-[32rem] border-t border-rule' : 'max-h-0'}`}>
                 <nav aria-label="Main" className="max-w-[1200px] mx-auto px-6 py-5 flex flex-col gap-3">
                     {PRIMARY.map((item) => (
                         <NavLink key={item.to} to={item.to} className={linkClass}>{item.label}</NavLink>

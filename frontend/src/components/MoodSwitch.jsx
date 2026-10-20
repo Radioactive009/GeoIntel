@@ -26,7 +26,7 @@ const MODES = [
         blurb: 'Rescues, recoveries, progress',
         icon: Sun,
         accent: 'text-risk-low',
-        active: 'bg-risk-low text-ink',
+        active: 'bg-risk-low text-paper',
     },
     {
         id: 'serious',
@@ -50,7 +50,7 @@ const MoodSwitch = ({ value, onChange, counts = {} }) => (
                     key={mode.id || 'all'}
                     onClick={() => onChange(mode.id)}
                     aria-pressed={isActive}
-                    className={`group flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left flex-1 ${
+                    className={`group flex items-center gap-3 px-4 py-3 rounded-2xl border transition-smooth text-left flex-1 ${
                         isActive
                             ? 'border-transparent shadow-lg'
                             : 'border-rule bg-surface hover:border-rule-strong'

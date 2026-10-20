@@ -439,7 +439,7 @@ const Home = () => {
                         <div
                             key={label}
                             className="border border-rule rounded-lg bg-surface p-6 relative animate-fade-in-up"
-                            style={{ animationDelay: `${i * 100}ms` }}
+                            style={{ animationDelay: `${i * 55}ms` }}
                         >
                             {/* The oversized watermark of the same icon behind
                                 each figure was decoration standing in for
@@ -478,7 +478,7 @@ const Home = () => {
                             {permission === 'default' && (
                                 <button
                                     onClick={requestPermission}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-sunken border border-rule text-[10px] font-bold uppercase tracking-widest text-body hover:text-risk-medium hover:border-risk-medium/30 transition-all"
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-sunken border border-rule text-[10px] font-bold uppercase tracking-widest text-body hover:text-risk-medium hover:border-risk-medium/30 transition-smooth"
                                 >
                                     <Bell size={12} />
                                     Alert me on escalation
@@ -507,7 +507,7 @@ const Home = () => {
                                     <button
                                         key={row.iso_code}
                                         onClick={() => setSelectedCountry(row.iso_code)}
-                                        className="group text-left p-3.5 rounded-2xl bg-surface border border-rule hover:border-risk-medium/30 transition-all"
+                                        className="group text-left p-3.5 rounded-2xl bg-surface border border-rule hover:border-risk-medium/30 transition-smooth"
                                     >
                                         <div className="flex items-center justify-between gap-2 mb-2">
                                             <span className="text-lg leading-none">{getFlagEmoji(row.iso_code)}</span>
@@ -535,7 +535,7 @@ const Home = () => {
 
                 {/* ── SECTION 2: ANALYTICS ──────────────────── */}
                 <section className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12 items-stretch">
-                    <div className="xl:col-span-2 glass rounded-2xl p-8 lg:p-10 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+                    <div className="xl:col-span-2 glass rounded-2xl p-8 lg:p-10 animate-fade-in-up" style={{ animationDelay: '160ms' }}>
                         <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-accent-soft border border-accent/50">
@@ -555,9 +555,9 @@ const Home = () => {
                                     <button
                                         key={f.id}
                                         onClick={() => setChartFilter(f.id)}
-                                        className={`px-3 py-1 rounded-lg text-[9px] font-bold transition-all whitespace-nowrap ${
+                                        className={`px-3 py-1 rounded-lg text-[9px] font-bold transition-smooth whitespace-nowrap ${
                                             chartFilter === f.id
-                                                ? 'bg-accent text-ink shadow-lg shadow-transparent'
+                                                ? 'bg-accent text-paper shadow-lg shadow-transparent'
                                                 : 'text-muted hover:text-body'
                                         }`}
                                     >
@@ -588,7 +588,7 @@ const Home = () => {
                         </div>
                     </div>
 
-                    <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '500ms' }}>
+                    <div className="glass rounded-2xl p-8 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
                         <div className="flex items-center gap-3 mb-8">
                             <div className="p-2 rounded-xl bg-indigo-500/10 border border-rule">
                                 <Zap size={18} className="text-accent" />
@@ -612,7 +612,7 @@ const Home = () => {
                                         <div className="flex items-center gap-2 mt-1.5">
                                             <div className="flex-grow h-1 rounded-full bg-surface-sunken overflow-hidden">
                                                 <div
-                                                    className="h-full rounded-full transition-all duration-1000 ease-out"
+                                                    className="h-full rounded-full transition-smooth duration-500 ease-out"
                                                     style={{ width: `${item.alert_level}%`, background: getAlertColor(item.alert_status) }}
                                                 />
                                             </div>
@@ -672,7 +672,7 @@ const Home = () => {
                         stats={stats}
                     />
 
-                    <div className="flex-grow space-y-8 animate-fade-in-up" style={{ animationDelay: '600ms' }}>
+                    <div className="flex-grow space-y-8 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
                         {/* Feed Header */}
                         <div className="flex items-center justify-between px-2 flex-wrap gap-3">
                             <div className="flex items-center gap-3">
@@ -769,7 +769,7 @@ const Home = () => {
                                             <button
                                                 onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                                                 disabled={currentPage === 1}
-                                                className="p-3 rounded-2xl glass hover:border-accent disabled:opacity-20 transition-all text-ink active:scale-95"
+                                                className="p-3 rounded-2xl glass hover:border-accent disabled:opacity-20 transition-smooth text-ink active:scale-95"
                                                 aria-label="Previous page"
                                             >
                                                 <ChevronLeft size={20} />
@@ -779,7 +779,7 @@ const Home = () => {
                                                     <button
                                                         key={page}
                                                         onClick={() => setCurrentPage(page)}
-                                                        className={`w-10 h-10 rounded-2xl text-xs font-bold transition-all ${currentPage === page
+                                                        className={`w-10 h-10 rounded-2xl text-xs font-bold transition-smooth ${currentPage === page
                                                             ? 'bg-gradient-to-r from-accent to-accent text-ink shadow-xl shadow-transparent scale-110'
                                                             : 'text-muted hover:bg-surface-sunken hover:text-ink'
                                                             }`}
@@ -791,7 +791,7 @@ const Home = () => {
                                             <button
                                                 onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
                                                 disabled={currentPage === totalPages}
-                                                className="p-3 rounded-2xl glass hover:border-accent disabled:opacity-20 transition-all text-ink active:scale-95"
+                                                className="p-3 rounded-2xl glass hover:border-accent disabled:opacity-20 transition-smooth text-ink active:scale-95"
                                                 aria-label="Next page"
                                             >
                                                 <ChevronRight size={20} />

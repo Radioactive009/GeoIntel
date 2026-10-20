@@ -87,6 +87,88 @@ def outlet_framing(articles: list) -> dict:
     }
 
 
+# An outlet has to have been measured against its peers on this many separate
+# events before its average tells you anything about the outlet rather than
+# about the handful of stories it happened to cover.
+#
+# Set against the live archive rather than picked round: at five the median
+# profiled outlet had been seen on eight events and the loudest leans were all
+# small samples with wide spreads; at eight the median is sixteen and 45
+# outlets still qualify, which is a claim worth making.
+MIN_EVENTS_FOR_PROFILE = 8
+
+
+def outlet_profiles(grouped: dict[str, list], limit: int = 40, min_events: int = MIN_EVENTS_FOR_PROFILE) -> list[dict]:
+    """
+    How each outlet frames, aggregated across every event it shared.
+
+    `outlet_framing` answers this for one happening and the answer is then
+    thrown away. Asked across hundreds of events it becomes a different and
+    much stronger claim: not "Al Jazeera read this story lower than the others"
+    but "across 240 stories it shared with other outlets, Al Jazeera reads
+    conflict six points below the room".
+
+    The comparison is only ever within a single event — an outlet's divergence
+    is measured against the outlets that covered *the same happening* — so this
+    is not a measure of which outlets cover grim news. A wire that only reports
+    disasters and a paper that only reports elections are never compared.
+
+    Reported with `spread`, the mean of the outlet's own per-event variance,
+    because a large average divergence from an outlet whose own reports scatter
+    just as widely is noise rather than stance.
+    """
+    per_outlet: dict[str, dict] = {}
+
+    for articles in grouped.values():
+        report = outlet_framing(articles)
+        if not report.get("available"):
+            continue
+        # One topic per event, so an outlet's behaviour can be split by subject
+        # rather than averaged across conflict and economics together.
+        topics = [getattr(a, "event_type", None) for a in articles]
+        topic = max(set(t for t in topics if t), key=topics.count, default=None) if any(topics) else None
+
+        for entry in report["outlets"]:
+            slot = per_outlet.setdefault(entry["source"], {
+                "source": entry["source"],
+                "divergences": [],
+                "spreads": [],
+                "reports": 0,
+                "by_topic": defaultdict(list),
+            })
+            slot["divergences"].append(entry["divergence"])
+            slot["spreads"].append(entry["spread"])
+            slot["reports"] += entry["reports"]
+            if topic:
+                slot["by_topic"][topic].append(entry["divergence"])
+
+    profiles = []
+    for slot in per_outlet.values():
+        events = len(slot["divergences"])
+        if events < min_events:
+            continue
+        divergence = statistics.fmean(slot["divergences"])
+        profiles.append({
+            "source": slot["source"],
+            "events": events,
+            "reports": slot["reports"],
+            # Positive: reads events as more severe than the outlets beside it.
+            "divergence": round(divergence, 1),
+            # How consistent that lean is. A large divergence with a large
+            # consistency spread is one or two loud stories, not a pattern.
+            "consistency": round(statistics.pstdev(slot["divergences"]), 1) if events > 1 else 0.0,
+            "self_spread": round(statistics.fmean(slot["spreads"]), 1),
+            "by_topic": [
+                {"topic": topic, "divergence": round(statistics.fmean(values), 1), "events": len(values)}
+                for topic, values in sorted(slot["by_topic"].items())
+                if len(values) >= 2
+            ],
+        })
+
+    profiles.sort(key=lambda p: -abs(p["divergence"]))
+    return profiles[:limit]
+
+
 def coverage_curve(articles: list, buckets: int = 24) -> dict:
     """
     When coverage arrived, and how quickly it stopped.

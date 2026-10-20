@@ -11,7 +11,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.framing import contested_events, coverage_curve, outlet_framing
+from app.services.framing import (
+    contested_events, coverage_curve, outlet_framing, outlet_profiles,
+)
 
 BASE = datetime(2026, 8, 10, 12, 0)
 
@@ -150,3 +152,68 @@ class TestCoverageCurve:
         curve = coverage_curve(articles, buckets=12)
         assert len(curve["points"]) == 12
         assert sum(p["count"] for p in curve["points"]) == len(articles)
+
+
+class TestOutletProfiles:
+    """Per-event framing aggregated into a claim about the outlet itself."""
+
+    def _event(self, key, scores):
+        """One event, one article per outlet, at the given scores."""
+        return [
+            type("A", (), {
+                "source": type("S", (), {"name": name})(),
+                "geo_risk_score": score,
+                "event_type": "conflict",
+            })()
+            for name, score in scores.items()
+        ]
+
+    def test_a_consistent_lean_is_reported(self):
+        # Hawk reads every shared event above the room; Dove below it.
+        grouped = {
+            f"ev{i}": self._event(f"ev{i}", {"Hawk": 80.0, "Middle": 50.0, "Dove": 20.0})
+            for i in range(6)
+        }
+        # Explicit, so this tests the aggregation rather than the default bar —
+        # which is tuned against the live archive and moves.
+        profiles = {p["source"]: p for p in outlet_profiles(grouped, min_events=5)}
+
+        assert profiles["Hawk"]["divergence"] > 0
+        assert profiles["Dove"]["divergence"] < 0
+        assert abs(profiles["Middle"]["divergence"]) < 1
+        assert profiles["Hawk"]["events"] == 6
+        # A perfectly consistent lean has no spread across events.
+        assert profiles["Hawk"]["consistency"] == 0.0
+
+    def test_an_outlet_seen_on_too_few_events_is_not_profiled(self):
+        grouped = {
+            "a": self._event("a", {"Hawk": 80.0, "Middle": 50.0, "Rare": 10.0}),
+            "b": self._event("b", {"Hawk": 80.0, "Middle": 50.0, "Other": 10.0}),
+        }
+        assert outlet_profiles(grouped, min_events=5) == []
+        named = {p["source"] for p in outlet_profiles(grouped, min_events=2)}
+        assert "Rare" not in named, "one shared event is not a profile"
+        assert "Hawk" in named
+
+    def test_events_with_too_few_outlets_are_skipped(self):
+        """Two outlets have no consensus to diverge from."""
+        grouped = {f"ev{i}": self._event(f"ev{i}", {"A": 80.0, "B": 20.0}) for i in range(9)}
+        assert outlet_profiles(grouped, min_events=2) == []
+
+    def test_the_lean_is_broken_down_by_topic(self):
+        grouped = {}
+        for i in range(4):
+            arts = self._event(f"c{i}", {"Hawk": 90.0, "Middle": 50.0, "Dove": 30.0})
+            grouped[f"c{i}"] = arts
+        for i in range(4):
+            arts = self._event(f"e{i}", {"Hawk": 55.0, "Middle": 50.0, "Dove": 45.0})
+            for a in arts:
+                a.event_type = "economy"
+            grouped[f"e{i}"] = arts
+
+        hawk = next(p for p in outlet_profiles(grouped, min_events=5) if p["source"] == "Hawk")
+        by_topic = {t["topic"]: t["divergence"] for t in hawk["by_topic"]}
+        assert by_topic["conflict"] > by_topic["economy"], (
+            "an outlet can lean hard on one subject and not another, and the "
+            "average across both would hide it"
+        )

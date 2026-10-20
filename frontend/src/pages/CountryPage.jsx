@@ -41,7 +41,7 @@ const CountryPage = () => {
     const standing = record && (
         <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-4 p-5 rounded-2xl bg-surface border border-rule">
             <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">Risk level</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted mb-1">High-risk share</p>
                 <p className="text-3xl font-black tabular-nums leading-none" style={{ color }}>
                     {record.alert_level.toFixed(1)}
                     <span className="text-base opacity-60">%</span>
@@ -66,7 +66,7 @@ const CountryPage = () => {
             <div className="flex items-center gap-2">
                 <button
                     onClick={() => toggle(code)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[12px] font-bold transition-all ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[12px] font-bold transition-smooth ${
                         isWatched(code)
                             ? 'text-risk-medium border-risk-medium/30 bg-risk-medium/10'
                             : 'text-body border-rule hover:text-risk-medium hover:border-risk-medium/30'
@@ -77,7 +77,7 @@ const CountryPage = () => {
                 </button>
                 <a
                     href={`${API_URL}/feed.xml?country=${code}`}
-                    className="p-2 rounded-xl border border-rule text-body hover:text-accent hover:border-accent transition-all"
+                    className="p-2 rounded-xl border border-rule text-body hover:text-accent hover:border-accent transition-smooth"
                     title={`RSS feed for ${name}`}
                     aria-label={`RSS feed for ${name}`}
                 >
@@ -86,7 +86,7 @@ const CountryPage = () => {
                 <AskAbout
                     question={`What is happening in ${name} right now?`}
                     label="Ask"
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rule text-[12px] font-bold text-body hover:text-accent hover:border-accent transition-all"
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl border border-rule text-[12px] font-bold text-body hover:text-accent hover:border-accent transition-smooth"
                 />
             </div>
         </div>

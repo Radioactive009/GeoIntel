@@ -39,7 +39,7 @@ import requests
 from sqlalchemy.orm import Session, joinedload
 
 from .. import models
-from . import alerts
+from . import alerts, search
 from .events import extract_figures
 
 logger = logging.getLogger(__name__)
@@ -398,13 +398,24 @@ def _search_news(db: Session, query: str, country: str = "", days: int = 14, lim
         .filter(models.Article.is_duplicate.isnot(True))
     )
     term = (query or "").strip()
+    ranked: list[int] | None = None
     if term:
-        escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        pattern = f"%{escaped}%"
-        rows = rows.filter(
-            models.Article.title.ilike(pattern, escape="\\")
-            | models.Article.description.ilike(pattern, escape="\\")
-        )
+        # The assistant gets the same ranked search a reader does. It only
+        # sees five articles per lookup, so which five matters more here than
+        # anywhere else on the site — under substring matching those were
+        # simply the five most recent to contain the word.
+        ranked = search.ranked_ids(db, term, limit=200)
+        if ranked is not None:
+            if not ranked:
+                return {"count": 0, "articles": []}
+            rows = rows.filter(models.Article.id.in_(ranked))
+        else:
+            escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            rows = rows.filter(
+                models.Article.title.ilike(pattern, escape="\\")
+                | models.Article.description.ilike(pattern, escape="\\")
+            )
     if country:
         code = country.strip()
         rows = rows.join(models.Article.country_rel).filter(
@@ -415,7 +426,13 @@ def _search_news(db: Session, query: str, country: str = "", days: int = 14, lim
             models.Article.published_at >= datetime.utcnow() - timedelta(days=min(max(days, 1), 30))
         )
 
-    found = rows.order_by(models.Article.published_at.desc()).limit(limit).all()
+    if ranked:
+        position = {article_id: i for i, article_id in enumerate(ranked)}
+        matched = rows.all()
+        matched.sort(key=lambda a: position.get(a.id, len(position)))
+        found = matched[:limit]
+    else:
+        found = rows.order_by(models.Article.published_at.desc()).limit(limit).all()
     return {"count": len(found), "articles": [_article_brief(a) for a in found]}
 
 

@@ -112,7 +112,7 @@ export const CoveragePanel = ({ coverage }) => {
                 {coverage.points.map((point, i) => (
                     <div
                         key={i}
-                        className="flex-1 rounded-t-sm bg-accent-soft min-h-[2px] transition-all"
+                        className="flex-1 rounded-t-sm bg-accent-soft min-h-[2px] transition-smooth"
                         style={{ height: `${(point.count / peak) * 100}%` }}
                         title={`${point.count} report${point.count === 1 ? '' : 's'} around hour ${point.hour}`}
                     />
