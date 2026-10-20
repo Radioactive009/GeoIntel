@@ -142,6 +142,7 @@ _ingest_state: dict = {
     "last_summary": None,
     "last_error": None,
 }
+_country_ingest_attempts: dict[str, float] = {}
 
 
 def run_ingest(batch_size: int | None = None) -> dict:
@@ -630,6 +631,36 @@ def get_articles(
         )
 
     total = query.with_entities(func.count(models.Article.id)).order_by(None).scalar() or 0
+
+    # On-demand ingestion: if a country was requested but has no coverage in the database yet,
+    # fetch Google News RSS for it on the fly so news is displayed immediately.
+    # Skipped during test suite execution to preserve fixture isolation.
+    if (
+        country_term
+        and total == 0
+        and offset == 0
+        and not os.getenv("PYTEST_CURRENT_TEST")
+        and os.getenv("GEOINTEL_SKIP_DOTENV") != "1"
+    ):
+        matching_country = (
+            db.query(models.Country)
+            .filter(
+                (models.Country.iso_code == country_term.upper())
+                | (models.Country.name.ilike(_like_escape(country_term), escape="\\"))
+            )
+            .first()
+        )
+        if matching_country:
+            now_ts = time.time()
+            if now_ts - _country_ingest_attempts.get(matching_country.iso_code, 0) > 300:
+                _country_ingest_attempts[matching_country.iso_code] = now_ts
+                try:
+                    logger.info("[DEMAND] Ingesting news on-demand for %s (%s)", matching_country.name, matching_country.iso_code)
+                    saved = ingest.ingest_news_for_country(matching_country.iso_code, db)
+                    if saved > 0:
+                        total = query.with_entities(func.count(models.Article.id)).order_by(None).scalar() or 0
+                except Exception as e:
+                    logger.warning("[DEMAND] On-demand ingest failed for %s: %s", matching_country.iso_code, e)
 
     if ranked:
         # Ordered by relevance rather than recency: the newest article merely
@@ -1244,6 +1275,42 @@ def ingest_all_countries(
         "message": "Global ingestion completed",
         "catalog_total": len(COUNTRIES),
         "ingested_count": len(results),
+        "results": results,
+        "total_saved": sum(results.values()),
+    }
+
+
+@app.post("/ingest-missing", dependencies=[Depends(require_admin)])
+def ingest_missing_countries(
+    limit: int = Query(default=30, ge=1, le=250),
+    db: Session = Depends(get_db),
+):
+    """Ingest news for countries that currently have 0 articles in the database."""
+    ingest.ensure_country_catalog_in_db(db)
+    attributed_ids = (
+        db.query(models.Article.country_id)
+        .filter(models.Article.country_id.isnot(None))
+        .distinct()
+    )
+    missing = (
+        db.query(models.Country)
+        .filter(~models.Country.id.in_(attributed_ids))
+        .order_by(models.Country.name)
+        .limit(limit)
+        .all()
+    )
+    results = {}
+    for country in missing:
+        try:
+            results[country.iso_code] = ingest.ingest_news_for_country(country.iso_code, db)
+        except Exception as e:
+            db.rollback()
+            logger.warning("[ERR] Ingest failed for %s: %s", country.iso_code, e)
+            results[country.iso_code] = 0
+
+    return {
+        "message": f"Ingested {len(results)} missing countries",
+        "missing_remaining": max(0, db.query(models.Country).filter(~models.Country.id.in_(attributed_ids)).count()),
         "results": results,
         "total_saved": sum(results.values()),
     }

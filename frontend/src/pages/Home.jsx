@@ -186,11 +186,17 @@ const Home = () => {
         let cancelled = false;
         setCountryArticlesLoading(true);
         getArticles({ country: selectedCountry, limit: 5 })
-            .then((res) => { if (!cancelled) setCountryArticles(res.data?.items || []); })
+            .then((res) => {
+                if (!cancelled) {
+                    const items = res.data?.items || [];
+                    setCountryArticles(items);
+                    if (items.length > 0) fetchOverview();
+                }
+            })
             .catch(() => { if (!cancelled) setCountryArticles([]); })
             .finally(() => { if (!cancelled) setCountryArticlesLoading(false); });
         return () => { cancelled = true; };
-    }, [selectedCountry]);
+    }, [selectedCountry, fetchOverview]);
 
     useEffect(() => { fetchArticles(); }, [fetchArticles]);
     useEffect(() => { fetchOverview(); }, [fetchOverview]);
