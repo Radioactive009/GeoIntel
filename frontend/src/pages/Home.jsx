@@ -18,11 +18,11 @@ import TimeScrubber from '../components/TimeScrubber';
 import useWatchlist from '../hooks/useWatchlist';
 import {
     getArticles, getAlertAnalysis, getStats, getTrends, getMovers, getChannels,
-    getRelations, getHistoryFrames,
+    getRelations, getHistoryFrames, refreshFeed,
 } from '../services/api';
 import {
     ChevronLeft, ChevronRight, AlertCircle, BarChart3, Globe, Activity,
-    Newspaper, Zap, AlertTriangle, Search, Star, Bell, BellOff,
+    Newspaper, Zap, AlertTriangle, Search, Star, Bell, BellOff, RefreshCw,
 } from 'lucide-react';
 import { getFlagEmoji, getAlertColor, matchesCountry } from '../utils/country';
 
@@ -56,6 +56,8 @@ const Home = () => {
     const [frames, setFrames] = useState([]);
     const [frameIndex, setFrameIndex] = useState(0);
     const [replaying, setReplaying] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshNotice, setRefreshNotice] = useState('');
     const feedRef = useRef(null);
 
     const { watched, isWatched, toggle: toggleWatch, permission, requestPermission, notifyEscalations } =
@@ -83,7 +85,7 @@ const Home = () => {
 
     // Articles are paginated and filtered by the backend; the dashboard used
     // to download every article and slice it in the browser.
-    const fetchArticles = useCallback(async () => {
+    const fetchArticles = useCallback(async (bustCache = false) => {
         const seq = ++requestSeq.current;
         setLoading(true);
         setError(null);
@@ -98,6 +100,7 @@ const Home = () => {
                 q: searchTerm,
                 limit: ARTICLES_PER_PAGE,
                 offset: (currentPage - 1) * ARTICLES_PER_PAGE,
+                bustCache,
             });
             if (seq !== requestSeq.current) return;
             setArticles(res.data?.items || []);
@@ -159,6 +162,33 @@ const Home = () => {
             setMovers(null);
         }
     }, [trendWindow, notifyEscalations]);
+
+    const handleRefreshFeed = useCallback(async () => {
+        if (refreshing) return;
+        setRefreshing(true);
+        setRefreshNotice('Fetching fresh news from wire APIs...');
+        try {
+            const res = await refreshFeed(selectedCountry);
+            const saved = res.data?.saved ?? 0;
+            // Bust cache and re-fetch feed, map overview, and trend series
+            await Promise.all([
+                fetchArticles(true),
+                fetchOverview(),
+                fetchTrends(),
+            ]);
+            if (saved > 0) {
+                setRefreshNotice(`Refreshed! ${saved} new stories loaded`);
+            } else {
+                setRefreshNotice('Feed updated to latest stories');
+            }
+        } catch (err) {
+            console.error(err);
+            setRefreshNotice('Could not reach news feeds');
+        } finally {
+            setRefreshing(false);
+            setTimeout(() => setRefreshNotice(''), 4500);
+        }
+    }, [refreshing, selectedCountry, fetchArticles, fetchOverview, fetchTrends]);
 
     // Fetched once for every country: the player switches locally on selection,
     // so re-fetching per country would restart the stream on every click.
@@ -344,16 +374,41 @@ const Home = () => {
                     monitoring dashboards, and they made a news site look like
                     a demo of one. What a reader wants first is what the site
                     is and how much it is holding. */}
-                <header className="mb-12 pb-8 border-b border-rule animate-fade-in">
-                    <h1 className="font-display text-4xl lg:text-5xl font-extrabold text-ink tracking-tight max-w-3xl">
-                        World coverage, attributed and measured
-                    </h1>
-                    <p className="mt-4 text-[15px] text-body leading-relaxed max-w-2xl">
-                        Stories from international wire services, each attributed to a country and
-                        scored for risk. {totalReports ? `${totalReports} held` : 'Loading'}
-                        {activeAlertData.length > 0 && ` across ${activeAlertData.length} countries`}.
-                        {error && ' The archive is unreachable at the moment.'}
-                    </p>
+                <header className="mb-12 pb-8 border-b border-rule animate-fade-in flex flex-col md:flex-row md:items-end justify-between gap-6">
+                    <div>
+                        <h1 className="font-display text-4xl lg:text-5xl font-extrabold text-ink tracking-tight max-w-3xl">
+                            World coverage, attributed and measured
+                        </h1>
+                        <p className="mt-4 text-[15px] text-body leading-relaxed max-w-2xl">
+                            Stories from international wire services, each attributed to a country and
+                            scored for risk. {totalReports ? `${totalReports} held` : 'Loading'}
+                            {activeAlertData.length > 0 && ` across ${activeAlertData.length} countries`}.
+                            {error && ' The archive is unreachable at the moment.'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                        {refreshNotice && (
+                            <span className="text-[12px] font-semibold text-accent animate-fade-in bg-accent-soft/40 px-3 py-1.5 rounded-xl border border-accent/20">
+                                {refreshNotice}
+                            </span>
+                        )}
+                        <button
+                            id="header-refresh-feed-btn"
+                            type="button"
+                            onClick={handleRefreshFeed}
+                            disabled={refreshing}
+                            className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border border-rule bg-surface text-[13px] font-bold text-body hover:text-ink hover:border-accent hover:bg-surface-sunken transition-all shadow-sm ${
+                                refreshing ? 'opacity-70 cursor-wait' : ''
+                            }`}
+                            title="Fetch latest news from live APIs and wire feeds"
+                        >
+                            <RefreshCw
+                                size={14}
+                                className={refreshing ? 'animate-spin text-accent' : 'text-accent'}
+                            />
+                            <span>{refreshing ? 'Refreshing...' : 'Refresh feed'}</span>
+                        </button>
+                    </div>
                 </header>
 
                 {/* ── SECTION 1: MAP + COUNTRY DOSSIER ───────
@@ -680,7 +735,7 @@ const Home = () => {
 
                     <div className="flex-grow space-y-8 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
                         {/* Feed Header */}
-                        <div className="flex items-center justify-between px-2 flex-wrap gap-3">
+                        <div className="flex items-center justify-between px-2 flex-wrap gap-4 pb-1 border-b border-rule/50">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-xl bg-accent-soft">
                                     <Search size={18} className="text-accent" />
@@ -693,9 +748,34 @@ const Home = () => {
                                             : 'Latest stories'}
                                 </h2>
                             </div>
-                            <p className="text-[10px] font-extrabold text-muted uppercase tracking-widest tabular-nums">
-                                {totalArticles} stories
-                            </p>
+
+                            <div className="flex items-center gap-3">
+                                {refreshNotice && (
+                                    <span className="text-[11px] font-medium text-accent animate-fade-in bg-accent-soft/40 px-2.5 py-1 rounded-lg border border-accent/20">
+                                        {refreshNotice}
+                                    </span>
+                                )}
+                                <button
+                                    id="feed-refresh-feed-btn"
+                                    type="button"
+                                    onClick={handleRefreshFeed}
+                                    disabled={refreshing}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border border-rule bg-surface text-[12px] font-bold text-body hover:text-ink hover:border-accent hover:bg-surface-sunken transition-all shadow-sm ${
+                                        refreshing ? 'opacity-70 cursor-wait' : ''
+                                    }`}
+                                    title="Fetch live news from wire APIs and update feed"
+                                >
+                                    <RefreshCw
+                                        size={13}
+                                        className={refreshing ? 'animate-spin text-accent' : 'text-accent'}
+                                    />
+                                    <span>{refreshing ? 'Refreshing...' : 'Refresh feed'}</span>
+                                </button>
+
+                                <p className="text-[10px] font-extrabold text-muted uppercase tracking-widest tabular-nums">
+                                    {totalArticles} stories
+                                </p>
+                            </div>
                         </div>
 
                         {/* Register first, filters second: choosing a mood is a

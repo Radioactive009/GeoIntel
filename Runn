@@ -1,0 +1,17 @@
+# 1. Activate the virtual environment (already created)
+.\venv\Scripts\activate
+
+# 2. (Optional) Install dependencies if needed
+pip install -r requirements.txt
+
+# 3. Start the FastAPI server
+uvicorn app.main:app --reload
+
+
+cd frontend
+
+# 1. Install dependencies (if not installed yet)
+npm install
+
+# 2. Start the Vite development server
+npm run dev

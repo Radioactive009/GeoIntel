@@ -93,6 +93,7 @@ export const getArticles = ({
     includeSecondary = false,
     limit = 60,
     offset = 0,
+    bustCache = false,
 } = {}) => {
     const params = { limit, offset };
     if (country) params.country = country;
@@ -104,7 +105,15 @@ export const getArticles = ({
     if (days) params.days = days;
     if (includeDuplicates) params.include_duplicates = true;
     if (includeSecondary) params.include_secondary = true;
+    if (bustCache) params._t = Date.now();
     return api.get('/articles', { params });
+};
+
+/** Request an immediate on-demand refresh of live feeds. */
+export const refreshFeed = (country = '') => {
+    const params = {};
+    if (country) params.country = country;
+    return api.post('/refresh-feed', null, { params });
 };
 
 /** One story plus its cluster siblings and same-country coverage. */

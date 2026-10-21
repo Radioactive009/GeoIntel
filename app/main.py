@@ -33,7 +33,7 @@ from . import models, schemas
 from .countries import COUNTRIES
 from .database import Base, SessionLocal, engine
 from .migrations import run_migrations
-from .services import agent, alerts, brief, channels, events, framing, ingest, search, speech
+from .services import agent, alerts, brief, channels, events, framing, ingest, rss_service, search, speech
 
 # =========================================================
 # LOGGING / ENV
@@ -143,6 +143,7 @@ _ingest_state: dict = {
     "last_error": None,
 }
 _country_ingest_attempts: dict[str, float] = {}
+_last_refresh_time: float = 0.0
 
 
 def run_ingest(batch_size: int | None = None) -> dict:
@@ -541,6 +542,7 @@ def get_articles(
     ),
     limit: int = Query(default=60, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    _t: int | None = Query(default=None, description="Cache buster timestamp"),
     db: Session = Depends(get_db),
 ):
     """
@@ -1313,6 +1315,58 @@ def ingest_missing_countries(
         "missing_remaining": max(0, db.query(models.Country).filter(~models.Country.id.in_(attributed_ids)).count()),
         "results": results,
         "total_saved": sum(results.values()),
+    }
+
+
+@app.post("/refresh-feed")
+def refresh_feed(
+    country: str | None = Query(default=None, description="Optional ISO code to refresh for"),
+    db: Session = Depends(get_db),
+):
+    """
+    On-demand feed refresh from live wire feeds and Google News RSS.
+    Pulls fresh articles into the database and updates the risk posture.
+    """
+    global _last_refresh_time
+    now = time.time()
+    if now - _last_refresh_time < 5.0:
+        return {
+            "message": "Feed was refreshed moments ago",
+            "saved": 0,
+            "throttled": True,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    _last_refresh_time = now
+
+    # Invalidate RSS cache so fresh stories are pulled directly from live sources
+    with rss_service._global_lock:
+        rss_service._global_cache["fetched_at"] = 0.0
+        rss_service._uplifting_cache["fetched_at"] = 0.0
+
+    saved = 0
+    try:
+        saved += ingest.ingest_global_feeds(db)
+        saved += ingest.ingest_uplifting_feeds(db)
+        if country:
+            country_clean = country.strip().upper()
+            with rss_service._country_lock:
+                rss_service._country_cache.pop(country_clean.lower(), None)
+            saved += ingest.ingest_news_for_country(country_clean, db)
+    except Exception as e:
+        db.rollback()
+        logger.warning("[REFRESH] Feed refresh partial failure: %s", e)
+
+    try:
+        alerts.capture_snapshot(db)
+    except Exception as e:
+        logger.warning("[REFRESH] Snapshot capture error: %s", e)
+
+    ingest.record_ingest_time(db)
+    return {
+        "message": "Feed refreshed successfully",
+        "saved": saved,
+        "throttled": False,
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 

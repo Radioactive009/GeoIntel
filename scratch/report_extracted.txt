@@ -1,0 +1,1433 @@
+GeoIntel AI: Automated Geopolitical Risk Intelligence and Real-Time Conflict Monitoring System
+
+Engineering Capstone Project Report
+
+Author(s): [Your Name / Team Members] · Supervisor: [Name] · Department: [Department], [Institution] · [Month Year]
+
+Abstract
+
+Background. Open-source intelligence (OSINT) has become a primary input to geopolitical risk assessment, humanitarian planning, and security analysis. Thousands of news items are published every hour across wire services, broadcasters, and regional outlets, and the volume far exceeds what human analysts can triage in real time.
+
+Problem. Existing automated approaches face a three-way trade-off. Event-coding infrastructures such as GDELT offer breadth but suffer from noisy extraction and coarse entity resolution. Transformer and LLM pipelines offer richer semantics but impose latency, GPU, and per-token API costs that are hard to sustain in a continuous 24/7 stream. Finally, most alerting layers react to raw scores without normalizing for sample size or for each country's historical baseline, which produces false alarms from isolated stories and chronic alert fatigue for perpetually volatile regions.
+
+Proposed solution. This report presents GeoIntel AI, a real-time geopolitical risk intelligence platform that ingests news every 30 minutes from curated RSS feeds, rotating keyless Google News queries covering 249 countries and territories, and optional NewsAPI/GNews sources. Each article is geographically attributed with a custom multi-tier gazetteer, scored by a hybrid rule-based engine, aggregated per country with statistical shrinkage, and visualized on interactive 2D and 3D choropleth maps with linked live video broadcasts.
+
+Key technical innovations. (i) A gazetteer resolving ISO 3166-1 alpha-2/3 codes, country names, capitals, aliases, and demonyms using longest-match-wins and capitalization-sensitive disambiguation (e.g., US versus us, South Sudan versus Sudan). (ii) A Risk Scoring Engine v3 that combines a four-tier event taxonomy, VADER negative sentiment, and a contextual mitigation dampener, executing on CPU in single-digit milliseconds with no transformer inference and no cloud API cost. (iii) An Empirical Bayes sample-size shrinkage estimator that pulls low-evidence country scores toward the global mean, coupled with rolling Z-score anomaly detection against per-country baselines. (iv) Server-side validated live YouTube broadcast orchestration with lazy-mounted playback.
+
+Summary of results. The design target is per-article scoring latency below 5 ms on commodity CPU hardware, compared with LLM inference latencies typically exceeding 800 ms, at zero marginal API cost. Chapter 6 reports the evaluation methodology, benchmark protocol, and validation scenarios used to assess latency, attribution accuracy, and escalation-versus-noise discrimination. Figures in that chapter should be replaced with your own measured values before submission.
+
+Keywords: OSINT, geopolitical risk, conflict monitoring, geoparsing, gazetteer, VADER, Empirical Bayes shrinkage, Z-score anomaly detection, FastAPI, choropleth visualization.
+
+Chapter 1: Introduction and Domain Background
+
+1.1 The Landscape of Open-Source Intelligence in Modern Geopolitics
+
+Open-source intelligence is the discipline of collecting, filtering, and analyzing information from publicly available sources to produce decision-relevant insight. Historically the preserve of national intelligence agencies, OSINT has been democratized by the digital media ecosystem. Newsrooms, social platforms, satellite imagery vendors, and government press offices now publish a continuous record of world events that is accessible to journalists, non-governmental organizations, insurers, logistics firms, and researchers.
+
+Three structural developments make OSINT central to contemporary geopolitical analysis:
+
+Velocity. Events such as airstrikes, coups, and border incursions are reported within minutes, and early signals frequently appear in regional or non-English outlets before wire services consolidate them.
+
+Volume and redundancy. A single incident can generate hundreds of near-duplicate articles across syndication networks, inflating apparent significance if counted naively.
+
+Heterogeneity. Sources vary in editorial stance, language, geographic focus, and reliability, so any automated system must treat source diversity as a first-class concern.
+
+Commercial risk-intelligence products address these needs but are typically subscription-priced and opaque. Academic event datasets such as GDELT, ACLED, and ICEWS provide structured records but differ in latency, coverage, and curation depth. There remains room for a transparent, low-cost, low-latency system that fuses broad ingestion with interpretable scoring and an analyst-friendly interface.
+
+1.2 Information Overload and the Limitations of Human Cognitive Triage
+
+Human analysts are effective at contextual judgment but are bounded by attention. Cognitive science and decision-science literature consistently describe working-memory limits, anchoring effects, and fatigue-driven degradation of vigilance during monitoring tasks. In a news-monitoring setting these limitations appear as:
+
+Coverage gaps. Analysts concentrate on already-salient crises (recency and availability bias) and under-monitor emerging hotspots.
+
+Alert fatigue. Frequent low-value notifications desensitize analysts, so genuinely significant escalations are missed or acknowledged late.
+
+Inconsistent severity judgments. Two analysts may grade the same headline differently, and the same analyst may grade it differently at different times of day.
+
+Scalability ceiling. Monitoring 249 countries and territories continuously with human effort alone requires a prohibitive staffing model.
+
+Automation should therefore be framed not as a replacement for analysts but as a triage layer: it reduces the haystack, ranks candidate escalations, and presents evidence so the analyst's limited attention is spent where it matters.
+
+1.3 Scope, Objectives, and Expected Outcomes of GeoIntel AI
+
+Scope. GeoIntel AI covers the pipeline from raw news ingestion to an interactive risk dashboard. It is limited to English-language textual sources and public live video streams. It produces relative, explainable risk indicators and not predictive forecasts or classified assessments.
+
+Objectives.
+
+O1: Ingest global news continuously on a 30-minute cycle without requiring paid API keys for baseline operation.
+
+O2: Attribute each article to one or more countries with high precision, handling ambiguous tokens, demonyms, and nested names.
+
+O3: Score articles using an interpretable hybrid of event taxonomy, sentiment, and mitigation context at CPU-only latency.
+
+O4: Produce statistically robust per-country risk indicators that resist small-sample spikes and adapt to local baselines.
+
+O5: Present results through interactive 2D/3D choropleth maps, trend charts, and linked live broadcasts.
+
+O6: Remain deployable on minimal cloud infrastructure (SQLite for development, PostgreSQL for production).
+
+Expected outcomes. A working full-stack system, a documented scoring methodology with explicit equations, an evaluation of latency and attribution quality, and a clear account of limitations and extension paths.
+
+Chapter 2: Research Gaps and Problem Statement
+
+2.1 Critical Gaps in Existing Solutions
+
+2.1.1 Latency versus accuracy trade-offs
+
+Lexicon and rule-based methods are fast but shallow, while deep contextual models capture nuance at far higher computational cost. Continuous monitoring of thousands of articles per cycle across hundreds of geographies amplifies this trade-off, because the system must sustain throughput and remain responsive to the user interface. Many research prototypes sidestep the problem by operating on static, offline corpora.
+
+2.1.2 Prohibitive API cost of large language models
+
+LLM-based classification of every article incurs per-token charges that scale linearly with volume. For a 24/7 pipeline processing on the order of tens of thousands of articles per day, recurring cost and rate-limit exposure become a structural barrier for student, non-profit, and small-organization deployments. Self-hosting a capable model replaces API cost with GPU cost and operational complexity.
+
+2.1.3 Entity disambiguation flaws in standard NER
+
+General-purpose Named Entity Recognition models are trained for broad entity categories, not for exact country-level attribution under news headline conventions. Typical failure modes include:
+
+Case ambiguity: US (country) versus us (pronoun) is trivial for a case-sensitive matcher but frequently mishandled after lower-casing or tokenization normalization.
+
+Nested names: South Sudan contains Sudan; Niger is a substring of Nigeria; Guinea is a substring of Equatorial Guinea, Guinea-Bissau, and Papua New Guinea. Shortest-match strategies mislabel these.
+
+Metonymy and capitals: Headlines such as "Moscow warns Kyiv" refer to states via their capitals.
+
+Demonyms and adjectival forms: Ukrainian forces, Iranian missile, Israeli strike require demonym-to-country resolution.
+
+Homonyms: Georgia (country versus US state), Jordan (country versus a personal name), Turkey (country versus bird or food).
+
+Geoparsing literature addresses the broader problem of mapping toponyms to coordinates, but a lightweight, country-level, deterministic resolver tuned to headline text remains useful where transparency and speed are priorities.
+
+2.1.4 False-positive alert spikes without baseline normalization
+
+Naive aggregation, such as averaging article scores per country, has two pathologies:
+
+Small-sample volatility. A country with a single, highly negative article can instantly top a ranking, whereas a country with 200 moderately negative articles is arguably under greater sustained stress.
+
+Baseline blindness. A score of 70 may be routine for a country in protracted conflict yet extraordinary for a normally stable one. Absolute thresholds therefore over-alert on chronically volatile regions and under-alert on emerging ones.
+
+Both issues motivate statistical normalization, namely shrinkage for sample size and standardization against per-country history.
+
+2.2 Formal Problem Formulation and System Requirements
+
+2.2.1 Formal problem formulation
+
+Let C be the set of countries and territories, with |C| = 249. At discrete time steps t = 1, 2, ... (30-minute cycles), the system observes a stream of articles A_t = {a_1, ..., a_m}, where each article is a tuple (title, summary, source, timestamp, url).
+
+The system must compute:
+
+An attribution function g that maps each article a to a subset G(a) of C, possibly empty.
+
+An article risk function s that maps each article a to a score s(a) in the range 0 to 100 quantifying conflict-related severity.
+
+A country risk indicator R_c(t) for each country c, aggregated over a time window W from the scores of all articles attributed to c, and corrected for sample size.
+
+An anomaly indicator z_c(t) measuring the deviation of R_c(t) from the country's own historical distribution.
+
+The objective is to maximize attribution precision and escalation-detection quality subject to the following constraints, where tau_max is the per-article processing budget (target: 5 ms on CPU) and M_max is the memory budget:
+
+\text{latency}_{\text{per-article}} \leq \tau_{\max}, \qquad \text{cost}_{\text{marginal}} \approx 0, \qquad \text{memory} \leq M_{\max}
+
+2.2.2 Functional requirements
+
+ID
+
+Requirement
+
+FR1
+
+Periodically ingest articles from curated RSS feeds, rotating Google News country queries, and optional NewsAPI/GNews.
+
+FR2
+
+Deduplicate articles using content hashing in batched operations.
+
+FR3
+
+Resolve countries via the gazetteer (codes, names, capitals, aliases, demonyms).
+
+FR4
+
+Compute article-level and country-level risk scores with explainable components.
+
+FR5
+
+Apply Empirical Bayes shrinkage and compute rolling Z-scores.
+
+FR6
+
+Persist articles, countries, risk snapshots, and broadcast links with TTL-based retention.
+
+FR7
+
+Expose a REST API for countries, risk time series, articles, and broadcasts.
+
+FR8
+
+Render 2D and 3D choropleth risk maps with country drill-down and trend charts.
+
+FR9
+
+Link validated 24/7 live broadcasts to selected countries.
+
+2.2.3 Non-functional requirements
+
+ID
+
+Requirement
+
+Target
+
+NFR1
+
+Per-article scoring latency
+
+Under 5 ms (CPU)
+
+NFR2
+
+Marginal API cost for baseline operation
+
+Zero (USD 0)
+
+NFR3
+
+Ingestion cycle period
+
+30 minutes
+
+NFR4
+
+Deployability
+
+Single small VM or container; SQLite (dev) / PostgreSQL (prod)
+
+NFR5
+
+Explainability
+
+Every score decomposable into event, sentiment, and mitigation terms
+
+NFR6
+
+Fault tolerance
+
+Failure of one feed must not halt a cycle
+
+NFR7
+
+Data hygiene
+
+TTL-based retention and idempotent ingestion
+
+NFR8
+
+Security
+
+Server-side validation of external embeds, input sanitization
+
+NFR9
+
+Responsiveness
+
+Interactive map frame rate acceptable on mid-range devices; lazy loading of heavy assets
+
+Chapter 3: Literature Review and Comparative Analysis
+
+3.1 Automated Global Event Extraction Systems
+
+GDELT. The Global Database of Events, Language, and Tone (Leetaru and Schrodt, 2013) monitors worldwide news in many languages and produces event records coded with the CAMEO taxonomy, along with a tone score and geographic tags. Its strengths are scale, near-real-time updates, and open access. Its weaknesses, widely discussed in the literature, include duplicate events from syndicated content, actor and location extraction errors produced by automated parsing, and a coarse tone measure that does not distinguish reporting about violence from de-escalation narratives.
+
+ACLED. The Armed Conflict Location and Event Data project (Raleigh et al., 2010) provides human-curated records of political violence and protest events with precise locations and actor details. It is high precision and analytically trusted, but its curation process introduces publication delay and finite coverage, which makes it unsuited as a sub-hour alerting signal.
+
+ICEWS. The Integrated Crisis Early Warning System (Boschee et al., 2015) provides machine-coded event data with actor and event-type fields, used extensively in forecasting research. Access, update cadence, and coverage conditions have changed over time, which limits its use as a dependable real-time feed for small deployments.
+
+Synthesis. These systems establish the value of structured event coding but reflect a spectrum: broad-and-noisy (GDELT), precise-and-delayed (ACLED), and research-oriented (ICEWS). None is designed as a self-contained, explainable, low-cost, end-to-end dashboard with per-country statistical normalization.
+
+3.2 Transformer-based Sentiment Analysis versus Computational Constraints
+
+Transformer encoders such as BERT (Devlin et al., 2019) and its optimized variants such as RoBERTa (Liu et al., 2019) achieve state-of-the-art results on many sentiment and classification benchmarks by modelling bidirectional context. Large language models extend this with few-shot and zero-shot capability, enabling nuanced judgments on event severity and implied stance.
+
+However, continuous-stream deployment imposes constraints that are underrepresented in benchmark-centric literature:
+
+Latency. Encoder inference on CPU is typically tens to hundreds of milliseconds per short document, and hosted LLM calls commonly run from hundreds of milliseconds to seconds, dominated by network and generation time.
+
+Cost. GPU instances or per-token billing introduce recurring cost proportional to throughput.
+
+Domain shift. General sentiment models are trained on reviews or social posts, where negative means dissatisfaction. In conflict reporting, negative language is often neutral reporting of fact, and the model must separate topic severity from tone.
+
+Opacity. Neural scores are harder to decompose into auditable components, which matters for analyst trust.
+
+These constraints motivate evaluating whether a carefully designed rule-and-lexicon hybrid can capture most of the operational value at a small fraction of the compute.
+
+3.3 Rule-Enhanced Lexicon Sentiment Modeling
+
+VADER. Valence Aware Dictionary and sEntiment Reasoner (Hutto and Gilbert, 2014) is a lexicon and rule-based model designed for short, informal text. It combines a human-validated lexicon with heuristics for punctuation, capitalization, degree modifiers, negation, and contrastive conjunctions, producing positive, neutral, negative, and compound scores. Its main advantages are speed (sub-millisecond for headlines), determinism, and no training requirement.
+
+SentiWordNet. SentiWordNet (Esuli and Sebastiani, 2006; Baccianella et al., 2010) assigns positivity, negativity, and objectivity scores to WordNet synsets. It offers broad lexical coverage but depends on word-sense disambiguation to be used accurately; without it, polysemy introduces noise.
+
+Limitations for geopolitics. Both resources are general purpose. They are insensitive to event severity ("talks stall" and "city bombed" may have similar negativity) and cannot distinguish de-escalation language containing negative words ("ceasefire ends bloodshed"). This report addresses the gap by pairing VADER with an explicit event taxonomy for severity and a mitigation dampener for de-escalation context, instead of expecting sentiment alone to carry geopolitical meaning.
+
+3.4 Comparative Analysis
+
+Dimension
+
+Traditional GDELT-style pipeline
+
+LLM-based pipeline
+
+GeoIntel AI hybrid
+
+Core method
+
+Automated CAMEO event coding, tone average
+
+Prompted or fine-tuned LLM classification
+
+Tiered event weights + VADER + mitigation dampener
+
+Typical per-item latency
+
+Batch (minutes to hours per update)
+
+Hundreds of ms to seconds
+
+Target under 5 ms on CPU
+
+Marginal cost
+
+Free (public data)
+
+Per-token or GPU-hour
+
+Approximately zero
+
+Geographic resolution
+
+Parser-derived, error-prone
+
+Strong with prompting, nondeterministic
+
+Deterministic gazetteer with longest-match-wins
+
+Explainability
+
+Moderate (event codes)
+
+Low to moderate
+
+High (three-term decomposition)
+
+Duplicate handling
+
+Weak
+
+Pipeline-dependent
+
+Content hashing, batched dedup
+
+Small-sample robustness
+
+None
+
+None by default
+
+Empirical Bayes shrinkage
+
+Baseline normalization
+
+None
+
+None by default
+
+Rolling per-country Z-score
+
+Semantic depth
+
+Moderate
+
+High
+
+Moderate (keyword and lexicon bound)
+
+Multilingual support
+
+Strong
+
+Strong
+
+Limited (English; extension planned)
+
+Hosting footprint
+
+Large infrastructure
+
+GPU or external API
+
+Single small VM
+
+The comparison highlights the intended design position of GeoIntel AI. It deliberately gives up semantic depth and multilingual breadth in exchange for latency, cost, determinism, and statistical hygiene, which are the properties most limiting in continuous low-budget monitoring.
+
+Chapter 4: System Architecture and Proposed Methodology
+
+4.1 High-Level End-to-End System Architecture
+
+GeoIntel AI follows a layered pipeline architecture. A scheduler triggers an ingestion cycle every 30 minutes. Collected articles pass through deduplication, geographic attribution, and risk scoring, after which they are aggregated into country-level snapshots that feed the REST API and the visualization layer.
+
++-----------------------------------------------------------------------------+|                              DATA SOURCES                                   ||  RSS: BBC | Al Jazeera | Reuters | DW | France 24 | TASS                    ||  Google News (keyless, rotating over 249 country queries)                   ||  Optional: NewsAPI / GNews                                                  |+-------------------------------------+---------------------------------------+                                      |  every 30 min (APScheduler)                                      v+-----------------------------------------------------------------------------+|  INGESTION LAYER (async fetchers, per-feed fault isolation)                 ||  fetch -> normalize -> content hash -> batched dedup (DB lookup by hash)    |+-------------------------------------+---------------------------------------+                                      v+-----------------------------------------------------------------------------+|  NLP / ATTRIBUTION LAYER                                                    ||  Gazetteer matcher (longest-match-wins, case rules, demonyms, capitals)     ||  -> country set G(a) with title/summary weighting                           |+-------------------------------------+---------------------------------------+                                      v+-----------------------------------------------------------------------------+|  RISK SCORING ENGINE v3                                                     ||  Event tier weight W  +  VADER negativity N  -  Mitigation dampener M      ||  -> article score s(a) in [0, 100]                                          |+-------------------------------------+---------------------------------------+                                      v+-----------------------------------------------------------------------------+|  STATISTICAL NORMALIZATION LAYER                                            ||  Windowed country mean -> Empirical Bayes shrinkage -> rolling Z-score      |+-------------------------------------+---------------------------------------+                                      v+--------------------------+   +----------------------------+  +-------------+|  PERSISTENCE (SQLAlchemy)|   |  FastAPI REST SERVICE      |  | BROADCAST   ||  Articles, Countries,    |<->|  /countries /risk /articles|  | VALIDATOR   ||  RiskSnapshots, Broadcasts|  |  /broadcasts               |<-| (server-side||  TTL retention           |   +-------------+--------------+  |  checks)    |+--------------------------+                 v                 +-------------+                              +----------------------------------+                              |  REACT 18 + VITE FRONTEND        |                              |  2D/3D choropleth, charts,       |                              |  lazy-mounted live video         |                              +----------------------------------+
+
+Design principles.
+
+Determinism and explainability: every stage is rule-based or statistical, so a score can be traced back to specific matched tokens.
+
+Fault isolation: each feed is fetched independently with timeouts, so one failing source degrades coverage but does not abort the cycle.
+
+Idempotency: the content hash makes re-ingestion of the same article a no-op.
+
+Separation of concerns: attribution, scoring, and normalization are independent modules with typed interfaces (Pydantic models), enabling unit testing and future replacement of any one stage.
+
+4.2 Multi-Channel Keyless Ingestion and Deduplication Pipeline
+
+4.2.1 Source channels
+
+Curated RSS feeds. BBC, Al Jazeera, Reuters, Deutsche Welle, France 24, and TASS are polled every cycle. Including sources with different editorial orientations (e.g., Western public broadcasters, Gulf-based, and Russian state media) widens perspective diversity, with the explicit caveat that state-affiliated outlets may carry framing bias (see Chapter 8).
+
+Rotating keyless Google News feeds. Google News exposes search-result RSS endpoints that require no API key. For each country in the ISO-249 list, a query combining the country name with a conflict-oriented term set can be issued. Querying all 249 countries every cycle would be wasteful and risks rate limiting, so a round-robin cursor processes a configurable batch of B countries per cycle. With B = 25, a full rotation takes about 10 cycles (roughly 5 hours); higher-risk countries can be placed on a faster rotation.
+
+Optional NewsAPI / GNews. When API keys are configured, these add breadth. They are strictly optional, so baseline operation incurs no cost.
+
+4.2.2 Normalization
+
+Each item is mapped to a canonical record containing title, summary, source domain, canonical URL (tracking parameters stripped), and a timezone-normalized UTC timestamp. HTML entities and markup are removed, and whitespace is collapsed.
+
+4.2.3 Content hashing and batched deduplication
+
+Syndicated stories appear under many URLs. The pipeline computes a deterministic fingerprint over normalized text:
+
+h(a) = \operatorname{SHA\text{-}256}\big(\operatorname{norm}(\text{title}) \,\Vert\, \operatorname{domain}(\text{url})\big)
+
+where norm lower-cases, strips punctuation and publisher suffixes (e.g., a trailing source name after a separator), and collapses whitespace. A secondary key on the canonical URL catches exact re-posts. Deduplication is batched: the hashes of a whole fetched batch are checked against the database with a single set-membership query, and only unseen records are inserted in a single bulk operation. This reduces round trips from O(n) to O(1) per batch and keeps cycle time low on SQLite and PostgreSQL alike.
+
+Note that including the domain in the hash retains the same story from distinct outlets as separate observations, which is deliberate. Cross-source corroboration is a legitimate signal of significance, while within-source repeats are removed. Near-duplicate detection across outlets (e.g., SimHash or MinHash) is listed as future work.
+
+4.2.4 TTL-based retention
+
+Articles older than a retention horizon T_ret (configurable, e.g., 30 days) are purged by a scheduled job, while the compact aggregated RiskSnapshots are kept longer. This bounds storage growth, which is important for small deployments, without sacrificing the longitudinal baselines needed for Z-score computation.
+
+4.3 Custom Gazetteer-based Geographic Attribution Algorithm
+
+4.3.1 Gazetteer structure
+
+The gazetteer maps surface forms to ISO 3166-1 country records. It is organized in four tiers of surface forms for each of the 249 entries:
+
+Tier
+
+Surface forms
+
+Example (country)
+
+Matching rule
+
+A
+
+Common name, official name, historical and press aliases
+
+"South Korea", "Republic of Korea", "Ivory Coast" / "Cote d'Ivoire"
+
+Case-insensitive, word-boundary
+
+B
+
+ISO alpha-2 / alpha-3 codes and common abbreviations
+
+"US", "USA", "UK", "UAE", "DRC"
+
+Case-sensitive, uppercase only
+
+C
+
+Capital cities and metonymic seats of government
+
+"Kyiv", "Tehran", "Moscow"
+
+Case-sensitive initial capital, word-boundary
+
+D
+
+Demonyms and adjectival forms
+
+"Ukrainian", "Iranian", "Israeli"
+
+Case-sensitive initial capital
+
+4.3.2 Longest-match-wins strategy
+
+All surface forms are compiled into one matcher (a single compiled alternation sorted by descending length, or equivalently an Aho-Corasick automaton). Scanning proceeds left to right, and when two candidate matches overlap, the longer span wins; shorter spans fully contained in an accepted span are discarded. The algorithm is:
+
+function ATTRIBUTE(text):    candidates <- all gazetteer matches in text, each (start, end, country, tier)    sort candidates by (length descending, tier priority, start ascending)    accepted <- empty list; occupied <- empty set of character positions    for m in candidates:        if span(m) does not overlap occupied:            apply case and context rules to m      # may reject m            if m survives:                accepted.append(m); occupied.add(span(m))    return unique countries in accepted, weighted by field (title > summary)
+
+This resolves nesting correctly: in "clashes in South Sudan", the span South Sudan (11 characters) is accepted first, so the contained Sudan is never reported. Likewise, Papua New Guinea, Equatorial Guinea, and Guinea-Bissau each pre-empt the bare Guinea, and Nigeria pre-empts Niger through word-boundary anchoring.
+
+4.3.3 Capitalization and context disambiguation
+
+Case sensitivity for codes: the token US matches only in uppercase; lower-case us is never a candidate. Short codes such as IN, IT, OR, AS, and ME are excluded from alpha-2 matching entirely because they collide with ordinary English words in headline capitalization, and are only accepted when expanded.
+
+Homonym rules: ambiguous names (Georgia, Jordan, Turkey, Chad, Guinea) require either a supporting context cue (e.g., Tbilisi, Georgian, Amman, Ankara, N'Djamena) or exclusion patterns (e.g., "Georgia Tech", "Jordan Peterson", "Chad Smith").
+
+Capital matching: capitals attribute events to states ("Moscow says...") but are ranked below explicit country names. When a capital and a different country name both appear, both are retained, since many headlines describe inter-state interactions.
+
+Demonym resolution: Israeli maps to Israel and Iranian maps to Iran. Ambiguous demonyms are scoped carefully (e.g., Guinean maps to Guinea, while Equatoguinean maps to Equatorial Guinea).
+
+4.3.4 Primary versus mentioned countries
+
+Each attribution carries a weight reflecting where it was found. A match in the title receives full weight, and a match only in the summary receives a reduced weight. Titles generally name the principal actors and location, while summaries add secondary context. Country-level aggregation later uses these weights so that incidental mentions do not dominate.
+
+4.3.5 Complexity
+
+With a compiled automaton the scan is linear in text length plus the number of matches, independent of gazetteer size. This keeps attribution in the sub-millisecond range for headline-length input and well inside the 5 ms per-article budget.
+
+4.4 Hybrid Geopolitical Risk Scoring Engine v3
+
+4.4.1 Core formula
+
+For an article a, the engine computes three normalized components, each in the range 0 to 1: the event weight W(a), the VADER negativity N(a), and the mitigation factor M(a). The raw risk is:
+
+Score_{raw}(a) = 0.70 \cdot W(a) + 0.30 \cdot N(a) - 0.40 \cdot M(a)
+
+and the published article score is rescaled to a 0-100 range and clipped:
+
+Score_{final}(a) = 100 \cdot \min\!\big(1,\ \max(0,\ Score_{raw}(a))\big)
+
+In code form this is Final Risk = (Event_Weight * 0.70) + (VADER_Neg * 0.30) - (Mitigation * 0.40), followed by the scale and clip operation. The coefficients 0.70 and 0.30 sum to one, so the unmitigated score is a convex combination of event severity and tone, while the 0.40 coefficient bounds how much de-escalation context can lower the score. Because of this bound, a de-escalation headline cannot fully erase a severe event; a Tier 1 event with maximum mitigation retains a substantial residual score by design.
+
+Why event weight dominates. VADER's negativity measures how negative the wording is, not how severe the event is. Headline neg values typically sit in a low range (often below 0.3), so the sentiment term acts as a modulator that separates graphic reporting from neutral reporting of the same event class, while the taxonomy anchors severity.
+
+4.4.2 Tiered event taxonomy
+
+The event weight is derived from keyword and phrase patterns grouped into four tiers. The weights below are the illustrative defaults documented for this report and are configurable; replace them with the values in your implementation if they differ.
+
+Tier
+
+Category
+
+Example indicators
+
+Weight w_tier
+
+1
+
+Catastrophic / war
+
+war declared, invasion, genocide, mass casualties, nuclear strike, massacre, coup
+
+1.00
+
+2
+
+Kinetic action
+
+airstrike, missile attack, shelling, bombing, drone strike, armed clashes, hostage
+
+0.80
+
+3
+
+Civil unrest
+
+protests, riots, crackdown, curfew, state of emergency, strike action
+
+0.50
+
+4
+
+Tension / coercion
+
+sanctions, tensions, warns, threatens, military buildup, diplomatic expulsion
+
+0.30
+
+The event weight combines the dominant tier with a small density bonus for corroborating cues, capped at 1:
+
+W(a) = \min\!\Big(1,\ \max_{k \in K(a)} w_{tier(k)} + \beta\,\big(|K(a)|-1\big)\Big)
+
+where K(a) is the set of matched taxonomy cues in the article and beta is a small constant (e.g., 0.05). If no cue matches, W(a) = 0, so non-conflict stories score close to zero regardless of tone. This is a deliberate safeguard against false positives from merely negative but irrelevant text such as a business downturn or a sports defeat.
+
+4.4.3 Contextual mitigation dampeners
+
+Conflict vocabulary frequently co-occurs with de-escalation language, as in "ceasefire halts airstrikes" or "peace accord ends civil war". The mitigation factor captures this:
+
+M(a) = \min\!\Big(1,\ \sum_{j \in D(a)} m_j\Big)
+
+where D(a) is the set of matched de-escalation cues, each with strength m_j. Typical groups are:
+
+Agreements: peace treaty, peace deal, accord, truce, ceasefire agreed (strong, e.g., m_j in the range 0.5 to 0.7).
+
+Process: talks resume, negotiations, mediation, dialogue (moderate, e.g., 0.2 to 0.3).
+
+Relief and reconstruction: aid delivered, withdrawal, prisoners released, reopening (moderate).
+
+Negation guards: phrases such as "ceasefire collapses" or "talks break down" invert the dampener, so these are treated as escalation cues in Tier 3-4 rather than mitigation.
+
+4.4.4 Worked example
+
+Headline
+
+W
+
+N
+
+M
+
+Raw
+
+Final
+
+"Airstrike kills dozens as city shelled"
+
+0.85
+
+0.55
+
+0
+
+0.595 + 0.165 = 0.760
+
+76
+
+"Ceasefire holds after days of airstrikes"
+
+0.80
+
+0.20
+
+0.60
+
+0.560 + 0.060 - 0.240 = 0.380
+
+38
+
+"Opposition leader criticizes new tax"
+
+0
+
+0.15
+
+0
+
+0 + 0.045 = 0.045
+
+5
+
+The example illustrates the intended behavior: severe kinetic reporting scores high, de-escalation context lowers but does not erase the score, and politically negative but non-violent content stays near zero. (Values here are computed illustrations of the formula, not experimental data.)
+
+4.4.5 Aggregation to country level
+
+For country c over window W_c, the weighted mean of attributed article scores is:
+
+\bar{x}_c = \frac{\sum_{a \in \mathcal{A}_c} \omega_{a,c}\, Score_{final}(a)}{\sum_{a \in \mathcal{A}_c} \omega_{a,c}}, \qquad n_c = |\mathcal{A}_c|
+
+where omega is the attribution weight from Section 4.3.4 (title versus summary). Recency weighting by exponential decay can be added to emphasize fresh articles. The pair (x-bar_c, n_c) is passed to the shrinkage stage.
+
+4.5 Statistical Anomaly Detection and Alert Normalization
+
+4.5.1 Empirical Bayes shrinkage
+
+A raw mean from one article is a high-variance estimate of a country's true risk level. Empirical Bayes shrinkage (in the spirit of Efron and Morris, 1973) pulls each country's mean toward the global mean in proportion to how little evidence it has:
+
+\hat{R}_c = \lambda_c\, \bar{x}_c + (1-\lambda_c)\, \mu_G, \qquad \lambda_c = \frac{n_c}{n_c + k}
+
+Here mu_G is the global mean across all countries and k is the prior strength, which acts like a number of "pseudo-articles" at the global mean. As n_c grows, lambda_c approaches 1 and the country's own evidence dominates. A principled choice of k follows from the method-of-moments estimate, the ratio of within-country article variance to between-country variance of true means:
+
+k \approx \frac{\sigma^2_{within}}{\tau^2_{between}}
+
+Numerical illustration (k = 5, mu_G = 30):
+
+Case
+
+n_c
+
+Raw mean
+
+lambda_c
+
+Shrunk score
+
+Isolated alarming story
+
+1
+
+90
+
+0.167
+
+40.0
+
+Sustained coverage
+
+50
+
+90
+
+0.909
+
+84.5
+
+The lone article is damped from 90 to 40, eliminating the spurious top-of-ranking spike, while a country with fifty consistently severe articles retains a score close to its raw value.
+
+4.5.2 Rolling Z-score anomaly tracking
+
+Shrinkage fixes sample-size noise but not baseline blindness. For each country, the engine maintains a rolling history of shrunk scores over a baseline window of D days (e.g., 14 to 30), excluding the current observation. The standardized deviation is:
+
+z_c(t) = \frac{\hat{R}_c(t) - \mu_{c,D}}{\max\big(\sigma_{c,D},\ \sigma_{min}\big)}
+
+where mu_{c,D} and sigma_{c,D} are the rolling mean and standard deviation, and sigma_min is a floor that prevents divide-by-near-zero blow-ups for very stable countries with tiny historical variance. A minimum history length is required before alerts are issued, which avoids spurious alarms for newly tracked countries.
+
+Z-score
+
+Interpretation
+
+UI treatment
+
+below 1.0
+
+Within normal variation
+
+No flag
+
+1.0 to 2.0
+
+Mildly elevated
+
+Subtle indicator
+
+2.0 to 3.0
+
+Significant escalation
+
+Alert
+
+3.0 and above
+
+Extreme departure from baseline
+
+Critical alert
+
+The thresholds are a standard convention and should be tuned empirically.
+
+4.5.3 Combined effect
+
+The two stages are complementary. Shrinkage controls how much to trust a score, while the Z-score determines how unusual it is for that country. A chronically volatile country can have a persistently high risk level without constant alerts, and a normally quiet country triggers an alert when a genuine shift occurs. The dashboard therefore exposes both the absolute risk level (for the choropleth) and the anomaly signal (for the alert feed).
+
+4.6 Server-Side Validated Live Broadcast Orchestration
+
+The dashboard links each country to relevant 24/7 live news broadcasts. Embedding arbitrary stream URLs from the client is both unreliable (dead or offline streams) and unsafe (untrusted embed targets), so the design moves validation to the server:
+
+Curated registry. A Broadcasts table maps each country code to candidate live streams (channel identifier, stream or video ID, language, label).
+
+Server-side validation. A background job verifies that each candidate is well-formed, restricted to the allowed YouTube domains, publicly embeddable, and currently live. Verification can use the official oEmbed endpoint or the YouTube Data API, depending on deployment constraints. Results are cached with a short TTL, and failing entries are demoted.
+
+Safe delivery. The API returns only validated entries, and the frontend constructs embed URLs from validated identifiers using the privacy-enhanced embed domain, never from free-form user input. This prevents injection of arbitrary frames.
+
+Lazy mounting. The iframe is mounted only when the user opens a broadcast panel or clicks a poster placeholder. Until then, no third-party scripts load, which reduces page weight, protects frame rate on the 3D globe, and limits third-party tracking exposure.
+
+This orchestration keeps the live-video feature robust, because the user never sees a dead player, and secure, because embed sources are allow-listed server-side.
+
+Chapter 5: Implementation Details and Hardware/Software Specifications
+
+5.1 Backend Microservice Implementation
+
+5.1.1 Technology stack
+
+Layer
+
+Technology
+
+Role
+
+Language / runtime
+
+Python 3.11
+
+Core implementation; improved interpreter speed over earlier versions
+
+Web framework
+
+FastAPI
+
+Asynchronous REST API with automatic OpenAPI documentation
+
+Validation
+
+Pydantic
+
+Typed request/response schemas and settings management
+
+ORM
+
+SQLAlchemy
+
+Database abstraction across SQLite and PostgreSQL
+
+Scheduling
+
+APScheduler
+
+30-minute ingestion cycle, retention purge, broadcast validation
+
+HTTP client / feed parsing
+
+Async HTTP client + RSS/Atom parser
+
+Concurrent, time-limited feed retrieval
+
+Sentiment
+
+vaderSentiment
+
+Negativity component N(a)
+
+Database
+
+SQLite (development), PostgreSQL (production)
+
+Persistence
+
+5.1.2 Service decomposition
+
+Although deployed as a single process for low cost, the code is organized as cohesive modules with narrow interfaces:
+
+ingestion: source adapters (RSS, Google News, NewsAPI/GNews) implementing a common interface that returns normalized article records, plus the batched deduplicator.
+
+geo: gazetteer loader, compiled matcher, disambiguation rules, and attribution weights.
+
+scoring: taxonomy tables, mitigation lexicon, VADER wrapper, and the v3 combiner.
+
+stats: aggregation, Empirical Bayes shrinkage, rolling baselines, and Z-score computation.
+
+broadcast: registry, validator, and cache.
+
+api: FastAPI routers, dependency-injected database sessions, and response models.
+
+jobs: scheduler configuration and job functions.
+
+5.1.3 Asynchronous task scheduling
+
+An in-process scheduler triggers the ingestion job every 30 minutes. Several configuration choices matter for correctness:
+
+No overlapping runs. The job is configured with a single permitted concurrent instance and coalescing of missed runs, so a slow cycle cannot spawn a pile-up of overlapping cycles.
+
+Concurrent fetching. Feeds are fetched concurrently with per-request timeouts and bounded retries. Exceptions are caught per feed and logged, so a failing source only reduces coverage for that cycle (NFR6).
+
+CPU-light processing. Attribution and scoring are lightweight enough to run inline, since they cost on the order of milliseconds per article. Only network I/O needs concurrency.
+
+Cycle pipeline. Fetch, then normalize, then batch-deduplicate, then attribute and score unseen articles, then bulk insert, then recompute affected countries' aggregates and snapshots.
+
+Secondary jobs. A retention job purges expired articles, and a broadcast validation job refreshes stream status on its own cadence.
+
+5.1.4 REST API surface
+
+Endpoint
+
+Method
+
+Purpose
+
+/api/countries
+
+GET
+
+All countries with latest shrunk risk, z-score, and article counts (feeds the choropleth)
+
+/api/countries/{code}
+
+GET
+
+Detail for one country: components, recent articles, top cues
+
+/api/countries/{code}/history
+
+GET
+
+Risk and z-score time series for charts
+
+/api/articles
+
+GET
+
+Paginated, filterable articles with attribution and score breakdown
+
+/api/alerts
+
+GET
+
+Countries currently above a z-score threshold
+
+/api/broadcasts/{code}
+
+GET
+
+Validated live streams for a country
+
+/api/health
+
+GET
+
+Liveness and last-successful-cycle timestamp
+
+Response models are Pydantic schemas, so the frontend and backend share an explicit contract and malformed data fails at the boundary.
+
+5.1.5 Operational considerations
+
+SQLite to PostgreSQL. SQLAlchemy abstracts dialect differences. For SQLite, write-ahead logging is recommended for concurrent reads during writes. PostgreSQL is used in production for concurrent access and robust indexing.
+
+Configuration. API keys, retention horizon, batch size B, prior strength k, baseline window D, and thresholds are environment-driven settings, with defaults that work without any keys.
+
+Observability. Structured logs record per-cycle counts (fetched, deduplicated, attributed, failed feeds) and duration.
+
+5.2 Frontend Visualization Layer
+
+5.2.1 Stack
+
+The client is a single-page application built with React 18 and Vite, styled with Tailwind CSS. Recharts renders trend and component charts. React-Simple-Maps renders the 2D SVG choropleth, and Three.js renders the interactive 3D globe.
+
+5.2.2 Choropleth rendering
+
+2D map. Country geometries (from a TopoJSON world atlas, matched to ISO codes) are filled by mapping the shrunk risk value through a sequential color scale. Hover reveals the name, score, and anomaly flag, and click selects the country.
+
+3D globe. Country colors are applied to the globe either as a generated texture or via per-country materials, with pointer picking for selection. The globe component is loaded lazily and only when the user switches to 3D view, since its asset and runtime cost is considerably higher than the SVG map.
+
+Encoding. Fill encodes the risk level, while the anomaly signal is encoded separately (e.g., outline or marker). Separating level from surprise mirrors the backend design and avoids conflating chronic and acute conditions.
+
+5.2.3 State orchestration
+
+Application state includes the selected country, view mode (2D or 3D), time window, and filters. Server data is fetched and cached with periodic background refresh aligned to the 30-minute backend cycle. Derived values (color scale domains, sorted rankings) are memoized so that interactions such as hover do not trigger full re-renders of the 250-region map. Heavy components (the globe, the video panel) use code splitting and lazy mounting.
+
+5.2.4 Responsive behavior
+
+The layout adapts across breakpoints: the map and detail panel sit side by side on desktop and stack on smaller screens. The 3D view can be disabled on low-capability devices in favor of the 2D map.
+
+5.3 Database Schema and Relational Entity Model
+
+5.3.1 Entity relationship overview
+
++----------------+ 1        N +----------------+ N        N +-----------------+|   Countries    |------------|  RiskSnapshots |            |    Articles     || code (PK)      |            | id (PK)        |            | id (PK)         || alpha3, name   |            | country_code FK|            | hash (UNIQUE)   || capital, region|            | ts, mean_raw   |            | title, summary  || lat, lng       |            | n, shrunk, z   |            | source, url     |+-------+--------+            | mu, sigma      |            | published_at    |        | 1                   +----------------+            | score, W, N, M  |        |                                                   +--------+--------+        | N                                                          | 1+-------+--------+                                                   ||   Broadcasts   |                                          N +-------+--------+| id (PK)        |                                            | ArticleCountry || country_code FK|                                            | article_id FK  || video_id, label|                                            | country_code FK|| language       |<-------------------------------------------| weight         || is_live, status|        (country_code relationship)         +----------------+| last_checked   |+----------------+
+
+5.3.2 Table definitions
+
+Table
+
+Key columns
+
+Notes
+
+Countries
+
+code (PK, ISO alpha-2), alpha3, name, capital, region, lat, lng
+
+Seeded from the 249-entry ISO list; gazetteer aliases and demonyms stored separately or in a seed file
+
+Articles
+
+id (PK), hash (UNIQUE), title, summary, source, url, published_at, ingested_at, score, event_w, vader_neg, mitigation
+
+Unique hash enforces idempotent ingestion; component columns preserve explainability
+
+ArticleCountry
+
+article_id (FK), country_code (FK), weight
+
+Many-to-many link carrying the attribution weight
+
+RiskSnapshots
+
+id (PK), country_code (FK), ts, mean_raw, n, shrunk, mu_baseline, sigma_baseline, z
+
+One row per country per cycle; supports charts and baselines
+
+Broadcasts
+
+id (PK), country_code (FK), video_id, label, language, is_live, status, last_checked
+
+Only validated rows are served
+
+Indexing. Indexes cover Articles(hash), Articles(published_at), ArticleCountry(country_code, article_id), and RiskSnapshots(country_code, ts). These support the dominant queries: hash membership checks, windowed country aggregation, and time-series retrieval.
+
+5.4 Hardware and Software Specifications
+
+The following table should be completed with the actual environment used for your benchmarks.
+
+Item
+
+Specification
+
+Development machine
+
+[CPU model, cores, RAM, OS]
+
+Reference deployment
+
+[e.g., 1-2 vCPU, 1-2 GB RAM cloud instance]
+
+Python
+
+3.11
+
+Node.js / build tool
+
+[version] / Vite
+
+Database
+
+SQLite [version] (dev); PostgreSQL [version] (prod)
+
+Browser for UI testing
+
+[browser and version]
+
+GPU
+
+Not required for GeoIntel AI (a GPU is used only for the LLM baseline comparison, if run)
+
+Chapter 6: Experimental Evaluation and Results
+
+Note on evidence. This chapter specifies the evaluation protocol and the expected form of the results. Cells marked [measure] must be filled with values from your own runs. Worked scenarios in Section 6.3 are computed from the formulas in Chapter 4 and are illustrations of the method's behavior, not field data. Do not present target values as measured results.
+
+6.1 Latency and Computational Benchmark
+
+6.1.1 Protocol
+
+Corpus: a fixed sample of N articles (suggested N of at least 1,000) drawn from the stored feeds, using title plus summary text.
+
+Measured stages: (a) gazetteer attribution, (b) event-taxonomy matching, (c) VADER scoring, (d) mitigation matching and combination. Report each stage and the total.
+
+Method: warm-up runs discarded, then at least 5 repetitions using a monotonic high-resolution timer. Report mean, median, p95, and p99 per article, single-threaded on the reference CPU.
+
+Baseline: one or more of (i) a transformer sentiment or zero-shot classifier on CPU, (ii) the same on a GPU, (iii) a hosted LLM API call measured end to end including network time. Use identical inputs.
+
+6.1.2 Results template
+
+Pipeline
+
+Hardware
+
+Mean latency
+
+p95 latency
+
+Throughput (articles/s)
+
+GeoIntel AI scoring (total)
+
+CPU, single thread
+
+[measure] (target under 5 ms)
+
+[measure]
+
+[measure]
+
+Transformer classifier
+
+CPU
+
+[measure]
+
+[measure]
+
+[measure]
+
+Transformer classifier
+
+GPU
+
+[measure]
+
+[measure]
+
+[measure]
+
+Hosted LLM API call
+
+Network + provider
+
+[measure] (often hundreds of ms or more)
+
+[measure]
+
+[measure]
+
+Interpretation guidance. The design claim is that the full per-article path stays under 5 ms on CPU, versus LLM inference that is commonly above 800 ms in end-to-end measurements. At 30-minute cycles, even several thousand articles consume only seconds of compute. Per-cycle wall time is therefore dominated by network fetching, not scoring, which is the intended bottleneck.
+
+6.2 Attribution Accuracy and Disambiguation Evaluation
+
+6.2.1 Test set construction
+
+Build a labeled set of headlines and summaries (suggested at least 500) with manually assigned ground-truth country sets. Stratify it to over-represent hard cases, using the categories below, and have a second annotator label a subset to report inter-annotator agreement (Cohen's kappa).
+
+Category
+
+Example
+
+Expected
+
+Typical naive failure
+
+Pronoun versus code
+
+"Talks between us and the delegation"
+
+No country
+
+Matches "US" after lowercasing
+
+Nested names
+
+"Clashes erupt in South Sudan"
+
+South Sudan only
+
+Also reports Sudan
+
+Substring collision
+
+"Floods hit Nigeria"
+
+Nigeria only
+
+Also reports Niger
+
+Guinea family
+
+"Papua New Guinea quake"
+
+Papua New Guinea only
+
+Reports Guinea
+
+Capital metonymy
+
+"Moscow warns Kyiv over strike"
+
+Russia, Ukraine
+
+No country found
+
+Demonym
+
+"Iranian drones target tanker"
+
+Iran
+
+No country found
+
+Homonym
+
+"Georgia Tech wins title"
+
+No country
+
+Reports Georgia
+
+Multi-country
+
+"France, Germany back Ukraine"
+
+All three
+
+Only first match
+
+6.2.2 Metrics and comparators
+
+Report precision, recall, and F1, both micro-averaged over all (article, country) pairs and per category. Compare against: (i) a naive case-insensitive substring matcher, (ii) a general-purpose NER model followed by a name-to-country lookup, and (iii) GeoIntel AI with individual features ablated (no longest-match, no case rules, no capitals, no demonyms). The ablations show the contribution of each design element.
+
+System
+
+Precision
+
+Recall
+
+F1
+
+Naive substring
+
+[measure]
+
+[measure]
+
+[measure]
+
+General NER + lookup
+
+[measure]
+
+[measure]
+
+[measure]
+
+GeoIntel gazetteer, no longest-match
+
+[measure]
+
+[measure]
+
+[measure]
+
+GeoIntel gazetteer, no case rules
+
+[measure]
+
+[measure]
+
+[measure]
+
+GeoIntel gazetteer (full)
+
+[measure]
+
+[measure]
+
+[measure]
+
+6.3 Case Studies and Simulated Validation Scenarios
+
+The scenarios below apply Section 4.5's formulas with prior strength k = 5 and global mean 30. They demonstrate how the system separates real escalation from routine noise.
+
+Scenario
+
+Evidence (n, raw mean)
+
+Country baseline (mean, std)
+
+Shrunk score
+
+Z-score
+
+Outcome
+
+A. Genuine escalation in a normally calm country
+
+40 articles, mean 55
+
+25, 5
+
+52.2
+
+5.4
+
+Critical alert
+
+B. Single sensational story
+
+1 article, score 85
+
+35, 6
+
+39.2
+
+0.7
+
+Suppressed (no alert)
+
+C. Chronically volatile country, ordinary day
+
+60 articles, mean 79
+
+70, 8
+
+75.2
+
+0.65
+
+High level shown, no alert
+
+Scenario A shows that sustained, corroborated evidence far from a low baseline produces a strong alert. Scenario B shows that Empirical Bayes shrinkage removes an isolated-story spike that a raw average would have ranked near the top: the raw score of 85 becomes about 39, and the Z-score shows no unusual departure. Scenario C shows baseline normalization, where a country whose absolute level is very high does not constantly alert, yet remains dark on the choropleth.
+
+Recommended empirical validation. Replay stored articles around known historical episodes (e.g., a documented coup or a major escalation) and report (i) lead time from the first elevated Z-score to the widely reported event, (ii) the false-alert rate on quiet periods per country-week, and (iii) rank correlation between GeoIntel's country rankings and an external reference such as ACLED event counts over the same period. These three measures speak directly to detection quality.
+
+6.4 Cost and Resource Efficiency Analysis
+
+Marginal API cost. Baseline operation uses keyless feeds and local computation, so recurring API spend is zero. For comparison, the LLM-based cost model is:
+
+Cost_{LLM} = N_{articles/day} \times \bar{T}_{tokens} \times p_{token} \times 30
+
+where N is the daily article volume, T-bar the average tokens per request (prompt plus output), and p the provider's per-token price. For example, 20,000 articles per day at roughly 300 tokens each is 6 million tokens per day, or about 180 million per month, before any retries; substitute current provider pricing to obtain a figure. GeoIntel AI avoids this recurring term entirely.
+
+Infrastructure footprint. Because no model weights are loaded, memory use is dominated by the gazetteer automaton, lexicons, the VADER lexicon, and the application runtime, and no GPU is needed. Report measured peak resident memory and CPU utilization during a cycle, and demonstrate deployment on a minimal instance (e.g., 1 vCPU and 1 GB RAM):
+
+Resource
+
+Measured
+
+Peak memory during cycle
+
+[measure]
+
+Mean CPU utilization during cycle
+
+[measure]
+
+Cycle wall-clock time (fetch dominated)
+
+[measure]
+
+Storage growth per day
+
+[measure]
+
+Chapter 7: Individual Contributions and Work Distribution
+
+Note. Replace the bracketed placeholders with the actual team members and the work each person did. The module breakdown below reflects the engineering scope described in Chapters 4 and 5.
+
+7.1 Module-Level Breakdown
+
+Module
+
+Scope of work
+
+Key deliverables
+
+Contributor
+
+Data ingestion engine
+
+RSS adapters; rotating keyless Google News queries across 249 countries; optional NewsAPI/GNews; normalization; content hashing; batched deduplication; TTL retention; scheduler configuration
+
+Ingestion service, source adapters, dedup module, retention job
+
+[Name]
+
+Geographic attribution
+
+ISO-249 gazetteer construction; aliases, capitals, demonyms; longest-match-wins matcher; case-sensitivity and homonym rules; attribution weighting
+
+Gazetteer data files, matcher library, disambiguation tests
+
+[Name]
+
+NLP scoring algorithms
+
+Four-tier event taxonomy; VADER integration; mitigation dampener lexicon and negation guards; Risk Scoring Engine v3 combiner
+
+Scoring module, tunable weights, explainable component output
+
+[Name]
+
+Statistical normalization
+
+Windowed aggregation; Empirical Bayes shrinkage and prior-strength estimation; rolling baselines and Z-score alerts
+
+Stats module, snapshot generation, threshold calibration
+
+[Name]
+
+Backend API and storage
+
+FastAPI routers; Pydantic schemas; SQLAlchemy models; SQLite/PostgreSQL support; indexing; health and observability
+
+REST API, database schema, migrations
+
+[Name]
+
+Broadcast orchestration
+
+Broadcast registry; server-side validation job; caching; safe embed delivery
+
+Validator, API endpoint, lazy-mount integration
+
+[Name]
+
+Geospatial UI
+
+React/Vite application; 2D choropleth; 3D globe; Recharts dashboards; state management; responsive layout
+
+Frontend application, component library
+
+[Name]
+
+Testing and evaluation
+
+Unit tests; benchmark harness; labeled attribution test set; scenario replays
+
+Evaluation scripts, results tables, figures
+
+[Name]
+
+Documentation and deployment
+
+Configuration, containerization, deployment on a minimal instance, project report
+
+Deployment guide, this report
+
+[Name]
+
+7.2 Description of Individual Contribution
+
+For an individual submission, write one to two paragraphs per module you personally owned, covering (i) the problem the module solves, (ii) the design decisions you made and their rationale, (iii) the main difficulties and how you resolved them (for example, the Guinea-family collision cases in the gazetteer or tuning k for shrinkage), and (iv) how you verified correctness. Include approximate lines of code or number of tests only if your institution asks for such metrics.
+
+Chapter 8: Limitations, Future Scope and Conclusion
+
+8.1 Current System Limitations
+
+English-source dependency. The gazetteer, taxonomy, mitigation lexicon, and VADER all operate on English text. Local-language reporting, which is often the earliest signal for emerging crises, is not directly exploited. Coverage is also biased toward countries that English-language outlets cover heavily, so low-coverage countries may appear artificially calm.
+
+Implicit and indirect sentiment. Lexicon and keyword methods struggle with sarcasm, euphemism, hedged reporting ("reportedly", "unconfirmed"), and events described without trigger words. Headlines such as "movement of forces near the border" may carry significant meaning with no taxonomy cue.
+
+Taxonomy and lexicon maintenance. Tier weights and mitigation strengths are hand-specified. They are transparent and tunable but subjective, and they require ongoing curation as the vocabulary of conflict reporting evolves.
+
+Source and framing bias. Including state-affiliated outlets increases perspective diversity but also imports editorial framing. Volume reflects media attention and not ground truth, so a high score indicates intense reporting of conflict-related events, which correlates with but is not identical to actual risk.
+
+Country-level granularity. Attribution stops at the country level. Sub-national hotspots, cross-border events, and non-state actors are not separately resolved, and an event involving several countries cannot indicate which is the aggressor, victim, or location.
+
+Near-duplicate handling. Hashing removes exact and normalized repeats but not paraphrased syndication across outlets, which can inflate counts.
+
+Validation scope. Without a large, independently labeled ground truth, claims about predictive value must remain modest, and the system provides situational awareness and not forecasts.
+
+Third-party dependencies. Keyless Google News feeds and embedded streams depend on external services whose availability and terms can change, so the design contains these dependencies behind adapters and validation.
+
+8.2 Future Directions
+
+Multilingual pipelines. Add language identification and machine translation (or multilingual gazetteer entries and lexicons) to ingest Arabic, Russian, French, Spanish, and other regional sources, which would reduce the English-coverage bias.
+
+Actor-Target knowledge graphs. Extend attribution from "which countries are mentioned" to structured triples (actor, action, target, location), enabling a directed graph of interactions, such as who attacks whom, that supports richer analytics and network-level escalation signals.
+
+Predictive escalation forecasting. Train sequence models (LSTM or Transformer-based) on the accumulated RiskSnapshots and Z-score history, evaluated against ACLED-style outcomes, to estimate near-term escalation probability instead of only describing current state. This should be benchmarked against simple baselines such as persistence and exponential smoothing.
+
+Selective neural augmentation. Use a small distilled transformer or an LLM only on ambiguous or high-impact articles flagged by the rule-based stage, preserving low average latency and cost while recovering nuance where it matters.
+
+Near-duplicate clustering. Apply SimHash or embedding-based clustering to group syndicated and paraphrased reports, producing event-level counts and a corroboration signal.
+
+Sub-national geocoding. Resolve provinces and cities to support regional maps.
+
+Learned calibration. Fit tier weights, mitigation strengths, and the prior strength k from labeled data, for example by regressing against an external conflict-event index.
+
+Alerting and integration. Add webhook, email, and chat notifications for critical Z-score alerts, plus an export API for downstream analysts.
+
+8.3 Concluding Summary
+
+This report presented GeoIntel AI, a real-time geopolitical risk monitoring system built on the premise that, for continuous low-budget OSINT triage, a carefully engineered hybrid of deterministic components can deliver the properties that matter most: speed, determinism, explainability, and near-zero cost. Its principal contributions are a deterministic multi-tier gazetteer with longest-match-wins and capitalization-aware disambiguation, a transparent scoring engine that separates event severity, sentiment, and de-escalation context, and a statistical normalization layer in which Empirical Bayes shrinkage and rolling Z-scores jointly suppress small-sample spikes and baseline-blind alerts. A server-validated broadcast layer and an interactive 2D/3D choropleth interface complete the analyst-facing experience.
+
+The system deliberately trades semantic depth and multilingual breadth for latency and cost, and Chapter 8 has set out where that trade-off bites and how to relax it incrementally. Positioned as a triage layer that directs scarce analyst attention, and not as an oracle, GeoIntel AI demonstrates that useful, explainable geopolitical monitoring is achievable on minimal infrastructure.
+
+References
+
+The entries below are the works cited in this report. Verify each bibliographic detail against the original source and reformat to your institution's required style (IEEE, ACM, or APA) before submission.
+
+Aho, A. V., and Corasick, M. J. (1975). Efficient string matching: An aid to bibliographic search. Communications of the ACM, 18(6), 333-340.
+
+Baccianella, S., Esuli, A., and Sebastiani, F. (2010). SentiWordNet 3.0: An enhanced lexical resource for sentiment analysis and opinion mining. Proceedings of LREC 2010.
+
+Boschee, E., Lautenschlager, J., O'Brien, S., Shellman, S., Starz, J., and Ward, M. (2015). ICEWS Coded Event Data. Harvard Dataverse.
+
+Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. (2019). BERT: Pre-training of deep bidirectional transformers for language understanding. Proceedings of NAACL-HLT 2019.
+
+Efron, B., and Morris, C. (1973). Stein's estimation rule and its competitors: An empirical Bayes approach. Journal of the American Statistical Association, 68(341), 117-130.
+
+Esuli, A., and Sebastiani, F. (2006). SentiWordNet: A publicly available lexical resource for opinion mining. Proceedings of LREC 2006.
+
+Gritta, M., Pilehvar, M. T., Limsopatham, N., and Collier, N. (2018). What's missing in geographical parsing? Language Resources and Evaluation, 52(2), 603-623.
+
+Hutto, C. J., and Gilbert, E. (2014). VADER: A parsimonious rule-based model for sentiment analysis of social media text. Proceedings of ICWSM 2014.
+
+Leetaru, K., and Schrodt, P. A. (2013). GDELT: Global data on events, location, and tone, 1979-2012. ISA Annual Convention.
+
+Liu, Y., Ott, M., Goyal, N., et al. (2019). RoBERTa: A robustly optimized BERT pretraining approach. arXiv:1907.11692.
+
+Raleigh, C., Linke, A., Hegre, H., and Karlsen, J. (2010). Introducing ACLED: An armed conflict location and event dataset. Journal of Peace Research, 47(5), 651-660.
