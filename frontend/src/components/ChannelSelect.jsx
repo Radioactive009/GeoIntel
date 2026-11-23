@@ -158,21 +158,18 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
             {/* Panel */}
             {open && (
                 <div
-                    // Explicit opaque hex, not a slash-opacity utility: the panel
-                    // floats over the stat cards, and any translucency lets their
-                    // headings bleed through the list rows.
-                    className={`absolute z-50 left-0 right-0 rounded-2xl border border-rule bg-[#070d1a] shadow-2xl shadow-black/70 overflow-hidden animate-fade-in ${
+                    className={`absolute z-50 left-0 right-0 rounded-2xl border border-rule bg-surface shadow-2xl shadow-ink/10 overflow-hidden animate-fade-in ${
                         dropUp ? 'bottom-full mb-2' : 'mt-2'
                     }`}
                 >
-                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-rule">
+                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-rule bg-surface-sunken/40">
                         <Search size={13} className="text-muted shrink-0" />
                         <input
                             ref={inputRef}
                             value={query}
                             onChange={(e) => { setQuery(e.target.value); setCursor(0); }}
                             placeholder="Search channels or countries…"
-                            className="flex-grow bg-transparent text-xs text-ink placeholder:text-faint outline-none font-medium"
+                            className="flex-grow bg-transparent text-xs text-ink placeholder:text-muted outline-none font-medium"
                         />
                         {query && (
                             <button
@@ -186,9 +183,9 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                         )}
                     </div>
 
-                    <div ref={listRef} className="max-h-[290px] overflow-y-auto chart-scrollbar py-1" role="listbox">
+                    <div ref={listRef} className="max-h-[290px] overflow-y-auto chart-scrollbar py-1 divide-y divide-rule/40" role="listbox">
                         {matches.length === 0 && offlineMatches.length === 0 && (
-                            <p className="px-4 py-6 text-center text-[11px] text-faint font-medium">
+                            <p className="px-4 py-6 text-center text-[11px] text-muted font-medium">
                                 No channels match “{query}”.
                             </p>
                         )}
@@ -205,8 +202,12 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
                                     onMouseEnter={() => setCursor(i)}
                                     onClick={() => commit(channel)}
                                     className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
-                                        isCursor ? 'bg-surface-sunken' : ''
-                                    } ${isActive ? 'bg-accent-soft' : ''}`}
+                                        isActive
+                                            ? 'bg-accent-soft text-accent'
+                                            : isCursor
+                                            ? 'bg-surface-sunken'
+                                            : 'hover:bg-surface-sunken/60'
+                                    }`}
                                 >
                                     <CountryBadge code={channel.country_iso_code} size="md" title={channel.country} />
                                     <span className="flex-grow min-w-0">
@@ -225,21 +226,21 @@ const ChannelSelect = ({ channels = [], offline = [], activeId, onSelect }) => {
 
                         {offlineMatches.length > 0 && (
                             <>
-                                <p className="px-3 pt-3 pb-1.5 text-[9px] font-extrabold text-faint uppercase tracking-[0.2em]">
+                                <p className="px-3 pt-3 pb-1.5 text-[9px] font-extrabold text-muted uppercase tracking-[0.2em]">
                                     Offline · {offlineMatches.length}
                                 </p>
                                 {offlineMatches.map((channel) => (
                                     <div
                                         key={channel.id}
-                                        className="w-full flex items-center gap-3 px-3 py-2 opacity-40 cursor-not-allowed"
+                                        className="w-full flex items-center gap-3 px-3 py-2 opacity-60 cursor-not-allowed"
                                         title="Not streaming right now"
                                     >
                                         <CountryBadge code={channel.country_iso_code} size="md" className="grayscale" title={channel.country} />
                                         <span className="flex-grow min-w-0">
-                                            <span className="block text-xs font-bold text-body truncate">
+                                            <span className="block text-xs font-bold text-ink/70 truncate">
                                                 {channel.name}
                                             </span>
-                                            <span className="block text-[10px] text-faint font-medium truncate">
+                                            <span className="block text-[10px] text-muted font-medium truncate">
                                                 {channel.country || 'Global'}
                                             </span>
                                         </span>

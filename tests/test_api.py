@@ -90,7 +90,7 @@ class TestArticleFilters:
 
     def test_search_matches_title_and_description(self, client, feed):
         assert client.get("/articles", params={"q": "Kyiv"}).json()["total"] == 1
-
+ p
 
 class TestWriteEndpoints:
     def test_duplicate_country_returns_409(self, client, countries, admin_headers):
